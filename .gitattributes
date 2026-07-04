@@ -1,0 +1,5 @@
+# Normalise les fins de ligne : LF dans le dépôt (Render/Linux),
+# CRLF en local pour les scripts Windows.
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.bat text eol=crlf
