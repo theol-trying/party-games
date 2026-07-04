@@ -1,0 +1,19 @@
+/* Style propre au « Blind Test ». */
+.screen[data-game="blind-test"] { --accent: #f783ac; }
+.bt-audio { width: 100%; margin: 10px 0; }
+.bt-buzzers { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.bt-buzzer {
+  cursor: pointer; font-family: inherit; font-weight: 700; font-size: 16px;
+  padding: 20px 12px; border-radius: 14px; color: var(--text);
+  background: var(--bg-soft); border: 2px solid var(--border);
+  transition: transform 0.08s;
+}
+.bt-buzzer:not(:disabled):active { transform: scale(0.95); }
+.bt-buzzer:disabled { opacity: 0.4; }
+.bt-buzzer.is-buzzed { background: #f783ac; color: #2a0016; border-color: transparent; opacity: 1; }
+.bt-answer { text-align: center; margin-top: 14px; animation: fadeIn 0.2s ease; }
+.bt-answer__title { font-size: 24px; font-weight: 800; color: #f783ac; }
+.bt-answer__artist { color: var(--text-dim); }
+.bt-scores { display: flex; flex-direction: column; gap: 6px; }
+.bt-score-row { display: flex; justify-content: space-between; padding: 8px 12px; background: var(--bg-soft); border-radius: 10px; }
+.bt-score-val { font-weight: 800; color: #f783ac; }

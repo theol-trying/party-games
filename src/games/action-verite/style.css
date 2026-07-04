@@ -1,0 +1,19 @@
+/* Style propre à « Action ou Vérité ». Surcharge locale du thème. */
+.screen[data-game="action-verite"] {
+  --accent: #ff4d6d;
+}
+.av-card { text-align: center; }
+.av-tag {
+  display: inline-block;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text-dim);
+  min-height: 20px;
+  margin-bottom: 8px;
+}
+.av-tag[data-kind="action"] { color: #ff4d6d; }
+.av-tag[data-kind="verite"] { color: #4dd0e1; }
+.av-btn-verite { background: #4dd0e1; }
+.av-btn-action { background: #ff4d6d; }
+.av-flash { animation: avFlash 0.3s ease; }
+@keyframes avFlash { from { opacity: 0.2; transform: scale(0.96); } to { opacity: 1; transform: none; } }

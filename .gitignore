@@ -1,0 +1,14 @@
+# Dépendances
+node_modules/
+
+# Secrets / config locale
+.env
+.env.local
+
+# Données locales du serveur PowerShell (persistance de dev)
+kv-local.*
+
+# Logs & système
+*.log
+.DS_Store
+Thumbs.db

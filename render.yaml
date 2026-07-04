@@ -1,0 +1,19 @@
+# Configuration de déploiement Render (Infrastructure as Code).
+# À la création du service, Render lit ce fichier automatiquement.
+# Doc : https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: soiree-jeux
+    runtime: node
+    plan: free
+    # Aucune dépendance npm, mais npm install reste inoffensif :
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      # Renseigne ces deux valeurs dans le dashboard Render (onglet Environment),
+      # elles proviennent de ta base Upstash Redis (section "REST API").
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false

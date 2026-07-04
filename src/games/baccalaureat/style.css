@@ -1,0 +1,12 @@
+/* Style propre au « Baccalauréat ». */
+.screen[data-game="baccalaureat"] { --accent: #63e6be; }
+.bc-letter { font-size: clamp(56px, 18vw, 96px); font-weight: 900; color: #63e6be; line-height: 1; margin: 4px 0; }
+.bc-timer { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.bc-timer.is-low { color: #ff4d6d; animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: 0.4; } }
+.bc-bar { height: 8px; border-radius: 999px; background: var(--bg-soft); overflow: hidden; margin-top: 10px; }
+.bc-bar__fill { height: 100%; background: #63e6be; transform-origin: left; transition: transform 1s linear; }
+.bc-field { display: flex; flex-direction: column; gap: 4px; }
+.bc-field__label { font-size: 13px; color: var(--text-dim); font-weight: 600; }
+.bc-recap-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 12px; background: var(--bg-soft); border-radius: 10px; }
+.bc-empty { color: var(--text-dim); font-weight: 400; }

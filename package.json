@@ -1,0 +1,13 @@
+{
+  "name": "soiree-jeux",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Soirée — site de jeux à boire et jeux d'ambiance",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,217 @@
+/* =========================================================================
+   BASE — variables globales, reset léger, layout, écran d'accueil.
+   Chaque jeu peut surcharger ces variables dans son propre style.css
+   via le sélecteur .screen[data-game="<id>"].
+   ========================================================================= */
+
+:root {
+  /* Palette globale (thème par défaut) */
+  --bg: #0f0f1a;
+  --bg-soft: #1a1a2e;
+  --bg-card: #21213a;
+  --bg-card-hover: #2a2a4a;
+  --text: #f2f2f7;
+  --text-dim: #a0a0c0;
+  --accent: #ff4d6d;
+  --accent-2: #4dd0e1;
+  --border: rgba(255, 255, 255, 0.08);
+  --radius: 18px;
+  --radius-sm: 12px;
+  --shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+  --maxw: 900px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  font-family: var(--font);
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(255, 77, 109, 0.15), transparent 60%),
+    radial-gradient(1000px 500px at 0% 110%, rgba(77, 208, 225, 0.12), transparent 55%),
+    var(--bg);
+  color: var(--text);
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- Header ---------- */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px clamp(16px, 4vw, 32px);
+  background: rgba(15, 15, 26, 0.72);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+}
+.app-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); }
+.app-logo__mark { font-size: 26px; }
+.app-logo__text { font-weight: 800; letter-spacing: 0.5px; font-size: 20px; }
+.app-nav { display: flex; gap: 8px; }
+.app-nav a {
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 14px;
+  padding: 6px 12px;
+  border-radius: 999px;
+}
+.app-nav a:hover { color: var(--text); background: var(--bg-card); }
+
+/* ---------- Layout principal ---------- */
+.app-main {
+  flex: 1;
+  width: 100%;
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: clamp(20px, 5vw, 40px) clamp(16px, 4vw, 32px);
+}
+
+.app-footer {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 12px;
+  padding: 24px 16px 40px;
+}
+
+/* ---------- Accueil ---------- */
+.home-hero { margin-bottom: 36px; }
+.home-hero h1 {
+  font-size: clamp(30px, 7vw, 52px);
+  line-height: 1.05;
+  letter-spacing: -1px;
+}
+.home-hero h1 span { color: var(--accent); }
+.home-hero p { color: var(--text-dim); margin-top: 12px; font-size: 17px; max-width: 560px; }
+
+.category { margin-bottom: 34px; }
+.category__title {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  margin-bottom: 14px;
+  font-weight: 700;
+}
+
+.game-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 14px;
+}
+
+.game-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-decoration: none;
+  color: var(--text);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  min-height: 132px;
+  overflow: hidden;
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.game-card::after {
+  /* accent coloré propre à chaque carte, piloté par --card-accent inline */
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--card-accent, var(--accent));
+}
+.game-card:hover { transform: translateY(-3px); background: var(--bg-card-hover); border-color: var(--card-accent, var(--accent)); }
+.game-card__icon { font-size: 30px; }
+.game-card__title { font-weight: 700; font-size: 17px; }
+.game-card__desc { color: var(--text-dim); font-size: 13px; line-height: 1.4; }
+
+/* ---------- Composants réutilisables par les jeux ---------- */
+.screen { animation: fadeIn 0.25s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+.screen__head { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+.screen__back {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 12px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  color: var(--text); text-decoration: none; font-size: 18px;
+}
+.screen__back:hover { background: var(--bg-card-hover); }
+.screen__title { font-size: clamp(22px, 5vw, 32px); font-weight: 800; }
+.screen__subtitle { color: var(--text-dim); font-size: 14px; margin-top: 2px; }
+
+.btn {
+  appearance: none; border: none; cursor: pointer;
+  font-family: inherit; font-size: 16px; font-weight: 700;
+  padding: 14px 22px; border-radius: 14px;
+  background: var(--accent); color: #fff;
+  transition: transform 0.1s ease, filter 0.15s ease;
+}
+.btn:hover { filter: brightness(1.08); }
+.btn:active { transform: scale(0.97); }
+.btn--ghost { background: var(--bg-card); color: var(--text); border: 1px solid var(--border); }
+.btn--full { width: 100%; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: clamp(20px, 5vw, 36px);
+  box-shadow: var(--shadow);
+}
+
+.input, .select {
+  width: 100%;
+  font-family: inherit; font-size: 16px;
+  padding: 12px 14px; border-radius: 12px;
+  background: var(--bg-soft); color: var(--text);
+  border: 1px solid var(--border);
+}
+.input:focus, .select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+.stack { display: flex; flex-direction: column; gap: 14px; }
+.center { text-align: center; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 999px;
+  background: var(--bg-soft); border: 1px solid var(--border);
+  font-size: 13px; cursor: pointer; color: var(--text-dim);
+}
+.chip.is-active { background: var(--accent); color: #fff; border-color: transparent; }
+
+.big-prompt {
+  font-size: clamp(22px, 6vw, 34px);
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Composant joueurs (players.js) */
+.pl-row { display: flex; gap: 8px; align-items: center; }
+.pl-row .input { flex: 1; }
+.pl-del { width: 46px; flex: 0 0 auto; padding: 12px 0; text-align: center; }
+
+.placeholder {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 30px;
+  text-align: center;
+  color: var(--text-dim);
+}

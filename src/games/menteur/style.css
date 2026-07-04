@@ -1,0 +1,13 @@
+/* Style propre à « Le Menteur ». */
+.screen[data-game="menteur"] { --accent: #69db7c; }
+.mt-mission {
+  font-size: clamp(20px, 5vw, 28px); font-weight: 700; line-height: 1.35;
+  margin: 18px 0; color: #69db7c;
+}
+.mt-reveal-row {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 12px 14px; border-radius: 12px; background: var(--bg-soft);
+  border: 1px solid var(--border);
+}
+.mt-reveal-row strong { color: #69db7c; }
+.mt-reveal-row span { font-size: 14px; color: var(--text-dim); }
