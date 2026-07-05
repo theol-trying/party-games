@@ -4,8 +4,9 @@
    Route "#/jeu/<id>"    -> charge et monte le jeu correspondant
    ========================================================================= */
 
-import { CATEGORIES, GAMES, getGame, gamesByCategory } from "./registry.js";
-import { el, ensureGameStyle } from "./ui.js";
+import { CATEGORIES, getGame, gamesByCategory } from "./registry.js";
+import { el, ensureGameStyle, announce } from "./ui.js";
+import { currentRoom, newRoom, setRoom, normalizeCode } from "./room.js";
 
 const app = document.getElementById("app");
 
@@ -22,6 +23,58 @@ function teardown() {
     }
     currentCleanup = null;
   }
+}
+
+/* ---------- Bandeau « soirée » (code de room) ---------- */
+function roomBanner() {
+  const code = currentRoom();
+
+  const info = el("div.room-banner__info", {}, [
+    el("span.room-banner__label", { text: "Soirée" }),
+    el("span.room-banner__code", { text: code }),
+  ]);
+
+  const shareBtn = el("button.chip", { text: "🔗 Partager", "aria-label": "Copier le lien de la soirée" });
+  shareBtn.addEventListener("click", async () => {
+    const link = `${location.origin}${location.pathname}#/r/${code}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      shareBtn.textContent = "Copié ✓";
+      announce("Lien de la soirée copié");
+      setTimeout(() => (shareBtn.textContent = "🔗 Partager"), 1500);
+    } catch {
+      window.prompt("Copie ce lien pour inviter :", link);
+    }
+  });
+
+  const joinBtn = el("button.chip", { text: "Rejoindre" });
+  const newBtn = el("button.chip", { text: "Nouvelle" });
+  newBtn.addEventListener("click", () => {
+    newRoom();
+    announce("Nouvelle soirée créée");
+    renderHome();
+  });
+
+  const actions = el("div.room-banner__actions", {}, [shareBtn, joinBtn, newBtn]);
+
+  joinBtn.addEventListener("click", () => {
+    const input = el("input.input.room-banner__input", { placeholder: "CODE", maxlength: "8", "aria-label": "Code de la soirée à rejoindre" });
+    const ok = el("button.chip.is-active", { text: "OK" });
+    const join = () => {
+      const c = normalizeCode(input.value);
+      if (!c) return;
+      setRoom(c);
+      renderHome();
+    };
+    ok.addEventListener("click", join);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") join();
+    });
+    actions.replaceChildren(input, ok);
+    input.focus();
+  });
+
+  return el("section.room-banner", {}, [info, actions]);
 }
 
 /* ---------- Accueil ---------- */
@@ -63,6 +116,7 @@ function renderHome() {
     );
   }
 
+  frag.prepend(roomBanner());
   mount(frag);
 }
 
@@ -122,6 +176,15 @@ function router() {
   const token = ++routeToken; // invalide tout render asynchrone en cours
   teardown(); // nettoie l'écran précédent (timers, audio…)
   const hash = location.hash || "#/";
+
+  // Lien d'invitation #/r/CODE : rejoint la soirée puis renvoie à l'accueil.
+  const rm = hash.match(/^#\/r\/([A-Za-z0-9]{1,8})/);
+  if (rm) {
+    setRoom(rm[1]);
+    location.hash = "#/"; // déclenche un nouveau routage vers l'accueil
+    return;
+  }
+
   const m = hash.match(/^#\/jeu\/([\w-]+)/);
   if (m) renderGame(m[1], token);
   else renderHome();
