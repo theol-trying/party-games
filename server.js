@@ -141,10 +141,14 @@ function pruneRate(now) {
 }
 
 function originAllowed(req) {
-  if (!ALLOWED_ORIGINS.length) return true; // pas de contrôle configuré
   const origin = req.headers.origin;
-  if (!origin) return true; // requêtes same-origin sans en-tête Origin
-  return ALLOWED_ORIGINS.includes(origin);
+  if (!origin) return true; // même origine (GET) ou client non-navigateur
+  // Le site peut TOUJOURS appeler sa propre API, quelle que soit l'URL Render.
+  try {
+    if (new URL(origin).host === req.headers.host) return true;
+  } catch {}
+  if (!ALLOWED_ORIGINS.length) return true; // pas de restriction supplémentaire configurée
+  return ALLOWED_ORIGINS.includes(origin); // origines externes explicitement autorisées
 }
 
 function readBody(req, limit) {
@@ -195,7 +199,24 @@ const server = http.createServer(async (req, res) => {
 
   // Endpoint de santé (léger, pas de contrôle) — pratique pour Render.
   if (pathname === "/api/health") {
-    return sendJson(res, 200, { ok: true, redis: Boolean(REDIS_URL && REDIS_TOKEN) });
+    const info = {
+      ok: true,
+      redis: Boolean(REDIS_URL && REDIS_TOKEN), // les variables Upstash sont-elles vues ?
+      node: process.version, // >= v18 requis pour que fetch existe
+      fetch: typeof fetch === "function",
+      originRestricted: ALLOWED_ORIGINS.length > 0,
+    };
+    // /api/health?deep=1 : teste vraiment la connexion Upstash (PING).
+    // Permet de distinguer « variables absentes » de « variables erronées ».
+    if (url.searchParams.get("deep") === "1" && info.redis) {
+      try {
+        info.redisPing = await redisCmd(["PING"]);
+      } catch (e) {
+        info.ok = false;
+        info.redisError = String(e && e.message ? e.message : e);
+      }
+    }
+    return sendJson(res, 200, info);
   }
 
   // Toutes les autres routes /api/* : contrôles transverses.
