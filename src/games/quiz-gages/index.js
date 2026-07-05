@@ -1,25 +1,23 @@
-import { el, screenHead, shuffle, pick } from "../../ui.js";
-import { QUESTIONS, GAGES } from "./data.js";
+import { el, screenHead } from "../../ui.js";
+import { createDeck } from "../../deck.js";
+import { pickGage } from "../../gages.js";
+import { QUESTIONS } from "./data.js";
 
 export function render(container, { game }) {
-  let deck = shuffle(QUESTIONS);
-  let i = 0;
+  const deck = createDeck(QUESTIONS); // anti-répétition partagée
+  let count = 0;
   let answered = false;
 
   container.append(screenHead(game.title, "Mauvaise réponse = gorgée ou gage"));
   const stage = el("div");
   container.append(stage);
 
-  function current() {
-    if (i >= deck.length) deck = shuffle(QUESTIONS), (i = 0);
-    return deck[i];
-  }
-
   function draw() {
     answered = false;
-    const item = current();
+    const item = deck.next();
+    count++;
     const feedback = el("div.qz-feedback", { style: "min-height:26px;margin-top:14px" });
-    const nextBtn = el("button.btn.btn--full", { text: "Question suivante →", style: "display:none;margin-top:14px", onClick: () => { i++; draw(); } });
+    const nextBtn = el("button.btn.btn--full", { text: "Question suivante →", style: "display:none;margin-top:14px", onClick: draw });
 
     const choices = el(
       "div.stack.qz-choices",
@@ -37,7 +35,8 @@ export function render(container, { game }) {
             });
             if (!correct) {
               e.currentTarget.classList.add("is-wrong");
-              feedback.innerHTML = `❌ Raté ! <strong>${pick(GAGES)}</strong>`;
+              // Contenu construit en nœuds DOM (jamais innerHTML).
+              feedback.replaceChildren("❌ Raté ! ", el("strong", { text: pickGage() }));
             } else {
               feedback.textContent = "✅ Bien joué !";
             }
@@ -49,7 +48,7 @@ export function render(container, { game }) {
 
     stage.replaceChildren(
       el("div.card", {}, [
-        el("p.screen__subtitle", { text: `Question ${i + 1}` }),
+        el("p.screen__subtitle", { text: `Question ${count}` }),
         el("h2.qz-question", { text: item.q, style: "margin:8px 0 18px" }),
         choices,
         feedback,

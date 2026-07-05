@@ -1,20 +1,15 @@
-import { el, screenHead, shuffle } from "../../ui.js";
+import { el, screenHead } from "../../ui.js";
+import { createDeck } from "../../deck.js";
 import { DILEMMES } from "./data.js";
 
 export function render(container, { game }) {
-  let deck = shuffle(DILEMMES);
-  let i = 0;
+  const deck = createDeck(DILEMMES); // anti-répétition partagée
   let counts = { a: 0, b: 0 };
   let revealed = false;
 
   container.append(screenHead(game.title, "Tape ton camp · le camp minoritaire boit"));
   const stage = el("div");
   container.append(stage);
-
-  function current() {
-    if (i >= deck.length) deck = shuffle(DILEMMES), (i = 0);
-    return deck[i];
-  }
 
   function optionBtn(side, label) {
     const btn = el("button.tp-option", {}, [
@@ -52,12 +47,12 @@ export function render(container, { game }) {
   function draw() {
     revealed = false;
     counts = { a: 0, b: 0 };
-    const d = current();
+    const d = deck.next();
     stage.replaceChildren(
       el("div.tp-board", {}, [optionBtn("a", d.a), el("div.tp-or", { text: "OU" }), optionBtn("b", d.b)]),
       el("p.tp-verdict.center", { style: "min-height:22px;margin:16px 0;font-weight:700" }),
       el("button.btn.btn--full.tp-reveal", { text: "Révéler le résultat", onClick: reveal }),
-      el("button.btn.btn--full.tp-next", { text: "Dilemme suivant →", style: "display:none", onClick: () => { i++; draw(); } })
+      el("button.btn.btn--full.tp-next", { text: "Dilemme suivant →", style: "display:none", onClick: draw })
     );
   }
 

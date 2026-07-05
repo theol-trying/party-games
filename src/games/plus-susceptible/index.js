@@ -1,5 +1,6 @@
-import { el, screenHead, shuffle } from "../../ui.js";
+import { el, screenHead } from "../../ui.js";
 import { playersCard } from "../../players.js";
+import { createDeck } from "../../deck.js";
 import { AFFIRMATIONS } from "./data.js";
 
 export function render(container, { game }) {
@@ -12,13 +13,10 @@ export function render(container, { game }) {
   );
 
   function startGame(players) {
-    let deck = shuffle(AFFIRMATIONS);
-    let round = 0;
+    const deck = createDeck(AFFIRMATIONS); // anti-répétition partagée
 
     function nextRound() {
-      if (round >= deck.length) deck = shuffle(AFFIRMATIONS), (round = 0);
-      const statement = deck[round++];
-      runVote(players, statement);
+      runVote(players, deck.next());
     }
     nextRound();
 

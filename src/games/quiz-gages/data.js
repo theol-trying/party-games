@@ -1,5 +1,5 @@
 /* Quiz culture générale. correct = index de la bonne réponse (0-based).
-   GAGES : piochés au hasard quand la réponse est fausse. Enrichis librement. */
+   Les gages sont désormais centralisés dans src/gages.js (pickGage). Enrichis librement. */
 export const QUESTIONS = [
   { q: "Quelle est la capitale de l'Australie ?", choices: ["Sydney", "Canberra", "Melbourne", "Perth"], correct: 1 },
   { q: "Combien de côtés a un hexagone ?", choices: ["5", "6", "7", "8"], correct: 1 },
@@ -11,13 +11,4 @@ export const QUESTIONS = [
   { q: "Quelle planète est la plus proche du Soleil ?", choices: ["Vénus", "Mercure", "Mars", "Terre"], correct: 1 },
   { q: "Qui a écrit « Les Misérables » ?", choices: ["Zola", "Balzac", "Hugo", "Flaubert"], correct: 2 },
   { q: "Quel pays a gagné la Coupe du monde 2018 ?", choices: ["Croatie", "France", "Allemagne", "Brésil"], correct: 1 },
-];
-
-export const GAGES = [
-  "Bois une gorgée 🍺",
-  "Cul sec du fond de ton verre",
-  "Distribue 2 gorgées à qui tu veux",
-  "Fais un compliment à ton voisin, sinon bois double",
-  "Imite un animal jusqu'à ton prochain tour",
-  "Bois et raconte une anecdote gênante",
 ];
