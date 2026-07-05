@@ -1,0 +1,15 @@
+{
+  "name": "Soirée — Jeux à boire & jeux d'ambiance",
+  "short_name": "Soirée",
+  "description": "10 jeux de soirée et jeux à boire, pour un téléphone posé sur la table.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f0f1a",
+  "theme_color": "#0f0f1a",
+  "lang": "fr",
+  "icons": [
+    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

@@ -193,3 +193,10 @@ function router() {
 window.addEventListener("hashchange", router);
 window.addEventListener("DOMContentLoaded", router);
 router();
+
+// Service worker : installe le support hors-ligne (échoue en silence si indispo).
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  });
+}
