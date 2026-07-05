@@ -1,5 +1,6 @@
 import { el, screenHead, shuffle } from "../../ui.js";
 import { playersCard } from "../../players.js";
+import { createScores, scoreboard } from "../../scoring.js";
 import { TRACKS } from "./data.js";
 
 export function render(container, { game }) {
@@ -19,7 +20,7 @@ export function render(container, { game }) {
   };
 
   function startGame(players) {
-    const scores = Object.fromEntries(players.map((p) => [p, 0]));
+    const sc = createScores("blind-test", players); // scores persistés par soirée
     let deck = shuffle(TRACKS);
     let round = 0;
     let buzzedBy = null;
@@ -28,17 +29,6 @@ export function render(container, { game }) {
     function track() {
       if (round >= deck.length) deck = shuffle(TRACKS), (round = 0);
       return deck[round];
-    }
-
-    function scoreboard() {
-      const ranked = [...players].sort((a, b) => scores[b] - scores[a]);
-      return el(
-        "div.bt-scores",
-        {},
-        ranked.map((p) =>
-          el("div.bt-score-row", {}, [el("span", { text: p }), el("span.bt-score-val", { text: String(scores[p]) })])
-        )
-      );
     }
 
     function playRound() {
@@ -82,7 +72,7 @@ export function render(container, { game }) {
       const answer = el("div.bt-answer", { style: "display:none" });
 
       function resolve(correct) {
-        if (correct && buzzedBy) scores[buzzedBy]++;
+        if (correct && buzzedBy) sc.add(buzzedBy);
         revealAnswer();
       }
       function revealAnswer() {
@@ -93,11 +83,11 @@ export function render(container, { game }) {
           el("div.bt-answer__title", { text: t.title }),
           el("div.bt-answer__artist", { text: t.artist })
         );
-        scoreWrap.replaceChildren(scoreboard());
+        scoreWrap.replaceChildren(scoreboard(sc.scores));
         judge.style.display = "none";
       }
 
-      const scoreWrap = el("div", {}, [scoreboard()]);
+      const scoreWrap = el("div", {}, [scoreboard(sc.scores)]);
 
       stage.replaceChildren(
         el("div.card", {}, [
@@ -112,10 +102,22 @@ export function render(container, { game }) {
             el("button.btn", { text: "Manche suivante →", onClick: () => { round++; playRound(); } }),
           ]),
         ]),
-        el("div.card", { style: "margin-top:16px" }, [el("h3", { text: "Scores", style: "margin-bottom:10px" }), scoreWrap]),
+        el("div.card", { style: "margin-top:16px" }, [
+          el("div.row", { style: "justify-content:space-between;align-items:center;margin-bottom:10px" }, [
+            el("h3", { text: "Scores" }),
+            el("button.chip", {
+              text: "↺ Réinitialiser",
+              onClick: () => {
+                sc.reset();
+                scoreWrap.replaceChildren(scoreboard(sc.scores));
+              },
+            }),
+          ]),
+          scoreWrap,
+        ]),
       );
     }
 
-    playRound();
+    sc.ready.then(playRound); // affiche d'emblée les scores persistés de la soirée
   }
 }

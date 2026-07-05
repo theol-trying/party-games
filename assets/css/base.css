@@ -220,6 +220,17 @@ body {
   justify-content: center;
 }
 
+/* Tableau des scores partagé (scoring.js) */
+.sb { display: flex; flex-direction: column; gap: 6px; }
+.sb-row {
+  display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px;
+  padding: 9px 12px; background: var(--bg-soft); border-radius: 10px;
+}
+.sb-row.is-leader { background: rgba(255, 215, 0, 0.12); border: 1px solid rgba(255, 215, 0, 0.35); }
+.sb-rank { text-align: center; font-weight: 700; }
+.sb-name { font-weight: 600; }
+.sb-pts { font-weight: 800; color: var(--accent-2); }
+
 /* Composant joueurs (players.js) */
 .pl-row { display: flex; gap: 8px; align-items: center; }
 .pl-row .input { flex: 1; }
