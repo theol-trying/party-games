@@ -17,3 +17,8 @@ services:
         sync: false
       - key: UPSTASH_REDIS_REST_TOKEN
         sync: false
+      # Recommandé en prod : restreint l'API à ton domaine (bloque l'usage cross-site).
+      # Mets l'URL exacte de ton app, ex "https://soiree-jeux.onrender.com".
+      # Laisse vide pour ne pas restreindre. Plusieurs origines = séparées par des virgules.
+      - key: ALLOWED_ORIGIN
+        sync: false

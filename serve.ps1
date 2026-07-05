@@ -36,7 +36,7 @@ $mime = @{
 }
 
 function Send-Response($stream, $status, $ctype, [byte[]]$body) {
-  $header = "HTTP/1.1 $status`r`nContent-Type: $ctype`r`nContent-Length: $($body.Length)`r`nConnection: close`r`nCache-Control: no-store`r`n`r`n"
+  $header = "HTTP/1.1 $status`r`nContent-Type: $ctype`r`nContent-Length: $($body.Length)`r`nConnection: close`r`nCache-Control: no-store`r`nX-Content-Type-Options: nosniff`r`n`r`n"
   $hb = [System.Text.Encoding]::ASCII.GetBytes($header)
   $stream.Write($hb, 0, $hb.Length)
   $stream.Write($body, 0, $body.Length)
@@ -53,6 +53,10 @@ Write-Host "Soiree servi sur  http://localhost:$Port   (Ctrl+C pour arreter)" -F
 try {
   while ($true) {
     $client = $listener.AcceptTcpClient()
+    # Timeouts : une socket ouverte sans requête (preconnect navigateur) ne doit
+    # pas figer ce serveur mono-thread ; elle expire et libère la boucle.
+    $client.ReceiveTimeout = 5000
+    $client.SendTimeout = 5000
     try {
       $stream = $client.GetStream()
 
@@ -101,6 +105,15 @@ try {
       }
       if ($urlPath -like "/api/kv/*") {
         $key = $urlPath.Substring("/api/kv/".Length)
+        # Mêmes contrôles que server.js : allowlist de clé + plafond de taille.
+        if ($key -notmatch '^[A-Za-z0-9:_-]{1,80}$') {
+          Send-Json $stream "400 Bad Request" '{"error":"cle invalide"}'
+          $client.Close(); continue
+        }
+        if (($method -eq "PUT" -or $method -eq "POST") -and $contentLength -gt 32768) {
+          Send-Json $stream "413 Payload Too Large" '{"error":"valeur trop volumineuse"}'
+          $client.Close(); continue
+        }
         if ($method -eq "GET") {
           if ($script:KV.ContainsKey($key)) {
             Send-Json $stream "200 OK" ('{"key":' + (ConvertTo-Json $key) + ',"value":' + $script:KV[$key] + '}')
@@ -115,7 +128,8 @@ try {
             Save-KV
             Send-Json $stream "200 OK" ('{"key":' + (ConvertTo-Json $key) + ',"ok":true}')
           } catch {
-            Send-Json $stream "500 Internal Server Error" ('{"error":' + (ConvertTo-Json "$($_.Exception.Message)") + '}')
+            Write-Host "[kv] PUT $key : $($_.Exception.Message)" -ForegroundColor Yellow
+            Send-Json $stream "400 Bad Request" '{"error":"corps JSON invalide"}'
           }
         } else {
           Send-Json $stream "405 Method Not Allowed" '{"error":"methode non autorisee"}'
