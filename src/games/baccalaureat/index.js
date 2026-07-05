@@ -1,10 +1,12 @@
-import { el, screenHead, pick } from "../../ui.js";
+import { el, screenHead } from "../../ui.js";
+import { createDeck } from "../../deck.js";
 import { CATEGORIES_DEFAUT, LETTRES, DUREE_DEFAUT } from "./data.js";
 
 export function render(container, { game }) {
   let duree = DUREE_DEFAUT;
   let categories = [...CATEGORIES_DEFAUT];
   let activeTimer = null; // chrono en cours, réf. au niveau du jeu pour pouvoir l'arrêter
+  const deck = createDeck(LETTRES); // tirage des lettres sans répétition
 
   container.append(screenHead(game.title, "Une lettre, des catégories, le chrono tourne"));
   const stage = el("div");
@@ -54,7 +56,11 @@ export function render(container, { game }) {
   }
 
   function play() {
-    const lettre = pick(LETTRES);
+    let lettre = deck.next();
+    if (lettre === null) { // toutes les lettres tirées : on relance un cycle complet
+      deck.reset();
+      lettre = deck.next();
+    }
     let remaining = duree;
 
     const timeEl = el("div.bc-timer", { text: fmt(remaining) });

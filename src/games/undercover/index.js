@@ -1,11 +1,15 @@
-import { el, screenHead, shuffle, pick } from "../../ui.js";
+import { el, screenHead, shuffle } from "../../ui.js";
 import { playersCard } from "../../players.js";
+import { createDeck } from "../../deck.js";
 import { PAIRES } from "./data.js";
 
 export function render(container, { game }) {
   container.append(screenHead(game.title, "Distribution secrète · un intrus parmi vous"));
   const stage = el("div");
   container.append(stage);
+
+  // Deck persistant entre parties (via Rejouer) : évite de revoir vite la même paire.
+  const deck = (game._undercoverDeck ||= createDeck(PAIRES));
 
   let impostorCount = 1;
 
@@ -36,7 +40,7 @@ export function render(container, { game }) {
   }
 
   function distribute(players) {
-    const pair = pick(PAIRES);
+    const pair = deck.next();
     const order = shuffle(players.map((_, i) => i));
     const impostors = new Set(order.slice(0, impostorCount));
     const roles = players.map((name, i) => ({

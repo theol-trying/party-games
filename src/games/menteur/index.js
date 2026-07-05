@@ -1,8 +1,10 @@
-import { el, screenHead, shuffle } from "../../ui.js";
+import { el, screenHead } from "../../ui.js";
+import { createDeck } from "../../deck.js";
 import { playersCard } from "../../players.js";
 import { MISSIONS } from "./data.js";
 
 export function render(container, { game }) {
+  const deck = createDeck(MISSIONS);
   container.append(screenHead(game.title, "Une mission secrète à glisser dans la conversation"));
   const stage = el("div");
   container.append(stage);
@@ -12,8 +14,7 @@ export function render(container, { game }) {
   );
 
   function distribute(players) {
-    const pool = shuffle(MISSIONS);
-    const roles = players.map((name, i) => ({ name, mission: pool[i % pool.length] }));
+    const roles = players.map((name) => ({ name, mission: deck.next() }));
 
     let idx = 0;
     function pass() {
@@ -69,7 +70,11 @@ export function render(container, { game }) {
             ])
           )
         ),
-        el("button.btn.btn--full", { text: "Rejouer", style: "margin-top:20px", onClick: () => { container.replaceChildren(); render(container, { game }); } }),
+        el("button.btn.btn--full", { text: "Rejouer", style: "margin-top:20px", onClick: () => {
+          stage.replaceChildren(
+            playersCard({ min: 2, cta: "Distribuer les missions", onReady: (names) => distribute(names) })
+          );
+        } }),
       ])
     );
   }

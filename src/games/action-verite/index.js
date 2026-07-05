@@ -1,15 +1,21 @@
-import { el, screenHead, pick } from "../../ui.js";
+import { el, screenHead } from "../../ui.js";
+import { createDeck } from "../../deck.js";
 import { VERITES, ACTIONS } from "./data.js";
 
 export function render(container, { game }) {
   let intensity = "soft"; // "soft" | "hot"
 
+  // Un paquet anti-répétition par combinaison (type × intensité).
+  const decks = {
+    verite: { soft: createDeck(VERITES.soft), hot: createDeck(VERITES.hot) },
+    action: { soft: createDeck(ACTIONS.soft), hot: createDeck(ACTIONS.hot) },
+  };
+
   const promptBox = el("div.big-prompt.av-prompt", { text: "Prêt·e ? Choisis Action ou Vérité." });
   const tag = el("div.av-tag");
 
   function draw(kind) {
-    const pool = kind === "verite" ? VERITES[intensity] : ACTIONS[intensity];
-    promptBox.textContent = pick(pool);
+    promptBox.textContent = decks[kind][intensity].next();
     promptBox.classList.remove("av-flash");
     void promptBox.offsetWidth; // reflow pour rejouer l'anim
     promptBox.classList.add("av-flash");

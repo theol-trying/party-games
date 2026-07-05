@@ -1,6 +1,7 @@
-import { el, screenHead, shuffle } from "../../ui.js";
+import { el, screenHead } from "../../ui.js";
 import { playersCard } from "../../players.js";
 import { createScores, scoreboard } from "../../scoring.js";
+import { createDeck } from "../../deck.js";
 import { TRACKS } from "./data.js";
 
 export function render(container, { game }) {
@@ -21,20 +22,16 @@ export function render(container, { game }) {
 
   function startGame(players) {
     const sc = createScores("blind-test", players); // scores persistés par soirée
-    let deck = shuffle(TRACKS);
+    const deck = createDeck(TRACKS);
     let round = 0;
     let buzzedBy = null;
     let revealed = false;
 
-    function track() {
-      if (round >= deck.length) deck = shuffle(TRACKS), (round = 0);
-      return deck[round];
-    }
-
     function playRound() {
       buzzedBy = null;
       revealed = false;
-      const t = track();
+      let t = deck.next();
+      if (!t) { deck.reset(); t = deck.next(); } // toutes les pistes vues : on recommence
 
       const audio = t.audioUrl
         ? el("audio.bt-audio", { src: t.audioUrl, controls: "", "aria-label": "Extrait à deviner" })
