@@ -6,10 +6,17 @@ export function render(container, { game }) {
   container.append(screenHead(game.title, "Buzzer + scores en temps réel"));
   const stage = el("div");
   container.append(stage);
+  let currentAudio = null; // extrait en cours, pour pouvoir l'arrêter
 
   stage.append(
     playersCard({ min: 2, cta: "Lancer le blind test", onReady: (names) => startGame(names) })
   );
+
+  // Nettoyage appelé par le routeur : coupe l'extrait si on quitte le jeu.
+  return () => {
+    if (currentAudio) currentAudio.pause();
+    currentAudio = null;
+  };
 
   function startGame(players) {
     const scores = Object.fromEntries(players.map((p) => [p, 0]));
@@ -40,8 +47,12 @@ export function render(container, { game }) {
       const t = track();
 
       const audio = t.audioUrl
-        ? el("audio.bt-audio", { src: t.audioUrl, controls: "" })
+        ? el("audio.bt-audio", { src: t.audioUrl, controls: "", "aria-label": "Extrait à deviner" })
         : el("div.placeholder", { text: "Pas d'audio branché : lance l'extrait depuis ton téléphone/enceinte, puis buzzez." });
+
+      // Coupe l'extrait précédent et mémorise le nouveau (pour le cleanup).
+      if (currentAudio) currentAudio.pause();
+      currentAudio = t.audioUrl ? audio : null;
 
       const buzzers = el(
         "div.bt-buzzers",

@@ -4,12 +4,19 @@ import { CATEGORIES_DEFAUT, LETTRES, DUREE_DEFAUT } from "./data.js";
 export function render(container, { game }) {
   let duree = DUREE_DEFAUT;
   let categories = [...CATEGORIES_DEFAUT];
+  let activeTimer = null; // chrono en cours, réf. au niveau du jeu pour pouvoir l'arrêter
 
   container.append(screenHead(game.title, "Une lettre, des catégories, le chrono tourne"));
   const stage = el("div");
   container.append(stage);
 
   setup();
+
+  // Nettoyage appelé par le routeur quand on quitte le jeu : stoppe le chrono.
+  return () => {
+    if (activeTimer) clearInterval(activeTimer);
+    activeTimer = null;
+  };
 
   function setup() {
     const catText = el("textarea.input", {
@@ -49,7 +56,6 @@ export function render(container, { game }) {
   function play() {
     const lettre = pick(LETTRES);
     let remaining = duree;
-    let timer = null;
 
     const timeEl = el("div.bc-timer", { text: fmt(remaining) });
     const bar = el("div.bc-bar__fill");
@@ -69,12 +75,13 @@ export function render(container, { game }) {
       if (remaining <= 0) stop(true);
     }
     function stop(timeUp) {
-      if (timer) clearInterval(timer);
-      timer = null;
+      if (activeTimer) clearInterval(activeTimer);
+      activeTimer = null;
       finish(timeUp);
     }
 
-    timer = setInterval(tick, 1000);
+    if (activeTimer) clearInterval(activeTimer); // sécurité : pas deux chronos à la fois
+    activeTimer = setInterval(tick, 1000);
 
     stage.replaceChildren(
       el("div.card.center.bc-header", {}, [

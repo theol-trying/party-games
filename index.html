@@ -6,7 +6,6 @@
   <meta name="theme-color" content="#0f0f1a" />
   <title>Soirée — Jeux à boire & jeux d'ambiance</title>
   <link rel="stylesheet" href="assets/css/base.css" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
 </head>
 <body>
   <header class="app-header">
@@ -14,7 +13,6 @@
       <span class="app-logo__mark">🍻</span>
       <span class="app-logo__text">Soirée</span>
     </a>
-    <nav class="app-nav" id="app-nav"></nav>
   </header>
 
   <main id="app" class="app-main">
@@ -24,6 +22,9 @@
   <footer class="app-footer">
     <p>À consommer avec modération · Réservé aux adultes · Fait pour rigoler entre potes</p>
   </footer>
+
+  <!-- Région d'annonces pour lecteurs d'écran (persistante, hors flux visuel). -->
+  <div id="a11y-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
   <script type="module" src="src/main.js"></script>
 </body>

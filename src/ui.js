@@ -63,6 +63,30 @@ export function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+/** Annonce un message aux lecteurs d'écran via la région aria-live persistante
+    (#a11y-live dans index.html, qui survit aux remplacements de #app). */
+export function announce(message) {
+  const region = document.getElementById("a11y-live");
+  if (!region) return;
+  region.textContent = "";
+  // Décale la mise à jour pour forcer la relecture même si le texte est identique.
+  requestAnimationFrame(() => {
+    region.textContent = message;
+  });
+}
+
+/** Remplace le contenu d'un conteneur de phase :
+    - réinitialise le scroll en haut (sinon la nouvelle phase reste hors écran),
+    - rejoue l'animation d'entrée.
+    Accepte un ou plusieurs nœuds. */
+export function showPhase(container, ...nodes) {
+  container.replaceChildren(...nodes);
+  container.classList.remove("phase-in");
+  void container.offsetWidth; // reflow pour rejouer l'anim
+  container.classList.add("phase-in");
+  window.scrollTo({ top: 0 });
+}
+
 /** Charge (une seule fois) la feuille de style propre à un jeu. */
 export function ensureGameStyle(gameId) {
   const href = `src/games/${gameId}/style.css`;
