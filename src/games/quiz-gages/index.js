@@ -1,14 +1,24 @@
 import { el, screenHead } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { pickGage } from "../../gages.js";
+import { levelSelector } from "../../levels.js";
 import { QUESTIONS } from "./data.js";
 
 export function render(container, { game }) {
   const deck = createDeck(QUESTIONS); // anti-répétition partagée
   let count = 0;
   let answered = false;
+  let level = "soft"; // niveau des gages
 
-  container.append(screenHead(game.title, "Mauvaise réponse = gorgée ou gage"));
+  const levelUI = levelSelector({ initial: level, onChange: (v) => (level = v) });
+
+  container.append(
+    screenHead(game.title, "Mauvaise réponse = gorgée ou gage"),
+    el("div.card", { style: "margin-bottom:14px" }, [
+      el("p.screen__subtitle", { text: "Niveau des gages", style: "margin-bottom:8px" }),
+      levelUI.node,
+    ])
+  );
   const stage = el("div");
   container.append(stage);
 
@@ -35,8 +45,8 @@ export function render(container, { game }) {
             });
             if (!correct) {
               e.currentTarget.classList.add("is-wrong");
-              // Contenu construit en nœuds DOM (jamais innerHTML).
-              feedback.replaceChildren("❌ Raté ! ", el("strong", { text: pickGage() }));
+              // Contenu construit en nœuds DOM (jamais innerHTML). Gage au niveau choisi.
+              feedback.replaceChildren("❌ Raté ! ", el("strong", { text: pickGage(level) }));
             } else {
               feedback.textContent = "✅ Bien joué !";
             }

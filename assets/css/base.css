@@ -291,3 +291,8 @@ select:focus-visible {
     padding-bottom: max(clamp(20px, 5vw, 40px), env(safe-area-inset-bottom));
   }
 }
+
+/* Sélecteur de niveaux (levels.js) */
+.lvl { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.lvl-consent { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-dim); cursor: pointer; }
+.lvl-consent input { width: 18px; height: 18px; accent-color: var(--accent); flex: 0 0 auto; }

@@ -1,5 +1,6 @@
 /* Données « Je n'ai jamais ». Chaque phrase commence implicitement par
-   « Je n'ai jamais… ». Niveaux : soft / hot. Enrichis à volonté. */
+   « Je n'ai jamais… ». Trois niveaux EXCLUSIFS (voir src/levels.js) :
+   soft · soiree · x18. Le niveau x18 est à compléter (vide pour l'instant). */
 
 export const PHRASES = {
   soft: [
@@ -14,7 +15,7 @@ export const PHRASES = {
     "fait un fou rire au pire moment possible.",
     "gardé un objet emprunté sans jamais le rendre.",
   ],
-  hot: [
+  soiree: [
     "embrassé quelqu'un dans cette pièce.",
     "eu un crush sur un·e ami·e de mes potes.",
     "fait un date via une appli.",
@@ -23,4 +24,5 @@ export const PHRASES = {
     "flirté pour obtenir quelque chose.",
     "fait des choses dans un lieu public.",
   ],
+  x18: [],
 };

@@ -1,21 +1,25 @@
 import { el, screenHead } from "../../ui.js";
 import { createDeck } from "../../deck.js";
+import { levelSelector, LEVELS } from "../../levels.js";
 import { VERITES, ACTIONS } from "./data.js";
 
 export function render(container, { game }) {
-  let intensity = "soft"; // "soft" | "hot"
+  let level = "soft";
 
-  // Un paquet anti-répétition par combinaison (type × intensité).
-  const decks = {
-    verite: { soft: createDeck(VERITES.soft), hot: createDeck(VERITES.hot) },
-    action: { soft: createDeck(ACTIONS.soft), hot: createDeck(ACTIONS.hot) },
-  };
+  // Un paquet anti-répétition par combinaison (type × niveau).
+  const decks = { verite: {}, action: {} };
+  for (const lv of LEVELS.map((l) => l.id)) {
+    decks.verite[lv] = createDeck(VERITES[lv] || []);
+    decks.action[lv] = createDeck(ACTIONS[lv] || []);
+  }
 
   const promptBox = el("div.big-prompt.av-prompt", { text: "Prêt·e ? Choisis Action ou Vérité." });
   const tag = el("div.av-tag");
 
   function draw(kind) {
-    promptBox.textContent = decks[kind][intensity].next();
+    const card = decks[kind][level].next();
+    promptBox.textContent =
+      card || "Aucune carte à ce niveau pour l'instant — ajoute-en dans data.js.";
     promptBox.classList.remove("av-flash");
     void promptBox.offsetWidth; // reflow pour rejouer l'anim
     promptBox.classList.add("av-flash");
@@ -23,20 +27,12 @@ export function render(container, { game }) {
     tag.dataset.kind = kind;
   }
 
-  const softChip = el("button.chip.is-active", { text: "😇 Soft" });
-  const hotChip = el("button.chip", { text: "🌶️ Hot" });
-  softChip.addEventListener("click", () => setIntensity("soft"));
-  hotChip.addEventListener("click", () => setIntensity("hot"));
-  function setIntensity(v) {
-    intensity = v;
-    softChip.classList.toggle("is-active", v === "soft");
-    hotChip.classList.toggle("is-active", v === "hot");
-  }
+  const levelUI = levelSelector({ initial: level, onChange: (v) => (level = v) });
 
   container.append(
-    screenHead(game.title, "Intensité réglable · appuie sur un bouton"),
+    screenHead(game.title, "Niveau réglable · appuie sur un bouton"),
     el("div.card.av-card", {}, [
-      el("div.row", { style: "justify-content:center;margin-bottom:18px" }, [softChip, hotChip]),
+      el("div", { style: "margin-bottom:18px" }, [levelUI.node]),
       tag,
       promptBox,
       el("div.row", { style: "justify-content:center;margin-top:22px" }, [

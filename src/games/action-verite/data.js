@@ -1,5 +1,7 @@
 /* Données « Action ou Vérité ».
-   Édite / enrichis librement. Chaque entrée a un niveau : "soft" ou "hot". */
+   Trois niveaux EXCLUSIFS (voir src/levels.js) : soft · soiree · x18.
+   Le contenu ci-dessous sera remplacé par ton fichier dédié ; le niveau x18
+   est volontairement vide pour l'instant (il s'affichera « à compléter »). */
 
 export const VERITES = {
   soft: [
@@ -12,7 +14,7 @@ export const VERITES = {
     "Quelle chanson honteuse écoutes-tu en boucle ?",
     "Quel est ton plus gros mensonge à tes parents ?",
   ],
-  hot: [
+  soiree: [
     "Quel est ton plus grand fantasme ?",
     "Qui, dans la pièce, embrasserais-tu si tu devais choisir ?",
     "Quel est l'endroit le plus insolite où tu as fait des choses ?",
@@ -20,6 +22,7 @@ export const VERITES = {
     "As-tu déjà menti pour éviter un date ? Raconte.",
     "Quel est ton red flag assumé en couple ?",
   ],
+  x18: [],
 };
 
 export const ACTIONS = {
@@ -32,11 +35,12 @@ export const ACTIONS = {
     "Danse 20 secondes sans musique.",
     "Montre la dernière photo de ta galerie.",
   ],
-  hot: [
+  soiree: [
     "Fais un lap dance de 15 secondes à la personne de ton choix.",
     "Laisse quelqu'un lire ton dernier échange de messages privés.",
     "Fais un bisou sur la joue à la personne à ta gauche… ou ailleurs.",
     "Mime ta position préférée, les autres devinent.",
     "Échange un vêtement avec la personne en face.",
   ],
+  x18: [],
 };
