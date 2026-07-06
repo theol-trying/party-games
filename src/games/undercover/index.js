@@ -1,53 +1,86 @@
-import { el, screenHead, shuffle } from "../../ui.js";
+import { el, screenHead, shuffle, announce } from "../../ui.js";
 import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
 import { PAIRES } from "./data.js";
 
 export function render(container, { game }) {
-  container.append(screenHead(game.title, "Distribution secrète · un intrus parmi vous"));
+  container.append(screenHead(game.title, "Distribution secrète · imposteurs & Mr White"));
   const stage = el("div");
   container.append(stage);
 
-  // Deck persistant entre parties (via Rejouer) : évite de revoir vite la même paire.
+  // Deck de paires persistant entre parties : évite de revoir vite la même paire.
   const deck = (game._undercoverDeck ||= createDeck(PAIRES));
+  let currentPair = null;
 
-  let impostorCount = 1;
+  showSetupIntro();
 
-  stage.append(
-    playersCard({ min: 3, cta: "Distribuer les mots", onReady: (names) => setup(names) })
-  );
+  function showSetupIntro() {
+    stage.replaceChildren(
+      playersCard({ min: 3, cta: "Distribuer les mots", onReady: (names) => setup(names) })
+    );
+  }
 
+  /* ---------- Réglage des rôles (imposteurs + Mr White) ---------- */
   function setup(players) {
-    // Réglage du nombre d'imposteurs
-    const maxImp = Math.max(1, Math.floor(players.length / 3));
-    const chips = el("div.row", { style: "justify-content:center;margin:12px 0" });
-    for (let n = 1; n <= maxImp; n++) {
-      const c = el("button.chip", { text: `${n} imposteur${n > 1 ? "s" : ""}` });
-      if (n === impostorCount) c.classList.add("is-active");
-      c.addEventListener("click", () => {
-        impostorCount = n;
-        [...chips.children].forEach((x, idx) => x.classList.toggle("is-active", idx + 1 === n));
-      });
-      chips.appendChild(c);
+    const n = players.length;
+    let imp = 1;
+    let white = 0;
+
+    const impVal = el("span.uc-step__val", { text: String(imp) });
+    const whiteVal = el("span.uc-step__val", { text: String(white) });
+    const summary = el("p.uc-summary");
+    const startBtn = el("button.btn.btn--full", { text: "C'est parti" });
+
+    function clamp(v) {
+      return Math.max(0, Math.min(n - 1, v));
     }
+    function refresh() {
+      impVal.textContent = imp;
+      whiteVal.textContent = white;
+      const civ = n - imp - white;
+      const special = imp + white;
+      summary.textContent = `${civ} civil${civ > 1 ? "s" : ""} · ${imp} imposteur${imp > 1 ? "s" : ""} · ${white} Mr White`;
+      startBtn.disabled = !(special >= 1 && civ >= 1);
+      summary.classList.toggle("is-bad", !(special >= 1 && civ >= 1));
+    }
+
+    function stepper(label, get, set) {
+      const dec = el("button.btn.btn--ghost.uc-step__btn", { text: "−", onClick: () => { set(clamp(get() - 1)); refresh(); }, "aria-label": `Moins ${label}` });
+      const inc = el("button.btn.btn--ghost.uc-step__btn", { text: "+", onClick: () => { set(clamp(get() + 1)); refresh(); }, "aria-label": `Plus ${label}` });
+      const valEl = label === "imposteurs" ? impVal : whiteVal;
+      return el("div.uc-step", {}, [
+        el("span.uc-step__label", { text: label }),
+        el("div.uc-step__ctrl", {}, [dec, valEl, inc]),
+      ]);
+    }
+
+    startBtn.addEventListener("click", () => distribute(players, imp, white));
+    refresh();
+
     stage.replaceChildren(
       el("div.card.center", {}, [
-        el("h3", { text: "Combien d'imposteurs ?" }),
-        chips,
-        el("button.btn.btn--full", { text: "C'est parti", onClick: () => distribute(players) }),
+        el("h3", { text: "Composition de la partie" }),
+        el("div.stack", { style: "margin:14px 0" }, [
+          stepper("imposteurs", () => imp, (v) => (imp = v)),
+          stepper("Mr White", () => white, (v) => (white = v)),
+        ]),
+        summary,
+        el("div", { style: "margin-top:16px" }, [startBtn]),
       ])
     );
   }
 
-  function distribute(players) {
-    const pair = deck.next();
+  /* ---------- Distribution secrète ---------- */
+  function distribute(players, impostorCount, whiteCount) {
+    currentPair = deck.next();
     const order = shuffle(players.map((_, i) => i));
     const impostors = new Set(order.slice(0, impostorCount));
-    const roles = players.map((name, i) => ({
-      name,
-      word: impostors.has(i) ? pair.imposteur : pair.civils,
-      isImpostor: impostors.has(i),
-    }));
+    const whites = new Set(order.slice(impostorCount, impostorCount + whiteCount));
+    const roles = players.map((name, i) => {
+      if (whites.has(i)) return { name, role: "blanc", word: null };
+      if (impostors.has(i)) return { name, role: "imposteur", word: currentPair.imposteur };
+      return { name, role: "civil", word: currentPair.civils };
+    });
 
     let idx = 0;
     function pass() {
@@ -56,17 +89,26 @@ export function render(container, { game }) {
         el("div.card.center", {}, [
           el("p.big-prompt", { text: "📱" }),
           el("p", { text: `Passe le téléphone à ${roles[idx].name}` }),
-          el("button.btn.btn--full", { text: "Voir mon mot", style: "margin-top:18px", onClick: showWord }),
+          el("button.btn.btn--full", { text: "Voir mon rôle", style: "margin-top:18px", onClick: showWord }),
         ])
       );
     }
     function showWord() {
       const r = roles[idx];
+      const body =
+        r.role === "blanc"
+          ? [
+              el("div.uc-word.uc-blanc", { text: "Mr White" }),
+              el("p.screen__subtitle", { text: "Tu n'as pas de mot ! Écoute, bluffe, et devine celui des civils." }),
+            ]
+          : [
+              el("div.uc-word", { text: r.word }),
+              el("p.screen__subtitle", { text: "Retiens-le. Ne le montre à personne." }),
+            ];
       stage.replaceChildren(
         el("div.card.center.uc-reveal", {}, [
-          el("p.screen__subtitle", { text: r.name + ", ton mot est :" }),
-          el("div.uc-word", { text: r.word }),
-          el("p.screen__subtitle", { text: "Retiens-le. Ne le montre à personne." }),
+          el("p.screen__subtitle", { text: r.name + ", ton rôle :" }),
+          ...body,
           el("button.btn.btn--full", { text: "J'ai vu, cacher →", style: "margin-top:18px", onClick: () => { idx++; pass(); } }),
         ])
       );
@@ -74,22 +116,72 @@ export function render(container, { game }) {
     pass();
   }
 
+  /* ---------- Discussion + actions ---------- */
   function discussion(roles) {
+    const hasWhite = roles.some((r) => r.role === "blanc");
+    const actions = [];
+    if (hasWhite) {
+      actions.push(el("button.btn.btn--full", { text: "🎤 Mr White devine le mot", onClick: () => whiteGuess(roles) }));
+    }
+    actions.push(
+      el("button.btn.btn--full.btn--ghost", { text: "Révéler tous les rôles", style: "margin-top:10px", onClick: () => reveal(roles) })
+    );
     stage.replaceChildren(
       el("div.card.center", {}, [
         el("h3", { text: "À vous de jouer 🗣️" }),
         el("p", {
           text:
-            "Chacun décrit son mot avec UN mot, sans le dire. Débattez, puis votez pour éliminer un suspect. " +
-            "Quand vous voulez la vérité :",
+            "Chacun décrit son mot avec UN mot, sans le dire. Débattez et votez à l'oral pour éliminer un suspect. " +
+            (hasWhite ? "Si Mr White est éliminé, il tente de deviner le mot des civils." : ""),
           style: "color:var(--text-dim);margin:12px 0 20px",
         }),
-        el("button.btn.btn--full", { text: "Révéler les imposteurs", onClick: () => reveal(roles) }),
+        ...actions,
       ])
     );
   }
 
+  /* ---------- Devinette de Mr White ---------- */
+  function whiteGuess(roles) {
+    stage.replaceChildren(
+      el("div.card.center", {}, [
+        el("h3", { text: "🎤 Mr White devine" }),
+        el("p", { text: "Mr White annonce à voix haute le mot qu'il pense être celui des civils.", style: "color:var(--text-dim);margin:12px 0" }),
+        el("button.btn.btn--full", { text: "Révéler le vrai mot des civils", onClick: showTruth }),
+      ])
+    );
+    function showTruth() {
+      announce("Le mot des civils était " + currentPair.civils);
+      stage.replaceChildren(
+        el("div.card.center", {}, [
+          el("p.screen__subtitle", { text: "Le mot des civils était :" }),
+          el("div.uc-word", { text: currentPair.civils }),
+          el("p", { text: "Mr White a-t-il trouvé ?", style: "margin:14px 0" }),
+          el("div.row", { style: "justify-content:center" }, [
+            el("button.btn", { text: "🎉 Oui, il gagne !", onClick: () => whiteResult(true, roles) }),
+            el("button.btn.btn--ghost", { text: "😢 Non", onClick: () => whiteResult(false, roles) }),
+          ]),
+        ])
+      );
+    }
+  }
+
+  function whiteResult(win, roles) {
+    stage.replaceChildren(
+      el("div.card.center", {}, [
+        el("h2", { text: win ? "🎉 Mr White gagne !" : "😢 Mr White éliminé" }),
+        el("p", {
+          text: win ? "Il a deviné le mot des civils." : "Mauvaise réponse — la partie continue sans lui.",
+          style: "color:var(--text-dim);margin:12px 0 20px",
+        }),
+        el("button.btn.btn--full", { text: "Révéler tous les rôles", onClick: () => reveal(roles) }),
+      ])
+    );
+  }
+
+  /* ---------- Révélation ---------- */
   function reveal(roles) {
+    const tag = (r) =>
+      r.role === "blanc" ? "🎭 Mr White (sans mot)" : r.role === "imposteur" ? "🕵️ Imposteur — " + r.word : "😇 " + r.word;
     stage.replaceChildren(
       el("div.card.center", {}, [
         el("h3", { text: "Résultat", style: "margin-bottom:14px" }),
@@ -97,19 +189,14 @@ export function render(container, { game }) {
           "div.stack",
           {},
           roles.map((r) =>
-            el("div.uc-role-row", { class: r.isImpostor ? "uc-role-row is-imp" : "uc-role-row" }, [
+            el("div.uc-role-row" + (r.role === "imposteur" ? ".is-imp" : r.role === "blanc" ? ".is-blanc" : ""), {}, [
               el("span", { text: r.name }),
-              el("span", { text: r.isImpostor ? "🕵️ Imposteur — " + r.word : "😇 " + r.word }),
+              el("span", { text: tag(r) }),
             ])
           )
         ),
-        el("button.btn.btn--full", { text: "Rejouer", style: "margin-top:20px", onClick: () => render(clear(), { game }) }),
+        el("button.btn.btn--full", { text: "Rejouer", style: "margin-top:20px", onClick: showSetupIntro }),
       ])
     );
-  }
-
-  function clear() {
-    container.replaceChildren();
-    return container;
   }
 }

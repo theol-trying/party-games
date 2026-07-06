@@ -11,3 +11,14 @@
   border: 1px solid var(--border); font-size: 15px;
 }
 .uc-role-row.is-imp { border-color: #ff4d6d; background: rgba(255,77,109,0.1); }
+.uc-role-row.is-blanc { border-color: #ffd43b; background: rgba(255,212,59,0.1); }
+.uc-blanc { color: #ffd43b; }
+
+/* Steppers de composition (imposteurs / Mr White) */
+.uc-step { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 4px; }
+.uc-step__label { font-weight: 600; }
+.uc-step__ctrl { display: flex; align-items: center; gap: 14px; }
+.uc-step__btn { min-width: 48px; padding: 10px 0; font-size: 20px; line-height: 1; }
+.uc-step__val { font-size: 22px; font-weight: 800; min-width: 28px; text-align: center; }
+.uc-summary { color: var(--text-dim); font-size: 14px; }
+.uc-summary.is-bad { color: #ff4d6d; }
