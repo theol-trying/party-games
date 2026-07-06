@@ -14,6 +14,16 @@
 .bt-answer { text-align: center; margin-top: 14px; animation: fadeIn 0.2s ease; }
 .bt-answer__title { font-size: 24px; font-weight: 800; color: #f783ac; }
 .bt-answer__artist { color: var(--text-dim); }
-.bt-scores { display: flex; flex-direction: column; gap: 6px; }
-.bt-score-row { display: flex; justify-content: space-between; padding: 8px 12px; background: var(--bg-soft); border-radius: 10px; }
-.bt-score-val { font-weight: 800; color: #f783ac; }
+/* Sélecteur de source / recherche musicale */
+.bt-themes { margin-top: 10px; }
+.bt-results { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; max-height: 320px; overflow-y: auto; }
+.bt-result {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 12px; background: var(--bg-soft); border-radius: 10px; border: 1px solid var(--border);
+}
+.bt-result__meta { min-width: 0; }
+.bt-result__title { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bt-result__artist { color: var(--text-dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bt-result .chip { flex: 0 0 auto; white-space: nowrap; }
+.bt-queue { text-align: center; color: var(--text-dim); margin-bottom: 10px; }
+.bt-launch { text-align: center; }

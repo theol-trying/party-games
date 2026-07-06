@@ -11,6 +11,9 @@
 
 param([int]$Port = 5178)
 
+# TLS 1.2 pour les appels sortants (iTunes / Deezer) sous Windows PowerShell 5.1.
+try { [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 } catch {}
+
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root
 $kvFile = Join-Path $root "kv-local.data"
@@ -102,6 +105,38 @@ try {
       # ---- Routes API ----
       if ($urlPath -eq "/api/health") {
         Send-Json $stream "200 OK" '{"ok":true,"redis":false,"mode":"local-file"}'
+        $client.Close(); continue
+      }
+      if ($urlPath -eq "/api/music") {
+        $qs = @{}
+        if ($rawPath.Contains("?")) {
+          foreach ($pair in ($rawPath.Split("?", 2)[1] -split "&")) {
+            $kv2 = $pair -split "=", 2
+            if ($kv2.Length -eq 2) { $qs[$kv2[0]] = [System.Uri]::UnescapeDataString($kv2[1].Replace("+", " ")) }
+          }
+        }
+        $query = $qs["q"]
+        $provider = if ($qs["provider"] -eq "deezer") { "deezer" } else { "itunes" }
+        $limit = 20; if ($qs["limit"]) { [int]::TryParse($qs["limit"], [ref]$limit) | Out-Null }
+        if ($limit -lt 1) { $limit = 1 } elseif ($limit -gt 30) { $limit = 30 }
+        if ([string]::IsNullOrWhiteSpace($query)) {
+          Send-Json $stream "400 Bad Request" '{"error":"requete vide"}'; $client.Close(); continue
+        }
+        try {
+          $enc = [System.Uri]::EscapeDataString($query)
+          if ($provider -eq "deezer") {
+            $data = Invoke-RestMethod "https://api.deezer.com/search?limit=$limit&q=$enc" -TimeoutSec 8
+            $out = foreach ($tk in $data.data) { if ($tk.preview) { [pscustomobject]@{ title = $tk.title; artist = $tk.artist.name; preview = $tk.preview; artwork = $tk.album.cover_medium } } }
+          } else {
+            $data = Invoke-RestMethod "https://itunes.apple.com/search?media=music&entity=song&limit=$limit&term=$enc" -TimeoutSec 8
+            $out = foreach ($tk in $data.results) { if ($tk.previewUrl) { [pscustomobject]@{ title = $tk.trackName; artist = $tk.artistName; preview = $tk.previewUrl; artwork = $tk.artworkUrl100 } } }
+          }
+          $json = (@{ provider = $provider; results = @($out) } | ConvertTo-Json -Depth 6 -Compress)
+          Send-Json $stream "200 OK" $json
+        } catch {
+          Write-Host "[music] $($_.Exception.Message)" -ForegroundColor Yellow
+          Send-Json $stream "502 Bad Gateway" '{"error":"recherche musicale indisponible"}'
+        }
         $client.Close(); continue
       }
       if ($urlPath -like "/api/kv/*") {

@@ -4,25 +4,155 @@ import { createScores, scoreboard } from "../../scoring.js";
 import { createDeck } from "../../deck.js";
 import { TRACKS } from "./data.js";
 
+// Thèmes rapides : une requête envoyée à la recherche d'extraits.
+const THEMES = [
+  { label: "Années 80", q: "80s hits" },
+  { label: "Années 90", q: "90s hits" },
+  { label: "Années 2000", q: "2000s hits" },
+  { label: "Rap FR", q: "rap francais" },
+  { label: "Variété FR", q: "chanson francaise" },
+  { label: "Disney", q: "disney" },
+  { label: "Rock", q: "rock classics" },
+  { label: "Été", q: "summer hits" },
+];
+
 export function render(container, { game }) {
   container.append(screenHead(game.title, "Buzzer + scores en temps réel"));
   const stage = el("div");
   container.append(stage);
-  let currentAudio = null; // extrait en cours, pour pouvoir l'arrêter
+  let currentAudio = null;
+  const objectUrls = []; // URLs de fichiers locaux à libérer au cleanup
 
   stage.append(
-    playersCard({ min: 2, cta: "Lancer le blind test", onReady: (names) => startGame(names) })
+    playersCard({ min: 2, cta: "Choisir la musique →", onReady: (names) => sourceScreen(names) })
   );
 
-  // Nettoyage appelé par le routeur : coupe l'extrait si on quitte le jeu.
+  // Nettoyage : coupe l'extrait et libère les fichiers locaux.
   return () => {
     if (currentAudio) currentAudio.pause();
     currentAudio = null;
+    objectUrls.forEach((u) => URL.revokeObjectURL(u));
   };
 
-  function startGame(players) {
+  /* ---------- Choix de la source + construction de la playlist ---------- */
+  function sourceScreen(players) {
+    const queue = [];
+    let provider = "itunes";
+
+    const queueInfo = el("p.bt-queue", { text: "0 titre dans la playlist" });
+    const launch = el("button.btn.btn--full", { text: "Lancer le blind test", disabled: true });
+    launch.addEventListener("click", () => startGame(players, queue.slice()));
+
+    function refreshQueue() {
+      queueInfo.textContent = `${queue.length} titre${queue.length > 1 ? "s" : ""} dans la playlist`;
+      launch.disabled = queue.length === 0;
+    }
+    function addTrack(t) {
+      queue.push(t);
+      refreshQueue();
+    }
+
+    // -- Recherche --
+    const results = el("div.bt-results");
+    const searchInput = el("input.input", { placeholder: "Titre ou artiste…", "aria-label": "Recherche musicale" });
+    searchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") doSearch(searchInput.value);
+    });
+    const searchBtn = el("button.btn", { text: "Chercher", onClick: () => doSearch(searchInput.value) });
+
+    const appleChip = el("button.chip.is-active", { text: "🍏 Apple", onClick: () => setProvider("itunes") });
+    const deezerChip = el("button.chip", { text: "🎵 Deezer", onClick: () => setProvider("deezer") });
+    function setProvider(p) {
+      provider = p;
+      appleChip.classList.toggle("is-active", p === "itunes");
+      deezerChip.classList.toggle("is-active", p === "deezer");
+    }
+
+    const themeRow = el(
+      "div.row.bt-themes",
+      {},
+      THEMES.map((th) => el("button.chip", { text: th.label, onClick: () => { searchInput.value = th.label; doSearch(th.q); } }))
+    );
+
+    async function doSearch(q) {
+      q = (q || "").trim();
+      if (!q) return;
+      results.replaceChildren(el("p.screen__subtitle", { text: "Recherche…" }));
+      try {
+        const r = await fetch(`/api/music?provider=${provider}&limit=20&q=${encodeURIComponent(q)}`);
+        const j = await r.json();
+        const list = (j.results || []).filter((t) => t.preview);
+        if (!list.length) {
+          results.replaceChildren(el("p.screen__subtitle", { text: "Aucun extrait trouvé." }));
+          return;
+        }
+        results.replaceChildren(
+          ...list.map((t) =>
+            el("div.bt-result", {}, [
+              el("div.bt-result__meta", {}, [
+                el("div.bt-result__title", { text: t.title }),
+                el("div.bt-result__artist", { text: t.artist || "" }),
+              ]),
+              el("button.chip", {
+                text: "+ Ajouter",
+                onClick: (e) => {
+                  addTrack({ title: t.title, artist: t.artist, src: t.preview });
+                  e.currentTarget.textContent = "✓ Ajouté";
+                  e.currentTarget.disabled = true;
+                },
+              }),
+            ])
+          )
+        );
+      } catch {
+        results.replaceChildren(el("p.screen__subtitle", { text: "Recherche indisponible (réseau ?)." }));
+      }
+    }
+
+    // -- Fichiers locaux --
+    const fileInput = el("input.input", { type: "file", accept: "audio/*", multiple: "", "aria-label": "Fichiers audio" });
+    fileInput.addEventListener("change", () => {
+      [...fileInput.files].forEach((f) => {
+        const u = URL.createObjectURL(f);
+        objectUrls.push(u);
+        addTrack({ title: f.name.replace(/\.[^.]+$/, ""), artist: "", src: u });
+      });
+      fileInput.value = "";
+    });
+
+    // -- Liste par défaut (data.js) --
+    const defaultBtn = el("button.chip", {
+      text: `Charger la liste par défaut (${TRACKS.length})`,
+      onClick: () => TRACKS.forEach((t) => addTrack({ title: t.title, artist: t.artist, src: t.audioUrl || "" })),
+    });
+
+    refreshQueue();
+    stage.replaceChildren(
+      el("div.card", {}, [
+        el("h3", { text: "🔎 Recherche d'extraits (30 s)" }),
+        el("p.screen__subtitle", { text: "Apple Music / Deezer — gratuit, sans compte", style: "margin-bottom:10px" }),
+        el("div.row", { style: "justify-content:center;margin-bottom:10px" }, [appleChip, deezerChip]),
+        el("div.row", {}, [searchInput, searchBtn]),
+        themeRow,
+        results,
+      ]),
+      el("div.card", { style: "margin-top:14px" }, [
+        el("h3", { text: "📁 Fichiers du téléphone" }),
+        el("p.screen__subtitle", { text: "Tes propres MP3, joués en local (hors-ligne)", style: "margin-bottom:10px" }),
+        fileInput,
+      ]),
+      el("div.card", { style: "margin-top:14px" }, [
+        el("h3", { text: "📝 Liste par défaut", style: "margin-bottom:10px" }),
+        defaultBtn,
+      ]),
+      el("div.card.bt-launch", { style: "margin-top:14px" }, [queueInfo, launch]),
+    );
+  }
+
+  /* ---------- Partie : buzzer + scores ---------- */
+  function startGame(players, tracks) {
     const sc = createScores("blind-test", players); // scores persistés par soirée
-    const deck = createDeck(TRACKS);
+    const deck = createDeck(tracks);
     let round = 0;
     let buzzedBy = null;
     let revealed = false;
@@ -31,15 +161,14 @@ export function render(container, { game }) {
       buzzedBy = null;
       revealed = false;
       let t = deck.next();
-      if (!t) { deck.reset(); t = deck.next(); } // toutes les pistes vues : on recommence
+      if (!t) { deck.reset(); t = deck.next(); }
 
-      const audio = t.audioUrl
-        ? el("audio.bt-audio", { src: t.audioUrl, controls: "", "aria-label": "Extrait à deviner" })
-        : el("div.placeholder", { text: "Pas d'audio branché : lance l'extrait depuis ton téléphone/enceinte, puis buzzez." });
+      const audio = t.src
+        ? el("audio.bt-audio", { src: t.src, controls: "", autoplay: "", "aria-label": "Extrait à deviner" })
+        : el("div.placeholder", { text: "Pas d'audio pour ce titre — lance-le à la main, puis buzzez." });
 
-      // Coupe l'extrait précédent et mémorise le nouveau (pour le cleanup).
       if (currentAudio) currentAudio.pause();
-      currentAudio = t.audioUrl ? audio : null;
+      currentAudio = t.src ? audio : null;
 
       const buzzers = el(
         "div.bt-buzzers",
@@ -78,7 +207,7 @@ export function render(container, { game }) {
         answer.style.display = "";
         answer.replaceChildren(
           el("div.bt-answer__title", { text: t.title }),
-          el("div.bt-answer__artist", { text: t.artist })
+          el("div.bt-answer__artist", { text: t.artist || "" })
         );
         scoreWrap.replaceChildren(scoreboard(sc.scores));
         judge.style.display = "none";
@@ -115,6 +244,6 @@ export function render(container, { game }) {
       );
     }
 
-    sc.ready.then(playRound); // affiche d'emblée les scores persistés de la soirée
+    sc.ready.then(playRound);
   }
 }

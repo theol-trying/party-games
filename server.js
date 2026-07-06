@@ -104,6 +104,33 @@ async function kvSet(key, value) {
   }
 }
 
+/* ---------- Recherche musicale (proxy iTunes / Deezer, sans clé) ---------- */
+// Évite les soucis CORS et normalise les résultats. Les extraits sont des MP3/M4A
+// de ~30 s lus côté client par <audio> (pas besoin de CORS pour la lecture média).
+async function musicSearch(provider, query, limit) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 6000);
+  try {
+    if (provider === "deezer") {
+      const url = `https://api.deezer.com/search?limit=${limit}&q=${encodeURIComponent(query)}`;
+      const r = await fetch(url, { signal: ctrl.signal });
+      const j = await r.json();
+      return (j.data || [])
+        .filter((tk) => tk.preview)
+        .map((tk) => ({ title: tk.title, artist: tk.artist && tk.artist.name, preview: tk.preview, artwork: tk.album && tk.album.cover_medium }));
+    }
+    // iTunes (Apple) par défaut
+    const url = `https://itunes.apple.com/search?media=music&entity=song&limit=${limit}&term=${encodeURIComponent(query)}`;
+    const r = await fetch(url, { signal: ctrl.signal });
+    const j = await r.json();
+    return (j.results || [])
+      .filter((tk) => tk.previewUrl)
+      .map((tk) => ({ title: tk.trackName, artist: tk.artistName, preview: tk.previewUrl, artwork: tk.artworkUrl100 }));
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 /* ---------- Utilitaires HTTP ---------- */
 const SECURITY_HEADERS = {
   "X-Content-Type-Options": "nosniff",
@@ -224,6 +251,22 @@ const server = http.createServer(async (req, res) => {
   if (pathname.startsWith("/api/")) {
     if (!originAllowed(req)) return sendJson(res, 403, { error: "origine non autorisée" });
     if (rateLimited(clientIp(req))) return sendJson(res, 429, { error: "trop de requêtes" });
+  }
+
+  // Recherche musicale : /api/music?q=...&provider=itunes|deezer&limit=N
+  if (pathname === "/api/music") {
+    const q = (url.searchParams.get("q") || "").slice(0, 120).trim();
+    const provider = url.searchParams.get("provider") === "deezer" ? "deezer" : "itunes";
+    const limit = Math.min(30, Math.max(1, parseInt(url.searchParams.get("limit") || "20", 10)));
+    if (!q) return sendJson(res, 400, { error: "requête vide" });
+    try {
+      const results = await musicSearch(provider, q, limit);
+      return sendJson(res, 200, { provider, results });
+    } catch (e) {
+      console.error("[music]", e && e.message ? e.message : e);
+      const status = e && e.name === "AbortError" ? 504 : 502;
+      return sendJson(res, status, { error: "recherche musicale indisponible" });
+    }
   }
 
   // API clé/valeur
