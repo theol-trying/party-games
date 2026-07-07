@@ -1,10 +1,11 @@
 import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
+import { createScores, scoreboard } from "../../scoring.js";
 import { AFFIRMATIONS } from "./data.js";
 
 export function render(container, { game }) {
-  container.append(screenHead(game.title, "Vote anonyme · passe le téléphone"));
+  container.append(screenHead(game.title, "Vote anonyme · roi/reine de la soirée"));
   const stage = el("div");
   container.append(stage);
 
@@ -14,11 +15,11 @@ export function render(container, { game }) {
 
   function startGame(players) {
     const deck = createDeck(AFFIRMATIONS); // anti-répétition partagée
+    const sc = createScores("plus-susceptible", players); // couronnes cumulées, persistées
 
     function nextRound() {
       runVote(players, deck.next());
     }
-    nextRound();
 
     /* Vote pass-the-phone : chaque joueur désigne secrètement quelqu'un. */
     function runVote(players, statement) {
@@ -43,8 +44,7 @@ export function render(container, { game }) {
                     onClick: () => {
                       votes[p] = (votes[p] || 0) + 1;
                       voter++;
-                      // écran tampon pour préserver l'anonymat
-                      hiddenPass();
+                      hiddenPass(); // écran tampon pour préserver l'anonymat
                     },
                   })
                 )
@@ -68,9 +68,11 @@ export function render(container, { game }) {
         const max = Math.max(0, ...Object.values(votes));
         const winners = Object.keys(votes).filter((p) => votes[p] === max);
         announce(winners.length > 1 ? winners.join(" et ") + " boivent" : winners[0] + " boit");
-        const ranking = players
-          .map((p) => ({ p, v: votes[p] || 0 }))
-          .sort((a, b) => b.v - a.v);
+        winners.forEach((w) => sc.add(w)); // +1 couronne pour le/les plus désigné(s)
+
+        const ranking = players.map((p) => ({ p, v: votes[p] || 0 })).sort((a, b) => b.v - a.v);
+        const scoreWrap = el("div", {}, [scoreboard(sc.scores)]);
+
         showPhase(stage,
           el("div.card.center", {}, [
             el("p.ps-statement", { text: `Qui est le plus susceptible de ${statement}` }),
@@ -89,12 +91,27 @@ export function render(container, { game }) {
                 ])
               )
             ),
-            el("button.btn.btn--full", { text: "Affirmation suivante →", style: "margin-top:20px", onClick: nextRound }),
-          ])
+          ]),
+          el("div.card", { style: "margin-top:14px" }, [
+            el("div.row", { style: "justify-content:space-between;align-items:center;margin-bottom:10px" }, [
+              el("h3", { text: "👑 Roi / Reine de la soirée" }),
+              el("button.chip", {
+                text: "↺ Réinitialiser",
+                onClick: () => {
+                  sc.reset();
+                  scoreWrap.replaceChildren(scoreboard(sc.scores));
+                },
+              }),
+            ]),
+            scoreWrap,
+          ]),
+          el("button.btn.btn--full", { text: "Affirmation suivante →", style: "margin-top:14px", onClick: nextRound })
         );
       }
 
       showVoter();
     }
+
+    sc.ready.then(nextRound); // charge les couronnes persistées avant la 1re manche
   }
 }
