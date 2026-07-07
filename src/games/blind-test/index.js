@@ -3,6 +3,7 @@ import { playersCard } from "../../players.js";
 import { createScores, scoreboard } from "../../scoring.js";
 import { createDeck } from "../../deck.js";
 import { buzz } from "../../sound.js";
+import { teamBuilder } from "../../teams.js";
 import { TRACKS } from "./data.js";
 
 // Thèmes rapides : une requête envoyée à la recherche d'extraits.
@@ -25,7 +26,7 @@ export function render(container, { game }) {
   const objectUrls = []; // URLs de fichiers locaux à libérer au cleanup
 
   stage.append(
-    playersCard({ min: 2, cta: "Choisir la musique →", onReady: (names) => sourceScreen(names) })
+    playersCard({ min: 2, cta: "Suite →", onReady: (names) => modeScreen(names) })
   );
 
   // Nettoyage : coupe l'extrait et libère les fichiers locaux.
@@ -35,14 +36,30 @@ export function render(container, { game }) {
     objectUrls.forEach((u) => URL.revokeObjectURL(u));
   };
 
+  // Choix : chacun pour soi ou en équipes.
+  function modeScreen(names) {
+    showPhase(stage,
+      el("div.card.center", {}, [
+        el("h3", { text: "Mode de jeu" }),
+        el("p.screen__subtitle", { text: `${names.length} joueurs`, style: "margin:6px 0 14px" }),
+        el("button.btn.btn--full", { text: "🙋 Chacun pour soi", onClick: () => sourceScreen(names, "blind-test") }),
+        el("button.btn.btn--full.btn--ghost", {
+          text: "👥 En équipes",
+          style: "margin-top:10px",
+          onClick: () => showPhase(stage, teamBuilder({ players: names, onReady: (teams) => sourceScreen(teams.map((t) => t.name), "blind-test:teams") })),
+        }),
+      ])
+    );
+  }
+
   /* ---------- Choix de la source + construction de la playlist ---------- */
-  function sourceScreen(players) {
+  function sourceScreen(players, scoreKey) {
     const queue = [];
     let provider = "itunes";
 
     const queueInfo = el("p.bt-queue", { text: "0 titre dans la playlist" });
     const launch = el("button.btn.btn--full", { text: "Lancer le blind test", disabled: true });
-    launch.addEventListener("click", () => startGame(players, queue.slice()));
+    launch.addEventListener("click", () => startGame(players, queue.slice(), scoreKey));
 
     function refreshQueue() {
       queueInfo.textContent = `${queue.length} titre${queue.length > 1 ? "s" : ""} dans la playlist`;
@@ -151,8 +168,8 @@ export function render(container, { game }) {
   }
 
   /* ---------- Partie : buzzer + scores ---------- */
-  function startGame(players, tracks) {
-    const sc = createScores("blind-test", players); // scores persistés par soirée
+  function startGame(players, tracks, scoreKey = "blind-test") {
+    const sc = createScores(scoreKey, players); // scores persistés par soirée (par joueur ou par équipe)
     const deck = createDeck(tracks);
     let round = 0;
     let buzzedBy = null;

@@ -4,6 +4,7 @@ import { createDeck } from "../../deck.js";
 import { createScores, scoreboard } from "../../scoring.js";
 import { pickGage } from "../../gages.js";
 import { levelSelector } from "../../levels.js";
+import { teamBuilder } from "../../teams.js";
 import { QUESTIONS } from "./data.js";
 
 export function render(container, { game }) {
@@ -12,12 +13,28 @@ export function render(container, { game }) {
   container.append(stage);
 
   stage.append(
-    playersCard({ min: 2, cta: "Commencer le quiz →", onReady: (names) => startGame(names) })
+    playersCard({ min: 2, cta: "Suite →", onReady: (names) => modeScreen(names) })
   );
 
-  function startGame(players) {
+  // Choix : chacun pour soi ou en équipes.
+  function modeScreen(names) {
+    showPhase(stage,
+      el("div.card.center", {}, [
+        el("h3", { text: "Mode de jeu" }),
+        el("p.screen__subtitle", { text: `${names.length} joueurs`, style: "margin:6px 0 14px" }),
+        el("button.btn.btn--full", { text: "🙋 Chacun pour soi", onClick: () => startGame(names, "quiz-gages") }),
+        el("button.btn.btn--full.btn--ghost", {
+          text: "👥 En équipes",
+          style: "margin-top:10px",
+          onClick: () => showPhase(stage, teamBuilder({ players: names, onReady: (teams) => startGame(teams.map((t) => t.name), "quiz-gages:teams") })),
+        }),
+      ])
+    );
+  }
+
+  function startGame(players, scoreKey = "quiz-gages") {
     const deck = createDeck(QUESTIONS); // anti-répétition partagée
-    const sc = createScores("quiz-gages", players); // scores persistés par soirée
+    const sc = createScores(scoreKey, players); // scores persistés par soirée (par joueur ou par équipe)
     let count = 0;
     let turn = 0;
     let answered = false;
