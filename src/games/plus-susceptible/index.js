@@ -1,4 +1,4 @@
-import { el, screenHead, announce } from "../../ui.js";
+import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
 import { AFFIRMATIONS } from "./data.js";
@@ -28,7 +28,7 @@ export function render(container, { game }) {
       function showVoter() {
         if (voter >= players.length) return reveal();
         const current = players[voter];
-        stage.replaceChildren(
+        showPhase(stage,
           el("div.card.center", {}, [
             el("p.ps-statement", { text: `Qui est le plus susceptible de ${statement}` }),
             el("p.screen__subtitle", { text: `Au tour de ${current} de voter` }),
@@ -55,7 +55,7 @@ export function render(container, { game }) {
 
       function hiddenPass() {
         if (voter >= players.length) return reveal();
-        stage.replaceChildren(
+        showPhase(stage,
           el("div.card.center", {}, [
             el("p.big-prompt", { text: "🙈" }),
             el("p", { text: `Passe le téléphone à ${players[voter]}` }),
@@ -71,7 +71,7 @@ export function render(container, { game }) {
         const ranking = players
           .map((p) => ({ p, v: votes[p] || 0 }))
           .sort((a, b) => b.v - a.v);
-        stage.replaceChildren(
+        showPhase(stage,
           el("div.card.center", {}, [
             el("p.ps-statement", { text: `Qui est le plus susceptible de ${statement}` }),
             el("h2.ps-winner", {

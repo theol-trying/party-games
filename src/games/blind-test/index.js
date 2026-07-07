@@ -1,4 +1,4 @@
-import { el, screenHead, announce } from "../../ui.js";
+import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { playersCard } from "../../players.js";
 import { createScores, scoreboard } from "../../scoring.js";
 import { createDeck } from "../../deck.js";
@@ -128,7 +128,7 @@ export function render(container, { game }) {
     });
 
     refreshQueue();
-    stage.replaceChildren(
+    showPhase(stage,
       el("div.card", {}, [
         el("h3", { text: "🔎 Recherche d'extraits (30 s)" }),
         el("p.screen__subtitle", { text: "Apple Music / Deezer — gratuit, sans compte", style: "margin-bottom:10px" }),
@@ -219,7 +219,7 @@ export function render(container, { game }) {
 
       const scoreWrap = el("div", {}, [scoreboard(sc.scores)]);
 
-      stage.replaceChildren(
+      showPhase(stage,
         el("div.card", {}, [
           el("p.screen__subtitle.center", { text: `Manche ${round + 1}` }),
           audio,

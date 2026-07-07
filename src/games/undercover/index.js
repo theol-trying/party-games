@@ -1,4 +1,4 @@
-import { el, screenHead, shuffle, announce } from "../../ui.js";
+import { el, screenHead, shuffle, announce, showPhase } from "../../ui.js";
 import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
 import { PAIRES } from "./data.js";
@@ -15,7 +15,7 @@ export function render(container, { game }) {
   showSetupIntro();
 
   function showSetupIntro() {
-    stage.replaceChildren(
+    showPhase(stage,
       playersCard({ min: 3, cta: "Distribuer les mots", onReady: (names) => setup(names) })
     );
   }
@@ -57,7 +57,7 @@ export function render(container, { game }) {
     startBtn.addEventListener("click", () => distribute(players, imp, white));
     refresh();
 
-    stage.replaceChildren(
+    showPhase(stage,
       el("div.card.center", {}, [
         el("h3", { text: "Composition de la partie" }),
         el("div.stack", { style: "margin:14px 0" }, [
@@ -85,7 +85,7 @@ export function render(container, { game }) {
     let idx = 0;
     function pass() {
       if (idx >= roles.length) return discussion(roles);
-      stage.replaceChildren(
+      showPhase(stage,
         el("div.card.center", {}, [
           el("p.big-prompt", { text: "📱" }),
           el("p", { text: `Passe le téléphone à ${roles[idx].name}` }),
@@ -105,7 +105,7 @@ export function render(container, { game }) {
               el("div.uc-word", { text: r.word }),
               el("p.screen__subtitle", { text: "Retiens-le. Ne le montre à personne." }),
             ];
-      stage.replaceChildren(
+      showPhase(stage,
         el("div.card.center.uc-reveal", {}, [
           el("p.screen__subtitle", { text: r.name + ", ton rôle :" }),
           ...body,
@@ -126,7 +126,7 @@ export function render(container, { game }) {
     actions.push(
       el("button.btn.btn--full.btn--ghost", { text: "Révéler tous les rôles", style: "margin-top:10px", onClick: () => reveal(roles) })
     );
-    stage.replaceChildren(
+    showPhase(stage,
       el("div.card.center", {}, [
         el("h3", { text: "À vous de jouer 🗣️" }),
         el("p", {
@@ -142,7 +142,7 @@ export function render(container, { game }) {
 
   /* ---------- Devinette de Mr White ---------- */
   function whiteGuess(roles) {
-    stage.replaceChildren(
+    showPhase(stage,
       el("div.card.center", {}, [
         el("h3", { text: "🎤 Mr White devine" }),
         el("p", { text: "Mr White annonce à voix haute le mot qu'il pense être celui des civils.", style: "color:var(--text-dim);margin:12px 0" }),
@@ -151,7 +151,7 @@ export function render(container, { game }) {
     );
     function showTruth() {
       announce("Le mot des civils était " + currentPair.civils);
-      stage.replaceChildren(
+      showPhase(stage,
         el("div.card.center", {}, [
           el("p.screen__subtitle", { text: "Le mot des civils était :" }),
           el("div.uc-word", { text: currentPair.civils }),
@@ -166,7 +166,7 @@ export function render(container, { game }) {
   }
 
   function whiteResult(win, roles) {
-    stage.replaceChildren(
+    showPhase(stage,
       el("div.card.center", {}, [
         el("h2", { text: win ? "🎉 Mr White gagne !" : "😢 Mr White éliminé" }),
         el("p", {
@@ -182,7 +182,7 @@ export function render(container, { game }) {
   function reveal(roles) {
     const tag = (r) =>
       r.role === "blanc" ? "🎭 Mr White (sans mot)" : r.role === "imposteur" ? "🕵️ Imposteur — " + r.word : "😇 " + r.word;
-    stage.replaceChildren(
+    showPhase(stage,
       el("div.card.center", {}, [
         el("h3", { text: "Résultat", style: "margin-bottom:14px" }),
         el(

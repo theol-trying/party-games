@@ -1,4 +1,4 @@
-import { el, screenHead, announce } from "../../ui.js";
+import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { DILEMMES } from "./data.js";
 
@@ -49,7 +49,7 @@ export function render(container, { game }) {
     revealed = false;
     counts = { a: 0, b: 0 };
     const d = deck.next();
-    stage.replaceChildren(
+    showPhase(stage,
       el("div.tp-board", {}, [optionBtn("a", d.a), el("div.tp-or", { text: "OU" }), optionBtn("b", d.b)]),
       el("p.tp-verdict.center", { style: "min-height:22px;margin:16px 0;font-weight:700" }),
       el("button.btn.btn--full.tp-reveal", { text: "Révéler le résultat", onClick: reveal }),

@@ -1,4 +1,4 @@
-import { el, screenHead, announce } from "../../ui.js";
+import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { CATEGORIES_DEFAUT, LETTRES, DUREE_DEFAUT } from "./data.js";
 
@@ -37,7 +37,7 @@ export function render(container, { game }) {
       dureeChips.appendChild(c);
     });
 
-    stage.replaceChildren(
+    showPhase(stage,
       el("div.card", {}, [
         el("h3", { text: "Catégories (une par ligne)" }),
         catText,
@@ -90,7 +90,7 @@ export function render(container, { game }) {
     if (activeTimer) clearInterval(activeTimer); // sécurité : pas deux chronos à la fois
     activeTimer = setInterval(tick, 1000);
 
-    stage.replaceChildren(
+    showPhase(stage,
       el("div.card.center.bc-header", {}, [
         el("p.screen__subtitle", { text: "Lettre" }),
         el("div.bc-letter", { text: lettre }),
@@ -106,7 +106,7 @@ export function render(container, { game }) {
     function finish(timeUp) {
       announce(timeUp ? "Temps écoulé" : "Manche terminée");
       const answers = categories.map((cat, idx) => ({ cat, val: inputs[idx].querySelector("input").value.trim() }));
-      stage.replaceChildren(
+      showPhase(stage,
         el("div.card.center", {}, [
           el("h2", { text: timeUp ? "⏰ Temps écoulé !" : "✋ Terminé !" }),
           el("p.screen__subtitle", { text: `Lettre : ${lettre}` }),

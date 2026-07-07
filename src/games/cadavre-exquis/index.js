@@ -1,4 +1,4 @@
-import { el, screenHead, announce } from "../../ui.js";
+import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { AMORCES } from "./data.js";
 
 export function render(container, { game }) {
@@ -30,7 +30,7 @@ export function render(container, { game }) {
     mPrev.addEventListener("click", () => { seePrevious = true; mPrev.classList.add("is-active"); mHidden.classList.remove("is-active"); });
     modeChips.append(mHidden, mPrev);
 
-    stage.replaceChildren(
+    showPhase(stage,
       el("div.card", {}, [
         el("h3", { text: "Nombre de contributions" }),
         stepChips,
@@ -47,7 +47,7 @@ export function render(container, { game }) {
 
     function passScreen() {
       if (step >= steps) return reveal();
-      stage.replaceChildren(
+      showPhase(stage,
         el("div.card.center", {}, [
           el("p.big-prompt", { text: "✍️" }),
           el("p", { text: `Contribution ${step + 1} / ${steps}` }),
@@ -82,13 +82,13 @@ export function render(container, { game }) {
           },
         })
       );
-      stage.replaceChildren(el("div.card", {}, blocks));
+      showPhase(stage,el("div.card", {}, blocks));
       ta.focus();
     }
 
     function reveal() {
       announce("Histoire terminée, lisez-la à voix haute");
-      stage.replaceChildren(
+      showPhase(stage,
         el("div.card", {}, [
           el("h2.center", { text: "📖 Votre chef-d'œuvre", style: "margin-bottom:16px" }),
           el(

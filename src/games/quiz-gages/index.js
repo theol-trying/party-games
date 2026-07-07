@@ -1,4 +1,4 @@
-import { el, screenHead, announce } from "../../ui.js";
+import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { pickGage } from "../../gages.js";
 import { levelSelector } from "../../levels.js";
@@ -59,7 +59,7 @@ export function render(container, { game }) {
       )
     );
 
-    stage.replaceChildren(
+    showPhase(stage,
       el("div.card", {}, [
         el("p.screen__subtitle", { text: `Question ${count}` }),
         el("h2.qz-question", { text: item.q, style: "margin:8px 0 18px" }),

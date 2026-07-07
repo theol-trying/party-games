@@ -1,4 +1,4 @@
-import { el, screenHead, announce } from "../../ui.js";
+import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { playersCard } from "../../players.js";
 import { MISSIONS } from "./data.js";
@@ -19,7 +19,7 @@ export function render(container, { game }) {
     let idx = 0;
     function pass() {
       if (idx >= roles.length) return discussion(roles);
-      stage.replaceChildren(
+      showPhase(stage,
         el("div.card.center", {}, [
           el("p.big-prompt", { text: "🤫" }),
           el("p", { text: `Passe le téléphone à ${roles[idx].name}` }),
@@ -29,7 +29,7 @@ export function render(container, { game }) {
     }
     function showMission() {
       const r = roles[idx];
-      stage.replaceChildren(
+      showPhase(stage,
         el("div.card.center", {}, [
           el("p.screen__subtitle", { text: r.name + ", ta mission :" }),
           el("div.mt-mission", { text: r.mission }),
@@ -42,7 +42,7 @@ export function render(container, { game }) {
   }
 
   function discussion(roles) {
-    stage.replaceChildren(
+    showPhase(stage,
       el("div.card.center", {}, [
         el("h3", { text: "Lancez la conversation 🗣️" }),
         el("p", {
@@ -58,7 +58,7 @@ export function render(container, { game }) {
 
   function reveal(roles) {
     announce("Les missions sont révélées");
-    stage.replaceChildren(
+    showPhase(stage,
       el("div.card", {}, [
         el("h3.center", { text: "Les missions étaient…", style: "margin-bottom:16px" }),
         el(
@@ -72,7 +72,7 @@ export function render(container, { game }) {
           )
         ),
         el("button.btn.btn--full", { text: "Rejouer", style: "margin-top:20px", onClick: () => {
-          stage.replaceChildren(
+          showPhase(stage,
             playersCard({ min: 2, cta: "Distribuer les missions", onReady: (names) => distribute(names) })
           );
         } }),
