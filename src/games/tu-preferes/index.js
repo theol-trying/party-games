@@ -1,4 +1,4 @@
-import { el, screenHead } from "../../ui.js";
+import { el, screenHead, announce } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { DILEMMES } from "./data.js";
 
@@ -35,6 +35,7 @@ export function render(container, { game }) {
       verdict = `Camp ${loser} minoritaire → il boit ! 🍻`;
     }
     stage.querySelector(".tp-verdict").textContent = verdict;
+    announce(verdict);
     stage.querySelectorAll(".tp-option").forEach((n) => {
       const side = n.dataset.side;
       const isMin = (side === "a" && a < b) || (side === "b" && b < a);

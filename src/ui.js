@@ -69,10 +69,11 @@ export function announce(message) {
   const region = document.getElementById("a11y-live");
   if (!region) return;
   region.textContent = "";
-  // Décale la mise à jour pour forcer la relecture même si le texte est identique.
-  requestAnimationFrame(() => {
+  // setTimeout (et non requestAnimationFrame, suspendu en arrière-plan) : force la
+  // relecture même si le texte est identique, quelle que soit la visibilité de l'onglet.
+  setTimeout(() => {
     region.textContent = message;
-  });
+  }, 60);
 }
 
 /** Remplace le contenu d'un conteneur de phase :

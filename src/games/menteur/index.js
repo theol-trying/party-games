@@ -1,4 +1,4 @@
-import { el, screenHead } from "../../ui.js";
+import { el, screenHead, announce } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { playersCard } from "../../players.js";
 import { MISSIONS } from "./data.js";
@@ -57,6 +57,7 @@ export function render(container, { game }) {
   }
 
   function reveal(roles) {
+    announce("Les missions sont révélées");
     stage.replaceChildren(
       el("div.card", {}, [
         el("h3.center", { text: "Les missions étaient…", style: "margin-bottom:16px" }),

@@ -1,4 +1,4 @@
-import { el, screenHead } from "../../ui.js";
+import { el, screenHead, announce } from "../../ui.js";
 import { AMORCES } from "./data.js";
 
 export function render(container, { game }) {
@@ -87,6 +87,7 @@ export function render(container, { game }) {
     }
 
     function reveal() {
+      announce("Histoire terminée, lisez-la à voix haute");
       stage.replaceChildren(
         el("div.card", {}, [
           el("h2.center", { text: "📖 Votre chef-d'œuvre", style: "margin-bottom:16px" }),

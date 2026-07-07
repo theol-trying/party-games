@@ -1,4 +1,4 @@
-import { el, screenHead } from "../../ui.js";
+import { el, screenHead, announce } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { levelSelector, LEVELS } from "../../levels.js";
 import { VERITES, ACTIONS } from "./data.js";
@@ -20,6 +20,7 @@ export function render(container, { game }) {
     const card = decks[kind][level].next();
     promptBox.textContent =
       card || "Aucune carte à ce niveau pour l'instant — ajoute-en dans data.js.";
+    if (card) announce((kind === "verite" ? "Vérité : " : "Action : ") + card);
     promptBox.classList.remove("av-flash");
     void promptBox.offsetWidth; // reflow pour rejouer l'anim
     promptBox.classList.add("av-flash");

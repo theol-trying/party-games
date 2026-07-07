@@ -1,4 +1,4 @@
-import { el, screenHead } from "../../ui.js";
+import { el, screenHead, announce } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { levelSelector } from "../../levels.js";
 import { PHRASES } from "./data.js";
@@ -20,6 +20,7 @@ export function render(container, { game }) {
       return;
     }
     promptBox.textContent = "Je n'ai jamais… " + phrase;
+    announce("Je n'ai jamais " + phrase);
     counter.textContent = `${deck.size() - deck.remaining()} / ${deck.size()}`;
     promptBox.classList.remove("jj-flash");
     void promptBox.offsetWidth;

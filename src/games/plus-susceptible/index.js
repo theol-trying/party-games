@@ -1,4 +1,4 @@
-import { el, screenHead } from "../../ui.js";
+import { el, screenHead, announce } from "../../ui.js";
 import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
 import { AFFIRMATIONS } from "./data.js";
@@ -67,6 +67,7 @@ export function render(container, { game }) {
       function reveal() {
         const max = Math.max(0, ...Object.values(votes));
         const winners = Object.keys(votes).filter((p) => votes[p] === max);
+        announce(winners.length > 1 ? winners.join(" et ") + " boivent" : winners[0] + " boit");
         const ranking = players
           .map((p) => ({ p, v: votes[p] || 0 }))
           .sort((a, b) => b.v - a.v);

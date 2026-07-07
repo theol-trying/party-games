@@ -1,4 +1,4 @@
-import { el, screenHead } from "../../ui.js";
+import { el, screenHead, announce } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { pickGage } from "../../gages.js";
 import { levelSelector } from "../../levels.js";
@@ -46,9 +46,12 @@ export function render(container, { game }) {
             if (!correct) {
               e.currentTarget.classList.add("is-wrong");
               // Contenu construit en nœuds DOM (jamais innerHTML). Gage au niveau choisi.
-              feedback.replaceChildren("❌ Raté ! ", el("strong", { text: pickGage(level) }));
+              const gage = pickGage(level);
+              feedback.replaceChildren("❌ Raté ! ", el("strong", { text: gage }));
+              announce("Raté. " + gage);
             } else {
               feedback.textContent = "✅ Bien joué !";
+              announce("Bonne réponse");
             }
             nextBtn.style.display = "";
           },

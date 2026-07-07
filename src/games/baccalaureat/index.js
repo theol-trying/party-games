@@ -1,4 +1,4 @@
-import { el, screenHead } from "../../ui.js";
+import { el, screenHead, announce } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { CATEGORIES_DEFAUT, LETTRES, DUREE_DEFAUT } from "./data.js";
 
@@ -61,6 +61,7 @@ export function render(container, { game }) {
       deck.reset();
       lettre = deck.next();
     }
+    announce("Lettre : " + lettre);
     let remaining = duree;
 
     const timeEl = el("div.bc-timer", { text: fmt(remaining) });
@@ -103,6 +104,7 @@ export function render(container, { game }) {
     );
 
     function finish(timeUp) {
+      announce(timeUp ? "Temps écoulé" : "Manche terminée");
       const answers = categories.map((cat, idx) => ({ cat, val: inputs[idx].querySelector("input").value.trim() }));
       stage.replaceChildren(
         el("div.card.center", {}, [

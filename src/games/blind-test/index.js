@@ -1,7 +1,8 @@
-import { el, screenHead } from "../../ui.js";
+import { el, screenHead, announce } from "../../ui.js";
 import { playersCard } from "../../players.js";
 import { createScores, scoreboard } from "../../scoring.js";
 import { createDeck } from "../../deck.js";
+import { buzz } from "../../sound.js";
 import { TRACKS } from "./data.js";
 
 // Thèmes rapides : une requête envoyée à la recherche d'extraits.
@@ -179,6 +180,8 @@ export function render(container, { game }) {
             onClick: (e) => {
               if (buzzedBy) return;
               buzzedBy = p;
+              buzz();
+              announce(`${p} a buzzé`);
               buzzInfo.textContent = `🔔 ${p} a buzzé !`;
               buzzers.querySelectorAll(".bt-buzzer").forEach((b) => (b.disabled = true));
               e.currentTarget.classList.add("is-buzzed");
@@ -209,6 +212,7 @@ export function render(container, { game }) {
           el("div.bt-answer__title", { text: t.title }),
           el("div.bt-answer__artist", { text: t.artist || "" })
         );
+        announce(`Réponse : ${t.title}${t.artist ? " par " + t.artist : ""}`);
         scoreWrap.replaceChildren(scoreboard(sc.scores));
         judge.style.display = "none";
       }
