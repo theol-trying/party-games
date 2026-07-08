@@ -3,6 +3,7 @@ import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
 import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
 import { passThePhone } from "../../game-kit.js";
+import { liveSession } from "../../realtime.js";
 import { PAIRES } from "./data.js";
 
 const SCHEMA = {
@@ -23,9 +24,58 @@ export function render(container, { game }) {
   let config = { onlyCustom: false, disabled: {} };
   let deck = createDeck(pairs()); // paires intégrées + perso, anti-répétition
   let currentPair = null;
+  let liveStop = null;
 
-  showSetupIntro();
+  modeSelect();
   reload();
+
+  // Cleanup appelé par le routeur : stoppe les timers du mode multi si actif.
+  return () => { if (liveStop) liveStop(); };
+
+  function modeSelect() {
+    showPhase(stage,
+      el("div.card.center", {}, [
+        el("h3", { text: "Comment jouer ?" }),
+        el("button.btn.btn--full", { text: "📱 Sur ce téléphone", onClick: showSetupIntro }),
+        el("button.btn.btn--full.btn--ghost", { text: "🌐 Multi-appareils", style: "margin-top:10px", onClick: startLive }),
+      ])
+    );
+  }
+  function startLive() {
+    if (liveStop) liveStop();
+    liveStop = liveSession(stage, {
+      gameId: "undercover",
+      title: "Undercover — multi",
+      minPlayers: 3,
+      assign: (ps) => {
+        const pair = deck.next() || { civils: "?", imposteur: "?" };
+        const nImp = Math.max(1, Math.floor(ps.length / 4));
+        const order = shuffle(ps.map((_, i) => i));
+        const imp = new Set(order.slice(0, nImp));
+        const roles = {};
+        ps.forEach((p, i) => (roles[p.id] = { role: imp.has(i) ? "imposteur" : "civil", word: imp.has(i) ? pair.imposteur : pair.civils }));
+        return { roles, meta: { pair } };
+      },
+      renderMine: (mine) =>
+        el("div", {}, [
+          el("p.screen__subtitle", { text: "Ton mot :" }),
+          el("div.uc-word", { text: mine.word }),
+          el("p.screen__subtitle", { text: "Décris-le sans le dire. Démasquez l'intrus !" }),
+        ]),
+      renderReveal: (live) =>
+        el("div", {}, [
+          el("h3", { text: "Rôles", style: "margin-bottom:10px" }),
+          el("div.stack", {},
+            Object.keys(live.roles).map((id) =>
+              el("div.uc-role-row" + (live.roles[id].role === "imposteur" ? ".is-imp" : ""), {}, [
+                el("span", { text: live.names[id] || "?" }),
+                el("span", { text: (live.roles[id].role === "imposteur" ? "🕵️ " : "😇 ") + live.roles[id].word }),
+              ])
+            )
+          ),
+        ]),
+    });
+  }
 
   async function reload() {
     [custom, config] = await Promise.all([loadContent("undercover"), loadConfig("undercover")]);

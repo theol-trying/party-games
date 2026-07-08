@@ -3,6 +3,7 @@ import { createDeck } from "../../deck.js";
 import { playersCard } from "../../players.js";
 import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
 import { passThePhone } from "../../game-kit.js";
+import { liveSession } from "../../realtime.js";
 import { MISSIONS } from "./data.js";
 
 const SCHEMA = {
@@ -15,12 +16,54 @@ export function render(container, { game }) {
   let custom = [];
   let config = { onlyCustom: false, disabled: {} };
   let deck = createDeck(missions());
+  let liveStop = null;
   container.append(screenHead(game.title, "Une mission secrète à glisser dans la conversation"));
   const stage = el("div");
   container.append(stage);
 
-  introScreen();
+  modeSelect();
   reload();
+
+  // Cleanup appelé par le routeur : stoppe les timers du mode multi si actif.
+  return () => { if (liveStop) liveStop(); };
+
+  function modeSelect() {
+    showPhase(stage,
+      el("div.card.center", {}, [
+        el("h3", { text: "Comment jouer ?" }),
+        el("button.btn.btn--full", { text: "📱 Sur ce téléphone", onClick: introScreen }),
+        el("button.btn.btn--full.btn--ghost", { text: "🌐 Multi-appareils", style: "margin-top:10px", onClick: startLive }),
+      ])
+    );
+  }
+  function startLive() {
+    if (liveStop) liveStop();
+    liveStop = liveSession(stage, {
+      gameId: "menteur",
+      title: "Le Menteur — multi",
+      minPlayers: 2,
+      assign: (ps) => {
+        const roles = {};
+        ps.forEach((p) => (roles[p.id] = { mission: deck.next() }));
+        return { roles };
+      },
+      renderMine: (mine) =>
+        el("div", {}, [
+          el("p.screen__subtitle", { text: "Ta mission :" }),
+          el("div.mt-mission", { text: mine.mission }),
+          el("p.screen__subtitle", { text: "Accomplis-la sans te faire griller." }),
+        ]),
+      renderReveal: (live) =>
+        el("div", {}, [
+          el("h3.center", { text: "Les missions", style: "margin-bottom:10px" }),
+          el("div.stack", {},
+            Object.keys(live.roles).map((id) =>
+              el("div.mt-reveal-row", {}, [el("strong", { text: live.names[id] || "?" }), el("span", { text: live.roles[id].mission })])
+            )
+          ),
+        ]),
+    });
+  }
 
   async function reload() {
     [custom, config] = await Promise.all([loadContent("menteur"), loadConfig("menteur")]);
