@@ -3,6 +3,7 @@ import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
 import { createScores, scoreboard } from "../../scoring.js";
 import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
+import { passThePhone } from "../../game-kit.js";
 import { AFFIRMATIONS } from "./data.js";
 
 const SCHEMA = {
@@ -65,45 +66,6 @@ export function render(container, { game }) {
     /* Vote pass-the-phone : chaque joueur désigne secrètement quelqu'un. */
     function runVote(players, statement) {
       const votes = {};
-      let voter = 0;
-
-      function showVoter() {
-        if (voter >= players.length) return reveal();
-        const current = players[voter];
-        showPhase(stage,
-          el("div.card.center", {}, [
-            el("p.ps-statement", { text: `Qui est le plus susceptible de ${statement}` }),
-            el("p.screen__subtitle", { text: `Au tour de ${current} de voter` }),
-            el(
-              "div.stack.ps-choices",
-              { style: "margin-top:18px" },
-              players
-                .filter((p) => p !== current)
-                .map((p) =>
-                  el("button.btn.btn--ghost.btn--full", {
-                    text: p,
-                    onClick: () => {
-                      votes[p] = (votes[p] || 0) + 1;
-                      voter++;
-                      hiddenPass(); // écran tampon pour préserver l'anonymat
-                    },
-                  })
-                )
-            ),
-          ])
-        );
-      }
-
-      function hiddenPass() {
-        if (voter >= players.length) return reveal();
-        showPhase(stage,
-          el("div.card.center", {}, [
-            el("p.big-prompt", { text: "🙈" }),
-            el("p", { text: `Passe le téléphone à ${players[voter]}` }),
-            el("button.btn.btn--full", { text: "Je suis prêt·e", style: "margin-top:18px", onClick: showVoter }),
-          ])
-        );
-      }
 
       function reveal() {
         const max = Math.max(0, ...Object.values(votes));
@@ -150,7 +112,23 @@ export function render(container, { game }) {
         );
       }
 
-      showVoter();
+      passThePhone(stage, players, {
+        icon: "🙈",
+        cta: "voter",
+        onPlayer: (current, i, next) =>
+          showPhase(stage,
+            el("div.card.center", {}, [
+              el("p.ps-statement", { text: `Qui est le plus susceptible de ${statement}` }),
+              el("p.screen__subtitle", { text: `Au tour de ${current} de voter` }),
+              el("div.stack.ps-choices", { style: "margin-top:18px" },
+                players.filter((p) => p !== current).map((p) =>
+                  el("button.btn.btn--ghost.btn--full", { text: p, onClick: () => { votes[p] = (votes[p] || 0) + 1; next(); } })
+                )
+              ),
+            ])
+          ),
+        onDone: reveal,
+      });
     }
 
     sc.ready.then(nextRound); // charge les couronnes persistées avant la 1re manche

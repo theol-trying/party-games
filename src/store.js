@@ -78,8 +78,3 @@ export async function setData(key, value) {
     apiAvailable = false;
   }
 }
-
-/** Indique si le backend de persistance est joignable (après un 1er appel). */
-export function isRemoteAvailable() {
-  return apiAvailable === true;
-}

@@ -82,7 +82,7 @@ function renderHome() {
   document.title = "Soirée — Jeux à boire & jeux d'ambiance";
   const frag = el("div.screen", { dataset: { game: "home" } }, [
     el("section.home-hero", {}, [
-      el("h1", { html: 'La soirée commence <span>ici</span>.' }),
+      el("h1", {}, ["La soirée commence ", el("span", { text: "ici" }), "."]),
       el("p", {
         text:
           "Choisis un jeu, pose le téléphone au milieu de la table, et laisse-toi guider. " +

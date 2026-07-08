@@ -10,5 +10,3 @@ export const AMORCES = [
   "Contre toute attente,",
   "Et pour finir,",
 ];
-
-export const AMORCE_LIBRE = "(écris ce que tu veux)";

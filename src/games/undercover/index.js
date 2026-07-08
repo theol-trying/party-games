@@ -2,6 +2,7 @@ import { el, screenHead, shuffle, announce, showPhase } from "../../ui.js";
 import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
 import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
+import { passThePhone } from "../../game-kit.js";
 import { PAIRES } from "./data.js";
 
 const SCHEMA = {
@@ -113,38 +114,31 @@ export function render(container, { game }) {
       return { name, role: "civil", word: currentPair.civils };
     });
 
-    let idx = 0;
-    function pass() {
-      if (idx >= roles.length) return discussion(roles);
-      showPhase(stage,
-        el("div.card.center", {}, [
-          el("p.big-prompt", { text: "📱" }),
-          el("p", { text: `Passe le téléphone à ${roles[idx].name}` }),
-          el("button.btn.btn--full", { text: "Voir mon rôle", style: "margin-top:18px", onClick: showWord }),
-        ])
-      );
-    }
-    function showWord() {
-      const r = roles[idx];
-      const body =
-        r.role === "blanc"
-          ? [
-              el("div.uc-word.uc-blanc", { text: "Mr White" }),
-              el("p.screen__subtitle", { text: "Tu n'as pas de mot ! Écoute, bluffe, et devine celui des civils." }),
-            ]
-          : [
-              el("div.uc-word", { text: r.word }),
-              el("p.screen__subtitle", { text: "Retiens-le. Ne le montre à personne." }),
-            ];
-      showPhase(stage,
-        el("div.card.center.uc-reveal", {}, [
-          el("p.screen__subtitle", { text: r.name + ", ton rôle :" }),
-          ...body,
-          el("button.btn.btn--full", { text: "J'ai vu, cacher →", style: "margin-top:18px", onClick: () => { idx++; pass(); } }),
-        ])
-      );
-    }
-    pass();
+    passThePhone(stage, players, {
+      icon: "📱",
+      cta: "Voir mon rôle",
+      onPlayer: (name, i, next) => {
+        const r = roles[i];
+        const body =
+          r.role === "blanc"
+            ? [
+                el("div.uc-word.uc-blanc", { text: "Mr White" }),
+                el("p.screen__subtitle", { text: "Tu n'as pas de mot ! Écoute, bluffe, et devine celui des civils." }),
+              ]
+            : [
+                el("div.uc-word", { text: r.word }),
+                el("p.screen__subtitle", { text: "Retiens-le. Ne le montre à personne." }),
+              ];
+        showPhase(stage,
+          el("div.card.center.uc-reveal", {}, [
+            el("p.screen__subtitle", { text: name + ", ton rôle :" }),
+            ...body,
+            el("button.btn.btn--full", { text: "J'ai vu, cacher →", style: "margin-top:18px", onClick: next }),
+          ])
+        );
+      },
+      onDone: () => discussion(roles),
+    });
   }
 
   /* ---------- Discussion + actions ---------- */

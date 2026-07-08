@@ -2,6 +2,7 @@ import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { playersCard } from "../../players.js";
 import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
+import { passThePhone } from "../../game-kit.js";
 import { MISSIONS } from "./data.js";
 
 const SCHEMA = {
@@ -48,30 +49,20 @@ export function render(container, { game }) {
       return;
     }
     const roles = players.map((name) => ({ name, mission: deck.next() }));
-
-    let idx = 0;
-    function pass() {
-      if (idx >= roles.length) return discussion(roles);
-      showPhase(stage,
-        el("div.card.center", {}, [
-          el("p.big-prompt", { text: "🤫" }),
-          el("p", { text: `Passe le téléphone à ${roles[idx].name}` }),
-          el("button.btn.btn--full", { text: "Voir ma mission", style: "margin-top:18px", onClick: showMission }),
-        ])
-      );
-    }
-    function showMission() {
-      const r = roles[idx];
-      showPhase(stage,
-        el("div.card.center", {}, [
-          el("p.screen__subtitle", { text: r.name + ", ta mission :" }),
-          el("div.mt-mission", { text: r.mission }),
-          el("p.screen__subtitle", { text: "Accomplis-la sans te faire griller. Ne montre à personne." }),
-          el("button.btn.btn--full", { text: "Compris, cacher →", style: "margin-top:18px", onClick: () => { idx++; pass(); } }),
-        ])
-      );
-    }
-    pass();
+    passThePhone(stage, players, {
+      icon: "🤫",
+      cta: "Voir ma mission",
+      onPlayer: (name, i, next) =>
+        showPhase(stage,
+          el("div.card.center", {}, [
+            el("p.screen__subtitle", { text: name + ", ta mission :" }),
+            el("div.mt-mission", { text: roles[i].mission }),
+            el("p.screen__subtitle", { text: "Accomplis-la sans te faire griller. Ne montre à personne." }),
+            el("button.btn.btn--full", { text: "Compris, cacher →", style: "margin-top:18px", onClick: next }),
+          ])
+        ),
+      onDone: () => discussion(roles),
+    });
   }
 
   function discussion(roles) {
