@@ -2,6 +2,7 @@ import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
 import { createScores, scoreboard } from "../../scoring.js";
+import { getData, setData } from "../../store.js";
 import { CATEGORIES_DEFAUT, LETTRES, DUREE_DEFAUT } from "./data.js";
 
 export function render(container, { game }) {
@@ -15,6 +16,10 @@ export function render(container, { game }) {
   container.append(stage);
 
   setup();
+  // Catégories personnalisées mémorisées par soirée.
+  getData("bac-categories", null).then((saved) => {
+    if (Array.isArray(saved) && saved.length) { categories = saved; setup(); }
+  });
 
   // Nettoyage appelé par le routeur quand on quitte le jeu : stoppe le chrono.
   return () => {
@@ -37,6 +42,7 @@ export function render(container, { game }) {
     });
     const readCats = () => {
       categories = catText.value.split("\n").map((s) => s.trim()).filter(Boolean);
+      setData("bac-categories", categories);
     };
 
     showPhase(stage,

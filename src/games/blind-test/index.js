@@ -4,7 +4,18 @@ import { createScores, scoreboard } from "../../scoring.js";
 import { createDeck } from "../../deck.js";
 import { buzz } from "../../sound.js";
 import { teamBuilder } from "../../teams.js";
+import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
 import { TRACKS } from "./data.js";
+
+const BT_SCHEMA = {
+  title: "Blind Test",
+  fields: [
+    { key: "title", label: "Titre", type: "text" },
+    { key: "artist", label: "Artiste", type: "text" },
+    { key: "url", label: "Lien audio .mp3 (optionnel)", type: "text", optional: true },
+  ],
+  summary: (e) => `${e.title} — ${e.artist}${e.url ? " 🔊" : ""}`,
+};
 
 // Thèmes rapides : une requête envoyée à la recherche d'extraits.
 const THEMES = [
@@ -24,10 +35,13 @@ export function render(container, { game }) {
   container.append(stage);
   let currentAudio = null;
   const objectUrls = []; // URLs de fichiers locaux à libérer au cleanup
+  let custom = [];
+  let config = { onlyCustom: false, disabled: {} };
 
   stage.append(
     playersCard({ min: 2, cta: "Suite →", onReady: (names) => modeScreen(names) })
   );
+  reload();
 
   // Nettoyage : coupe l'extrait et libère les fichiers locaux.
   return () => {
@@ -51,6 +65,14 @@ export function render(container, { game }) {
       ])
     );
   }
+
+  async function reload() {
+    [custom, config] = await Promise.all([loadContent("blind-test"), loadConfig("blind-test")]);
+  }
+  function defaultTracks() {
+    return activeCards({ builtIn: TRACKS, custom, config, keyOf: (t) => t.title, customToValue: (e) => ({ title: e.title, artist: e.artist, audioUrl: e.url || "" }) });
+  }
+  function builtInTracks() { return TRACKS.map((t) => ({ key: t.title, label: `${t.title} — ${t.artist}` })); }
 
   /* ---------- Choix de la source + construction de la playlist ---------- */
   function sourceScreen(players, scoreKey) {
@@ -138,10 +160,19 @@ export function render(container, { game }) {
       fileInput.value = "";
     });
 
-    // -- Liste par défaut (data.js) --
+    // -- Liste par défaut + mes titres --
     const defaultBtn = el("button.chip", {
-      text: `Charger la liste par défaut (${TRACKS.length})`,
-      onClick: () => TRACKS.forEach((t) => addTrack({ title: t.title, artist: t.artist, src: t.audioUrl || "" })),
+      text: `Charger la liste (${defaultTracks().length})`,
+      onClick: () => defaultTracks().forEach((t) => addTrack({ title: t.title, artist: t.artist, src: t.audioUrl || "" })),
+    });
+    const editBtn = el("button.chip", {
+      text: "✏️ Mes titres",
+      onClick: () => openEditor(stage, {
+        gameId: "blind-test",
+        schema: BT_SCHEMA,
+        builtInList: builtInTracks(),
+        onDone: async () => { await reload(); sourceScreen(players, scoreKey); },
+      }),
     });
 
     refreshQueue();
@@ -160,8 +191,8 @@ export function render(container, { game }) {
         fileInput,
       ]),
       el("div.card", { style: "margin-top:14px" }, [
-        el("h3", { text: "📝 Liste par défaut", style: "margin-bottom:10px" }),
-        defaultBtn,
+        el("h3", { text: "📝 Liste par défaut & mes titres", style: "margin-bottom:10px" }),
+        el("div.row", {}, [defaultBtn, editBtn]),
       ]),
       el("div.card.bt-launch", { style: "margin-top:14px" }, [queueInfo, launch]),
     );

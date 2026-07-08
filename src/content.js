@@ -58,7 +58,7 @@ function sanitizeEntry(raw, schema) {
       e[f.key] = f.options.some((o) => o.v === v) ? v : f.options[0].v;
     } else {
       v = typeof v === "string" ? v.trim().slice(0, MAX_LEN) : "";
-      if (!v) return null;
+      if (!v && !f.optional) return null;
       e[f.key] = v;
     }
   }
@@ -108,7 +108,7 @@ export function openEditor(container, { gameId, schema, builtInList = [], onDone
     fields.forEach((f) => (v[f.key] = f.type === "select" ? controls[f.key].value : controls[f.key].value.trim().slice(0, MAX_LEN)));
     return v;
   };
-  const valid = (v) => textFields.every((f) => v[f.key]);
+  const valid = (v) => textFields.every((f) => f.optional || v[f.key]);
   const resetForm = () => { editingId = null; textFields.forEach((f) => (controls[f.key].value = "")); addBtn.textContent = "Ajouter"; };
 
   async function persist() { await saveContent(gameId, entries); renderList(); }
