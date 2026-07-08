@@ -2,19 +2,45 @@ import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
 import { createScores, scoreboard } from "../../scoring.js";
+import { openEditor, loadContent } from "../../content.js";
 import { AFFIRMATIONS } from "./data.js";
 
+const SCHEMA = {
+  title: "Qui est le plus susceptible de…",
+  fields: [{ key: "text", label: "… (commence par un verbe : « finir la soirée… »)", type: "text" }],
+  summary: (e) => e.text,
+};
+
 export function render(container, { game }) {
+  let custom = [];
   container.append(screenHead(game.title, "Vote anonyme · roi/reine de la soirée"));
   const stage = el("div");
   container.append(stage);
 
-  stage.append(
-    playersCard({ min: 3, cta: "Lancer les votes", onReady: (names) => startGame(names) })
-  );
+  introScreen();
+  loadContent("plus-susceptible").then((list) => (custom = list));
+
+  function affirmations() {
+    return [...AFFIRMATIONS, ...custom.map((e) => e.text)];
+  }
+
+  function introScreen() {
+    stage.replaceChildren(
+      playersCard({ min: 3, cta: "Lancer les votes", onReady: (names) => startGame(names) }),
+      el("div.row", { style: "justify-content:center;margin-top:14px" }, [el("button.chip", { text: "✏️ Mes cartes", onClick: openEd })])
+    );
+  }
+
+  function openEd() {
+    openEditor(stage, {
+      gameId: "plus-susceptible",
+      schema: SCHEMA,
+      onDone: async () => { custom = await loadContent("plus-susceptible"); introScreen(); },
+    });
+  }
 
   function startGame(players) {
-    const deck = createDeck(AFFIRMATIONS); // anti-répétition partagée
+    const deck = createDeck(affirmations()); // intégré + perso, anti-répétition
     const sc = createScores("plus-susceptible", players); // couronnes cumulées, persistées
 
     function nextRound() {

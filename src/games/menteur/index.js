@@ -1,17 +1,35 @@
 import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { playersCard } from "../../players.js";
+import { openEditor, loadContent } from "../../content.js";
 import { MISSIONS } from "./data.js";
 
+const SCHEMA = {
+  title: "Le Menteur",
+  fields: [{ key: "text", label: "Mission à glisser dans la conversation", type: "text" }],
+  summary: (e) => e.text,
+};
+
 export function render(container, { game }) {
-  const deck = createDeck(MISSIONS);
+  let custom = [];
+  let deck = createDeck(missions());
   container.append(screenHead(game.title, "Une mission secrète à glisser dans la conversation"));
   const stage = el("div");
   container.append(stage);
 
-  stage.append(
-    playersCard({ min: 2, cta: "Distribuer les missions", onReady: (names) => distribute(names) })
-  );
+  introScreen();
+  loadContent("menteur").then((list) => { custom = list; deck = createDeck(missions()); });
+
+  function missions() { return [...MISSIONS, ...custom.map((e) => e.text)]; }
+  function introScreen() {
+    showPhase(stage,
+      playersCard({ min: 2, cta: "Distribuer les missions", onReady: (names) => distribute(names) }),
+      el("div.row", { style: "justify-content:center;margin-top:14px" }, [el("button.chip", { text: "✏️ Mes cartes", onClick: openEd })])
+    );
+  }
+  function openEd() {
+    openEditor(stage, { gameId: "menteur", schema: SCHEMA, onDone: async () => { custom = await loadContent("menteur"); deck = createDeck(missions()); introScreen(); } });
+  }
 
   function distribute(players) {
     const roles = players.map((name) => ({ name, mission: deck.next() }));
@@ -71,11 +89,7 @@ export function render(container, { game }) {
             ])
           )
         ),
-        el("button.btn.btn--full", { text: "Rejouer", style: "margin-top:20px", onClick: () => {
-          showPhase(stage,
-            playersCard({ min: 2, cta: "Distribuer les missions", onReady: (names) => distribute(names) })
-          );
-        } }),
+        el("button.btn.btn--full", { text: "Rejouer", style: "margin-top:20px", onClick: introScreen }),
       ])
     );
   }

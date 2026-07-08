@@ -160,11 +160,13 @@ try {
           try {
             $obj = $body | ConvertFrom-Json
             $val = $obj.value
-            # PowerShell sérialise un tableau vide en $null : on force du JSON valide.
+            # ConvertTo-Json déballe les tableaux à 0/1 élément : on force un vrai
+            # tableau JSON pour les valeurs de type liste (le Node de prod le fait déjà).
             if ($null -eq $val) {
               $valJson = "null"
-            } elseif ($val -is [System.Collections.IEnumerable] -and -not ($val -is [string]) -and @($val).Count -eq 0) {
-              $valJson = "[]"
+            } elseif ($val -is [System.Collections.IEnumerable] -and -not ($val -is [string])) {
+              $items = @($val | ForEach-Object { $_ | ConvertTo-Json -Depth 30 -Compress })
+              $valJson = "[" + ($items -join ",") + "]"
             } else {
               $valJson = $val | ConvertTo-Json -Depth 30 -Compress
               if ([string]::IsNullOrEmpty($valJson)) { $valJson = "null" }

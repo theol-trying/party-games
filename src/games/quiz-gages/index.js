@@ -1,20 +1,48 @@
-import { el, screenHead, announce, showPhase } from "../../ui.js";
+import { el, screenHead, announce, showPhase, shuffle } from "../../ui.js";
 import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
 import { createScores, scoreboard } from "../../scoring.js";
 import { pickGage } from "../../gages.js";
 import { levelSelector } from "../../levels.js";
 import { teamBuilder } from "../../teams.js";
+import { openEditor, loadContent } from "../../content.js";
 import { QUESTIONS } from "./data.js";
+
+const SCHEMA = {
+  title: "Quiz à gages",
+  fields: [
+    { key: "q", label: "Question", type: "text" },
+    { key: "bonne", label: "Bonne réponse", type: "text" },
+    { key: "m1", label: "Mauvaise réponse 1", type: "text" },
+    { key: "m2", label: "Mauvaise réponse 2", type: "text" },
+    { key: "m3", label: "Mauvaise réponse 3", type: "text" },
+  ],
+  summary: (e) => `${e.q} → ${e.bonne}`,
+};
+function toQuestion(e) {
+  const choices = shuffle([e.bonne, e.m1, e.m2, e.m3]);
+  return { q: e.q, choices, correct: choices.indexOf(e.bonne) };
+}
 
 export function render(container, { game }) {
   container.append(screenHead(game.title, "Chacun son tour · bonne réponse = point, sinon gage"));
   const stage = el("div");
   container.append(stage);
 
-  stage.append(
-    playersCard({ min: 2, cta: "Suite →", onReady: (names) => modeScreen(names) })
-  );
+  let custom = [];
+  introScreen();
+  loadContent("quiz-gages").then((list) => (custom = list));
+
+  function questions() { return [...QUESTIONS, ...custom.map(toQuestion)]; }
+  function introScreen() {
+    showPhase(stage,
+      playersCard({ min: 2, cta: "Suite →", onReady: (names) => modeScreen(names) }),
+      el("div.row", { style: "justify-content:center;margin-top:14px" }, [el("button.chip", { text: "✏️ Mes cartes", onClick: openEd })])
+    );
+  }
+  function openEd() {
+    openEditor(stage, { gameId: "quiz-gages", schema: SCHEMA, onDone: async () => { custom = await loadContent("quiz-gages"); introScreen(); } });
+  }
 
   // Choix : chacun pour soi ou en équipes.
   function modeScreen(names) {
@@ -33,7 +61,7 @@ export function render(container, { game }) {
   }
 
   function startGame(players, scoreKey = "quiz-gages") {
-    const deck = createDeck(QUESTIONS); // anti-répétition partagée
+    const deck = createDeck(questions()); // intégré + perso, anti-répétition
     const sc = createScores(scoreKey, players); // scores persistés par soirée (par joueur ou par équipe)
     let count = 0;
     let turn = 0;

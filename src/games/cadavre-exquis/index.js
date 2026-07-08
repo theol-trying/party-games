@@ -1,15 +1,26 @@
 import { el, screenHead, announce, showPhase } from "../../ui.js";
+import { openEditor, loadContent } from "../../content.js";
 import { AMORCES } from "./data.js";
+
+const SCHEMA = {
+  title: "Cadavre exquis",
+  fields: [{ key: "text", label: "Amorce (début de phrase)", type: "text" }],
+  summary: (e) => e.text,
+};
 
 export function render(container, { game }) {
   let steps = 8; // nombre de contributions
   let seePrevious = false; // mode : voir la ligne précédente ou non
+  let custom = [];
 
   container.append(screenHead(game.title, "Chacun écrit sans voir la suite"));
   const stage = el("div");
   container.append(stage);
 
   setup();
+  loadContent("cadavre-exquis").then((list) => (custom = list));
+
+  const amorces = () => [...AMORCES, ...custom.map((e) => e.text)];
 
   function setup() {
     const stepChips = el("div.row", { style: "margin-top:8px" });
@@ -37,8 +48,17 @@ export function render(container, { game }) {
         el("h3", { text: "Mode", style: "margin-top:16px" }),
         modeChips,
         el("button.btn.btn--full", { text: "Écrire l'histoire", style: "margin-top:18px", onClick: play }),
+        el("div.row", { style: "justify-content:center;margin-top:12px" }, [el("button.chip", { text: "✏️ Mes amorces", onClick: openEd })]),
       ])
     );
+  }
+
+  function openEd() {
+    openEditor(stage, {
+      gameId: "cadavre-exquis",
+      schema: SCHEMA,
+      onDone: async () => { custom = await loadContent("cadavre-exquis"); setup(); },
+    });
   }
 
   function play() {
@@ -58,7 +78,8 @@ export function render(container, { game }) {
     }
 
     function writeScreen() {
-      const amorce = AMORCES[step % AMORCES.length];
+      const pool = amorces();
+      const amorce = pool[step % pool.length];
       const ta = el("textarea.input.ce-input", { rows: "3", placeholder: "…" });
       const prev = fragments[fragments.length - 1];
 

@@ -1,15 +1,32 @@
 import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { createDeck } from "../../deck.js";
+import { openEditor, loadContent } from "../../content.js";
 import { DILEMMES } from "./data.js";
 
+const SCHEMA = {
+  title: "Tu préfères…",
+  fields: [
+    { key: "a", label: "Option A", type: "text" },
+    { key: "b", label: "Option B", type: "text" },
+  ],
+  summary: (e) => `${e.a}  /  ${e.b}`,
+};
+
 export function render(container, { game }) {
-  const deck = createDeck(DILEMMES); // anti-répétition partagée
+  let custom = [];
+  let deck = createDeck(dilemmes());
   let counts = { a: 0, b: 0 };
   let revealed = false;
 
   container.append(screenHead(game.title, "Tape ton camp · le camp minoritaire boit"));
   const stage = el("div");
   container.append(stage);
+
+  loadContent("tu-preferes").then((list) => { custom = list; deck = createDeck(dilemmes()); });
+  function dilemmes() { return [...DILEMMES, ...custom.map((e) => ({ a: e.a, b: e.b }))]; }
+  function openEd() {
+    openEditor(stage, { gameId: "tu-preferes", schema: SCHEMA, onDone: async () => { custom = await loadContent("tu-preferes"); deck = createDeck(dilemmes()); draw(); } });
+  }
 
   function optionBtn(side, label) {
     const btn = el("button.tp-option", {}, [
@@ -53,7 +70,8 @@ export function render(container, { game }) {
       el("div.tp-board", {}, [optionBtn("a", d.a), el("div.tp-or", { text: "OU" }), optionBtn("b", d.b)]),
       el("p.tp-verdict.center", { style: "min-height:22px;margin:16px 0;font-weight:700" }),
       el("button.btn.btn--full.tp-reveal", { text: "Révéler le résultat", onClick: reveal }),
-      el("button.btn.btn--full.tp-next", { text: "Dilemme suivant →", style: "display:none", onClick: draw })
+      el("button.btn.btn--full.tp-next", { text: "Dilemme suivant →", style: "display:none", onClick: draw }),
+      el("div.row", { style: "justify-content:center;margin-top:12px" }, [el("button.chip", { text: "✏️ Mes cartes", onClick: openEd })])
     );
   }
 

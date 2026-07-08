@@ -1,23 +1,41 @@
 import { el, screenHead, shuffle, announce, showPhase } from "../../ui.js";
 import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
+import { openEditor, loadContent } from "../../content.js";
 import { PAIRES } from "./data.js";
+
+const SCHEMA = {
+  title: "Undercover",
+  fields: [
+    { key: "civils", label: "Mot des civils", type: "text" },
+    { key: "imposteur", label: "Mot de l'imposteur", type: "text" },
+  ],
+  summary: (e) => `${e.civils} / ${e.imposteur}`,
+};
 
 export function render(container, { game }) {
   container.append(screenHead(game.title, "Distribution secrète · imposteurs & Mr White"));
   const stage = el("div");
   container.append(stage);
 
-  // Deck de paires persistant entre parties : évite de revoir vite la même paire.
-  const deck = (game._undercoverDeck ||= createDeck(PAIRES));
+  let custom = [];
+  let deck = createDeck(pairs()); // paires intégrées + perso, anti-répétition
   let currentPair = null;
 
   showSetupIntro();
+  loadContent("undercover").then((list) => { custom = list; deck = createDeck(pairs()); });
 
+  function pairs() {
+    return [...PAIRES, ...custom.map((e) => ({ civils: e.civils, imposteur: e.imposteur }))];
+  }
   function showSetupIntro() {
     showPhase(stage,
-      playersCard({ min: 3, cta: "Distribuer les mots", onReady: (names) => setup(names) })
+      playersCard({ min: 3, cta: "Distribuer les mots", onReady: (names) => setup(names) }),
+      el("div.row", { style: "justify-content:center;margin-top:14px" }, [el("button.chip", { text: "✏️ Mes cartes", onClick: openEd })])
     );
+  }
+  function openEd() {
+    openEditor(stage, { gameId: "undercover", schema: SCHEMA, onDone: async () => { custom = await loadContent("undercover"); deck = createDeck(pairs()); showSetupIntro(); } });
   }
 
   /* ---------- Réglage des rôles (imposteurs + Mr White) ---------- */
