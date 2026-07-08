@@ -307,3 +307,11 @@ select:focus-visible {
 .tm-rosters { margin-top: 4px; }
 .tm-roster { display: flex; justify-content: space-between; gap: 10px; padding: 8px 12px; background: var(--bg-soft); border-radius: 10px; font-size: 14px; }
 .tm-roster span { color: var(--text-dim); text-align: right; }
+
+/* Éditeur de contenu (content.js) */
+.ed-field { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.ed-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; background: var(--bg-soft); border-radius: 10px; }
+.ed-sum { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-actions { flex: 0 0 auto; flex-wrap: nowrap; }
+.ed-bulk summary { cursor: pointer; color: var(--text-dim); font-size: 14px; margin-bottom: 8px; }
+.ed-list { max-height: 340px; overflow-y: auto; }

@@ -159,7 +159,16 @@ try {
         } elseif ($method -eq "PUT" -or $method -eq "POST") {
           try {
             $obj = $body | ConvertFrom-Json
-            $valJson = $obj.value | ConvertTo-Json -Depth 30 -Compress
+            $val = $obj.value
+            # PowerShell sérialise un tableau vide en $null : on force du JSON valide.
+            if ($null -eq $val) {
+              $valJson = "null"
+            } elseif ($val -is [System.Collections.IEnumerable] -and -not ($val -is [string]) -and @($val).Count -eq 0) {
+              $valJson = "[]"
+            } else {
+              $valJson = $val | ConvertTo-Json -Depth 30 -Compress
+              if ([string]::IsNullOrEmpty($valJson)) { $valJson = "null" }
+            }
             $script:KV[$key] = $valJson
             Save-KV
             Send-Json $stream "200 OK" ('{"key":' + (ConvertTo-Json $key) + ',"ok":true}')
