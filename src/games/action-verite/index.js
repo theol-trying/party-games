@@ -1,7 +1,7 @@
 import { el, screenHead, announce } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { levelSelector, LEVELS } from "../../levels.js";
-import { openEditor, loadContent } from "../../content.js";
+import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
 import { VERITES, ACTIONS } from "./data.js";
 
 const LEVEL_LABEL = { soft: "Soft", soiree: "Soirée", x18: "18+" };
@@ -19,6 +19,7 @@ const EDIT_SCHEMA = {
 export function render(container, { game }) {
   let level = "soft";
   let custom = [];
+  let config = { onlyCustom: false, disabled: {} };
   const decks = { verite: {}, action: {} };
 
   container.append(screenHead(game.title, "Niveau réglable · ajoute tes propres cartes"));
@@ -27,16 +28,39 @@ export function render(container, { game }) {
 
   buildDecks();
   mainScreen();
-  // Charge le contenu perso de la soirée puis reconstruit les paquets.
-  loadContent("action-verite").then((list) => { custom = list; buildDecks(); });
+  reload();
+
+  async function reload() {
+    [custom, config] = await Promise.all([loadContent("action-verite"), loadConfig("action-verite")]);
+    buildDecks();
+  }
 
   function buildDecks() {
     for (const lv of LEVELS.map((l) => l.id)) {
-      const vExtra = custom.filter((e) => e.type === "verite" && e.niveau === lv).map((e) => e.text);
-      const aExtra = custom.filter((e) => e.type === "action" && e.niveau === lv).map((e) => e.text);
-      decks.verite[lv] = createDeck([...(VERITES[lv] || []), ...vExtra]);
-      decks.action[lv] = createDeck([...(ACTIONS[lv] || []), ...aExtra]);
+      decks.verite[lv] = createDeck(activeCards({
+        builtIn: VERITES[lv] || [],
+        custom: custom.filter((e) => e.type === "verite" && e.niveau === lv),
+        config,
+        keyOf: (t) => `v|${lv}|${t}`,
+        customToValue: (e) => e.text,
+      }));
+      decks.action[lv] = createDeck(activeCards({
+        builtIn: ACTIONS[lv] || [],
+        custom: custom.filter((e) => e.type === "action" && e.niveau === lv),
+        config,
+        keyOf: (t) => `a|${lv}|${t}`,
+        customToValue: (e) => e.text,
+      }));
     }
+  }
+
+  function builtInList() {
+    const out = [];
+    for (const lv of LEVELS.map((l) => l.id)) {
+      (VERITES[lv] || []).forEach((t) => out.push({ key: `v|${lv}|${t}`, label: `🗣️ ${LEVEL_LABEL[lv]} · ${t}` }));
+      (ACTIONS[lv] || []).forEach((t) => out.push({ key: `a|${lv}|${t}`, label: `🔥 ${LEVEL_LABEL[lv]} · ${t}` }));
+    }
+    return out;
   }
 
   function mainScreen() {
@@ -45,7 +69,7 @@ export function render(container, { game }) {
 
     function draw(kind) {
       const card = decks[kind][level].next();
-      promptBox.textContent = card || "Aucune carte à ce niveau — ajoute-en via ✏️ Mes cartes.";
+      promptBox.textContent = card || "Aucune carte à ce niveau — ajoute-en ou active-en via ✏️ Mes cartes.";
       if (card) announce((kind === "verite" ? "Vérité : " : "Action : ") + card);
       promptBox.classList.remove("av-flash");
       void promptBox.offsetWidth;
@@ -76,11 +100,8 @@ export function render(container, { game }) {
     openEditor(stage, {
       gameId: "action-verite",
       schema: EDIT_SCHEMA,
-      onDone: async () => {
-        custom = await loadContent("action-verite");
-        buildDecks();
-        mainScreen();
-      },
+      builtInList: builtInList(),
+      onDone: async () => { await reload(); mainScreen(); },
     });
   }
 }

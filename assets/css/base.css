@@ -313,3 +313,4 @@ select:focus-visible {
 .ed-actions { flex: 0 0 auto; flex-wrap: nowrap; }
 .ed-bulk summary { cursor: pointer; color: var(--text-dim); font-size: 14px; margin-bottom: 8px; }
 .ed-list { max-height: 340px; overflow-y: auto; }
+.ed-row.is-off { opacity: 0.45; }
