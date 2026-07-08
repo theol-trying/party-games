@@ -1,7 +1,7 @@
 import { el, screenHead, shuffle, announce, showPhase } from "../../ui.js";
 import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
-import { openEditor, loadContent } from "../../content.js";
+import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
 import { PAIRES } from "./data.js";
 
 const SCHEMA = {
@@ -19,15 +19,21 @@ export function render(container, { game }) {
   container.append(stage);
 
   let custom = [];
+  let config = { onlyCustom: false, disabled: {} };
   let deck = createDeck(pairs()); // paires intégrées + perso, anti-répétition
   let currentPair = null;
 
   showSetupIntro();
-  loadContent("undercover").then((list) => { custom = list; deck = createDeck(pairs()); });
+  reload();
 
-  function pairs() {
-    return [...PAIRES, ...custom.map((e) => ({ civils: e.civils, imposteur: e.imposteur }))];
+  async function reload() {
+    [custom, config] = await Promise.all([loadContent("undercover"), loadConfig("undercover")]);
+    deck = createDeck(pairs());
   }
+  function pairs() {
+    return activeCards({ builtIn: PAIRES, custom, config, keyOf: (p) => `${p.civils}|${p.imposteur}`, customToValue: (e) => ({ civils: e.civils, imposteur: e.imposteur }) });
+  }
+  function builtInList() { return PAIRES.map((p) => ({ key: `${p.civils}|${p.imposteur}`, label: `${p.civils} / ${p.imposteur}` })); }
   function showSetupIntro() {
     showPhase(stage,
       playersCard({ min: 3, cta: "Distribuer les mots", onReady: (names) => setup(names) }),
@@ -35,7 +41,7 @@ export function render(container, { game }) {
     );
   }
   function openEd() {
-    openEditor(stage, { gameId: "undercover", schema: SCHEMA, onDone: async () => { custom = await loadContent("undercover"); deck = createDeck(pairs()); showSetupIntro(); } });
+    openEditor(stage, { gameId: "undercover", schema: SCHEMA, builtInList: builtInList(), onDone: async () => { await reload(); showSetupIntro(); } });
   }
 
   /* ---------- Réglage des rôles (imposteurs + Mr White) ---------- */
@@ -91,6 +97,13 @@ export function render(container, { game }) {
   /* ---------- Distribution secrète ---------- */
   function distribute(players, impostorCount, whiteCount) {
     currentPair = deck.next();
+    if (!currentPair) {
+      showPhase(stage, el("div.card.center", {}, [
+        el("p", { text: "Aucune paire de mots active — ajoute-en ou change la source via ✏️ Mes cartes." }),
+        el("button.btn", { text: "✏️ Mes cartes", style: "margin-top:12px", onClick: openEd }),
+      ]));
+      return;
+    }
     const order = shuffle(players.map((_, i) => i));
     const impostors = new Set(order.slice(0, impostorCount));
     const whites = new Set(order.slice(impostorCount, impostorCount + whiteCount));

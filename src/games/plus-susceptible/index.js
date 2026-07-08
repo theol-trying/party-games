@@ -2,7 +2,7 @@ import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
 import { createScores, scoreboard } from "../../scoring.js";
-import { openEditor, loadContent } from "../../content.js";
+import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
 import { AFFIRMATIONS } from "./data.js";
 
 const SCHEMA = {
@@ -13,15 +13,22 @@ const SCHEMA = {
 
 export function render(container, { game }) {
   let custom = [];
+  let config = { onlyCustom: false, disabled: {} };
   container.append(screenHead(game.title, "Vote anonyme · roi/reine de la soirée"));
   const stage = el("div");
   container.append(stage);
 
   introScreen();
-  loadContent("plus-susceptible").then((list) => (custom = list));
+  reload();
 
+  async function reload() {
+    [custom, config] = await Promise.all([loadContent("plus-susceptible"), loadConfig("plus-susceptible")]);
+  }
   function affirmations() {
-    return [...AFFIRMATIONS, ...custom.map((e) => e.text)];
+    return activeCards({ builtIn: AFFIRMATIONS, custom, config, keyOf: (t) => t, customToValue: (e) => e.text });
+  }
+  function builtInList() {
+    return AFFIRMATIONS.map((t) => ({ key: t, label: t }));
   }
 
   function introScreen() {
@@ -35,11 +42,19 @@ export function render(container, { game }) {
     openEditor(stage, {
       gameId: "plus-susceptible",
       schema: SCHEMA,
-      onDone: async () => { custom = await loadContent("plus-susceptible"); introScreen(); },
+      builtInList: builtInList(),
+      onDone: async () => { await reload(); introScreen(); },
     });
   }
 
   function startGame(players) {
+    if (!affirmations().length) {
+      showPhase(stage, el("div.card.center", {}, [
+        el("p", { text: "Aucune affirmation active — ajoute-en ou change la source via ✏️ Mes cartes." }),
+        el("button.btn", { text: "✏️ Mes cartes", style: "margin-top:12px", onClick: openEd }),
+      ]));
+      return;
+    }
     const deck = createDeck(affirmations()); // intégré + perso, anti-répétition
     const sc = createScores("plus-susceptible", players); // couronnes cumulées, persistées
 

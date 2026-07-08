@@ -1,6 +1,6 @@
 import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { createDeck } from "../../deck.js";
-import { openEditor, loadContent } from "../../content.js";
+import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
 import { DILEMMES } from "./data.js";
 
 const SCHEMA = {
@@ -14,6 +14,7 @@ const SCHEMA = {
 
 export function render(container, { game }) {
   let custom = [];
+  let config = { onlyCustom: false, disabled: {} };
   let deck = createDeck(dilemmes());
   let counts = { a: 0, b: 0 };
   let revealed = false;
@@ -22,10 +23,17 @@ export function render(container, { game }) {
   const stage = el("div");
   container.append(stage);
 
-  loadContent("tu-preferes").then((list) => { custom = list; deck = createDeck(dilemmes()); });
-  function dilemmes() { return [...DILEMMES, ...custom.map((e) => ({ a: e.a, b: e.b }))]; }
+  reload();
+  async function reload() {
+    [custom, config] = await Promise.all([loadContent("tu-preferes"), loadConfig("tu-preferes")]);
+    deck = createDeck(dilemmes());
+  }
+  function dilemmes() {
+    return activeCards({ builtIn: DILEMMES, custom, config, keyOf: (d) => `${d.a}|${d.b}`, customToValue: (e) => ({ a: e.a, b: e.b }) });
+  }
+  function builtInList() { return DILEMMES.map((d) => ({ key: `${d.a}|${d.b}`, label: `${d.a} / ${d.b}` })); }
   function openEd() {
-    openEditor(stage, { gameId: "tu-preferes", schema: SCHEMA, onDone: async () => { custom = await loadContent("tu-preferes"); deck = createDeck(dilemmes()); draw(); } });
+    openEditor(stage, { gameId: "tu-preferes", schema: SCHEMA, builtInList: builtInList(), onDone: async () => { await reload(); draw(); } });
   }
 
   function optionBtn(side, label) {
@@ -66,6 +74,13 @@ export function render(container, { game }) {
     revealed = false;
     counts = { a: 0, b: 0 };
     const d = deck.next();
+    if (!d) {
+      showPhase(stage, el("div.card.center", {}, [
+        el("p", { text: "Aucun dilemme actif — ajoute-en ou change la source via ✏️ Mes cartes." }),
+        el("button.btn", { text: "✏️ Mes cartes", style: "margin-top:12px", onClick: openEd }),
+      ]));
+      return;
+    }
     showPhase(stage,
       el("div.tp-board", {}, [optionBtn("a", d.a), el("div.tp-or", { text: "OU" }), optionBtn("b", d.b)]),
       el("p.tp-verdict.center", { style: "min-height:22px;margin:16px 0;font-weight:700" }),

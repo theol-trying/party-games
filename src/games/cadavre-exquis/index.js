@@ -1,5 +1,5 @@
 import { el, screenHead, announce, showPhase } from "../../ui.js";
-import { openEditor, loadContent } from "../../content.js";
+import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
 import { AMORCES } from "./data.js";
 
 const SCHEMA = {
@@ -12,15 +12,20 @@ export function render(container, { game }) {
   let steps = 8; // nombre de contributions
   let seePrevious = false; // mode : voir la ligne précédente ou non
   let custom = [];
+  let config = { onlyCustom: false, disabled: {} };
 
   container.append(screenHead(game.title, "Chacun écrit sans voir la suite"));
   const stage = el("div");
   container.append(stage);
 
   setup();
-  loadContent("cadavre-exquis").then((list) => (custom = list));
+  reload();
 
-  const amorces = () => [...AMORCES, ...custom.map((e) => e.text)];
+  async function reload() {
+    [custom, config] = await Promise.all([loadContent("cadavre-exquis"), loadConfig("cadavre-exquis")]);
+  }
+  const amorces = () => activeCards({ builtIn: AMORCES, custom, config, keyOf: (t) => t, customToValue: (e) => e.text });
+  const builtInList = () => AMORCES.map((t) => ({ key: t, label: t }));
 
   function setup() {
     const stepChips = el("div.row", { style: "margin-top:8px" });
@@ -57,7 +62,8 @@ export function render(container, { game }) {
     openEditor(stage, {
       gameId: "cadavre-exquis",
       schema: SCHEMA,
-      onDone: async () => { custom = await loadContent("cadavre-exquis"); setup(); },
+      builtInList: builtInList(),
+      onDone: async () => { await reload(); setup(); },
     });
   }
 
@@ -79,7 +85,7 @@ export function render(container, { game }) {
 
     function writeScreen() {
       const pool = amorces();
-      const amorce = pool[step % pool.length];
+      const amorce = pool.length ? pool[step % pool.length] : "";
       const ta = el("textarea.input.ce-input", { rows: "3", placeholder: "…" });
       const prev = fragments[fragments.length - 1];
 

@@ -5,7 +5,7 @@ import { createScores, scoreboard } from "../../scoring.js";
 import { pickGage } from "../../gages.js";
 import { levelSelector } from "../../levels.js";
 import { teamBuilder } from "../../teams.js";
-import { openEditor, loadContent } from "../../content.js";
+import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
 import { QUESTIONS } from "./data.js";
 
 const SCHEMA = {
@@ -30,10 +30,17 @@ export function render(container, { game }) {
   container.append(stage);
 
   let custom = [];
+  let config = { onlyCustom: false, disabled: {} };
   introScreen();
-  loadContent("quiz-gages").then((list) => (custom = list));
+  reload();
 
-  function questions() { return [...QUESTIONS, ...custom.map(toQuestion)]; }
+  async function reload() {
+    [custom, config] = await Promise.all([loadContent("quiz-gages"), loadConfig("quiz-gages")]);
+  }
+  function questions() {
+    return activeCards({ builtIn: QUESTIONS, custom, config, keyOf: (q) => q.q, customToValue: toQuestion });
+  }
+  function builtInList() { return QUESTIONS.map((q) => ({ key: q.q, label: `${q.q} → ${q.choices[q.correct]}` })); }
   function introScreen() {
     showPhase(stage,
       playersCard({ min: 2, cta: "Suite →", onReady: (names) => modeScreen(names) }),
@@ -41,7 +48,7 @@ export function render(container, { game }) {
     );
   }
   function openEd() {
-    openEditor(stage, { gameId: "quiz-gages", schema: SCHEMA, onDone: async () => { custom = await loadContent("quiz-gages"); introScreen(); } });
+    openEditor(stage, { gameId: "quiz-gages", schema: SCHEMA, builtInList: builtInList(), onDone: async () => { await reload(); introScreen(); } });
   }
 
   // Choix : chacun pour soi ou en équipes.
@@ -61,6 +68,13 @@ export function render(container, { game }) {
   }
 
   function startGame(players, scoreKey = "quiz-gages") {
+    if (!questions().length) {
+      showPhase(stage, el("div.card.center", {}, [
+        el("p", { text: "Aucune question active — ajoute-en ou change la source via ✏️ Mes cartes." }),
+        el("button.btn", { text: "✏️ Mes cartes", style: "margin-top:12px", onClick: openEd }),
+      ]));
+      return;
+    }
     const deck = createDeck(questions()); // intégré + perso, anti-répétition
     const sc = createScores(scoreKey, players); // scores persistés par soirée (par joueur ou par équipe)
     let count = 0;

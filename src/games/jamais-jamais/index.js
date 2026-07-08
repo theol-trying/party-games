@@ -1,7 +1,7 @@
 import { el, screenHead, announce } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { levelSelector } from "../../levels.js";
-import { openEditor, loadContent } from "../../content.js";
+import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
 import { PHRASES } from "./data.js";
 
 const LEVEL_LABEL = { soft: "Soft", soiree: "Soirée", x18: "18+" };
@@ -17,6 +17,7 @@ const SCHEMA = {
 export function render(container, { game }) {
   let level = "soft";
   let custom = [];
+  let config = { onlyCustom: false, disabled: {} };
   let deck = createDeck(pool(level));
 
   container.append(screenHead(game.title, "Bois si tu l'as déjà fait"));
@@ -24,10 +25,25 @@ export function render(container, { game }) {
   container.append(stage);
 
   mainScreen();
-  loadContent("jamais-jamais").then((list) => { custom = list; deck = createDeck(pool(level)); });
+  reload();
 
+  async function reload() {
+    [custom, config] = await Promise.all([loadContent("jamais-jamais"), loadConfig("jamais-jamais")]);
+    deck = createDeck(pool(level));
+  }
   function pool(lv) {
-    return [...(PHRASES[lv] || []), ...custom.filter((e) => e.niveau === lv).map((e) => e.text)];
+    return activeCards({
+      builtIn: PHRASES[lv] || [],
+      custom: custom.filter((e) => e.niveau === lv),
+      config,
+      keyOf: (t) => `${lv}|${t}`,
+      customToValue: (e) => e.text,
+    });
+  }
+  function builtInList() {
+    const out = [];
+    for (const lv of ["soft", "soiree", "x18"]) (PHRASES[lv] || []).forEach((t) => out.push({ key: `${lv}|${t}`, label: `${LEVEL_LABEL[lv]} · ${t}` }));
+    return out;
   }
 
   function mainScreen() {
@@ -74,11 +90,8 @@ export function render(container, { game }) {
     openEditor(stage, {
       gameId: "jamais-jamais",
       schema: SCHEMA,
-      onDone: async () => {
-        custom = await loadContent("jamais-jamais");
-        deck = createDeck(pool(level));
-        mainScreen();
-      },
+      builtInList: builtInList(),
+      onDone: async () => { await reload(); mainScreen(); },
     });
   }
 }

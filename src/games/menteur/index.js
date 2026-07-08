@@ -1,7 +1,7 @@
 import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { playersCard } from "../../players.js";
-import { openEditor, loadContent } from "../../content.js";
+import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
 import { MISSIONS } from "./data.js";
 
 const SCHEMA = {
@@ -12,15 +12,23 @@ const SCHEMA = {
 
 export function render(container, { game }) {
   let custom = [];
+  let config = { onlyCustom: false, disabled: {} };
   let deck = createDeck(missions());
   container.append(screenHead(game.title, "Une mission secrète à glisser dans la conversation"));
   const stage = el("div");
   container.append(stage);
 
   introScreen();
-  loadContent("menteur").then((list) => { custom = list; deck = createDeck(missions()); });
+  reload();
 
-  function missions() { return [...MISSIONS, ...custom.map((e) => e.text)]; }
+  async function reload() {
+    [custom, config] = await Promise.all([loadContent("menteur"), loadConfig("menteur")]);
+    deck = createDeck(missions());
+  }
+  function missions() {
+    return activeCards({ builtIn: MISSIONS, custom, config, keyOf: (t) => t, customToValue: (e) => e.text });
+  }
+  function builtInList() { return MISSIONS.map((t) => ({ key: t, label: t })); }
   function introScreen() {
     showPhase(stage,
       playersCard({ min: 2, cta: "Distribuer les missions", onReady: (names) => distribute(names) }),
@@ -28,10 +36,17 @@ export function render(container, { game }) {
     );
   }
   function openEd() {
-    openEditor(stage, { gameId: "menteur", schema: SCHEMA, onDone: async () => { custom = await loadContent("menteur"); deck = createDeck(missions()); introScreen(); } });
+    openEditor(stage, { gameId: "menteur", schema: SCHEMA, builtInList: builtInList(), onDone: async () => { await reload(); introScreen(); } });
   }
 
   function distribute(players) {
+    if (!missions().length) {
+      showPhase(stage, el("div.card.center", {}, [
+        el("p", { text: "Aucune mission active — ajoute-en ou change la source via ✏️ Mes cartes." }),
+        el("button.btn", { text: "✏️ Mes cartes", style: "margin-top:12px", onClick: openEd }),
+      ]));
+      return;
+    }
     const roles = players.map((name) => ({ name, mission: deck.next() }));
 
     let idx = 0;
