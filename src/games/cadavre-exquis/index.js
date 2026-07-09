@@ -1,7 +1,7 @@
-import { el, screenHead, announce, showPhase } from "../../ui.js";
+import { el, screenHead, announce, showPhase, shuffle, pick } from "../../ui.js";
 import { openEditor } from "../../content.js";
 import { contentSource } from "../../game-kit.js";
-import { AMORCES } from "./data.js";
+import { AMORCES, OUVERTURES, CLOTURES } from "./data.js";
 
 const SCHEMA = {
   title: "Cadavre exquis",
@@ -67,6 +67,8 @@ export function render(container, { game }) {
   function play() {
     const fragments = [];
     let step = 0;
+    // Une ouverture, des connecteurs de milieu mélangés (intégrés + perso), une clôture.
+    const mids = shuffle(amorces());
 
     function passScreen() {
       if (step >= steps) return reveal();
@@ -81,8 +83,11 @@ export function render(container, { game }) {
     }
 
     function writeScreen() {
-      const pool = amorces();
-      const amorce = pool.length ? pool[step % pool.length] : "";
+      const amorce =
+        step === 0 ? pick(OUVERTURES)
+        : step === steps - 1 ? pick(CLOTURES)
+        : mids.length ? mids[(step - 1) % mids.length]
+        : pick(AMORCES);
       const ta = el("textarea.input.ce-input", { rows: "3", placeholder: "…" });
       const prev = fragments[fragments.length - 1];
 

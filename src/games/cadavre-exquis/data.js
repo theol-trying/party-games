@@ -1,12 +1,80 @@
-/* Cadavre exquis : amorces optionnelles pour guider chaque contribution.
-   Le nombre d'amorces définit aussi la longueur suggérée d'une histoire. */
-export const AMORCES = [
+/* Cadavre exquis : amorces structurées.
+   OUVERTURES = début d'histoire (1re contribution), CLOTURES = fin (dernière),
+   AMORCES = connecteurs de milieu (toutes les autres). L'éditeur « Mes amorces »
+   enrichit le pool du milieu. */
+
+export const OUVERTURES = [
   "Il était une fois…",
+  "Tout a commencé un mardi, vers 23h47, quand",
+  "Personne n'aurait parié que",
+  "Au fin fond d'un royaume oublié,",
+  "Le jour de son anniversaire,",
+  "Dans un futur pas si lointain,",
+  "La légende raconte que",
+  "C'était la soirée la plus banale du monde, jusqu'à ce que",
+  "Au réveil, avec un mal de tête suspect,",
+  "Sur une petite île déserte,",
+  "Le premier jour de son nouveau travail,",
+  "Alors que la pluie tombait sur la ville,",
+];
+
+export const AMORCES = [
   "Soudain,",
   "Mais personne ne s'attendait à ce que",
   "C'est alors que",
   "Au même moment, à l'autre bout de la ville,",
   "Malheureusement,",
   "Contre toute attente,",
+  "Pendant ce temps, dans l'ombre,",
+  "Sans prévenir,",
+  "Comme par magie,",
+  "Et là, catastrophe :",
+  "Ce que personne ne savait, c'est que",
+  "Par un heureux hasard,",
+  "Dans un fracas épouvantable,",
+  "Le plus discrètement possible,",
+  "À la surprise générale,",
+  "Après trois jours de silence,",
+  "Au moment précis où tout semblait perdu,",
+  "Avec un aplomb incroyable,",
+  "Juste avant minuit,",
+  "Dans un dernier effort,",
+  "Alors, évidemment,",
+  "Sans aucune raison valable,",
+  "Le téléphone sonna et",
+  "Quelqu'un cria que",
+  "En ouvrant la porte,",
+  "Sous les applaudissements,",
+  "Trempé de la tête aux pieds,",
+  "Avec l'énergie du désespoir,",
+  "Comme dans un rêve,",
+  "Aussitôt dit, aussitôt fait :",
+  "Contre l'avis de tout le monde,",
+  "Dans le plus grand secret,",
+  "Le lendemain matin,",
+  "À des kilomètres de là,",
+  "Étrangement,",
+  "Pour couronner le tout,",
+  "Sur un malentendu,",
+  "Avec la grâce d'un flamant rose,",
+  "Le destin en décida autrement :",
+  "En chuchotant très fort,",
+  "Par vengeance,",
+  "Dans un élan de courage inexpliqué,",
+  "Alors que plus personne n'y croyait,",
+  "Une odeur de fromage flottait quand",
+  "Comble de l'ironie,",
+];
+
+export const CLOTURES = [
   "Et pour finir,",
+  "Et c'est ainsi que",
+  "Moralité :",
+  "Depuis ce jour,",
+  "Finalement, contre toute attente,",
+  "Et ils vécurent, tant bien que mal,",
+  "Le rapport de police conclura simplement que",
+  "Aujourd'hui encore, on raconte que",
+  "En guise de happy end,",
+  "Tout ça pour dire que",
 ];
