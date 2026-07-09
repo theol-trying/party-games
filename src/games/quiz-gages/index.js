@@ -5,7 +5,8 @@ import { createScores, scoreboard } from "../../scoring.js";
 import { pickGage } from "../../gages.js";
 import { levelSelector } from "../../levels.js";
 import { teamBuilder } from "../../teams.js";
-import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
+import { openEditor } from "../../content.js";
+import { contentSource } from "../../game-kit.js";
 import { QUESTIONS } from "./data.js";
 
 const SCHEMA = {
@@ -29,17 +30,11 @@ export function render(container, { game }) {
   const stage = el("div");
   container.append(stage);
 
-  let custom = [];
-  let config = { onlyCustom: false, disabled: {} };
+  const src = contentSource("quiz-gages", { builtIn: QUESTIONS, keyOf: (q) => q.q, toValue: toQuestion });
   introScreen();
-  reload();
+  src.reload();
 
-  async function reload() {
-    [custom, config] = await Promise.all([loadContent("quiz-gages"), loadConfig("quiz-gages")]);
-  }
-  function questions() {
-    return activeCards({ builtIn: QUESTIONS, custom, config, keyOf: (q) => q.q, customToValue: toQuestion });
-  }
+  function questions() { return src.cards(); }
   function builtInList() { return QUESTIONS.map((q) => ({ key: q.q, label: `${q.q} → ${q.choices[q.correct]}` })); }
   function introScreen() {
     showPhase(stage,
@@ -48,7 +43,7 @@ export function render(container, { game }) {
     );
   }
   function openEd() {
-    openEditor(stage, { gameId: "quiz-gages", schema: SCHEMA, builtInList: builtInList(), onDone: async () => { await reload(); introScreen(); } });
+    openEditor(stage, { gameId: "quiz-gages", schema: SCHEMA, builtInList: builtInList(), onDone: async () => { await src.reload(); introScreen(); } });
   }
 
   // Choix : chacun pour soi ou en équipes.

@@ -1,8 +1,8 @@
 import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { playersCard } from "../../players.js";
-import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
-import { passThePhone } from "../../game-kit.js";
+import { openEditor } from "../../content.js";
+import { passThePhone, contentSource } from "../../game-kit.js";
 import { liveSession } from "../../realtime.js";
 import { MISSIONS } from "./data.js";
 
@@ -13,8 +13,7 @@ const SCHEMA = {
 };
 
 export function render(container, { game }) {
-  let custom = [];
-  let config = { onlyCustom: false, disabled: {} };
+  const src = contentSource("menteur", { builtIn: MISSIONS });
   let deck = createDeck(missions());
   let liveStop = null;
   container.append(screenHead(game.title, "Une mission secrète à glisser dans la conversation"));
@@ -42,6 +41,7 @@ export function render(container, { game }) {
       gameId: "menteur",
       title: "Le Menteur — multi",
       minPlayers: 2,
+      onExit: modeSelect,
       assign: (ps) => {
         const roles = {};
         ps.forEach((p) => (roles[p.id] = { mission: deck.next() }));
@@ -66,12 +66,10 @@ export function render(container, { game }) {
   }
 
   async function reload() {
-    [custom, config] = await Promise.all([loadContent("menteur"), loadConfig("menteur")]);
+    await src.reload();
     deck = createDeck(missions());
   }
-  function missions() {
-    return activeCards({ builtIn: MISSIONS, custom, config, keyOf: (t) => t, customToValue: (e) => e.text });
-  }
+  function missions() { return src.cards(); }
   function builtInList() { return MISSIONS.map((t) => ({ key: t, label: t })); }
   function introScreen() {
     showPhase(stage,

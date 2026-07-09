@@ -2,8 +2,8 @@ import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
 import { createScores, scoreboard } from "../../scoring.js";
-import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
-import { passThePhone } from "../../game-kit.js";
+import { openEditor } from "../../content.js";
+import { passThePhone, contentSource } from "../../game-kit.js";
 import { AFFIRMATIONS } from "./data.js";
 
 const SCHEMA = {
@@ -13,21 +13,15 @@ const SCHEMA = {
 };
 
 export function render(container, { game }) {
-  let custom = [];
-  let config = { onlyCustom: false, disabled: {} };
+  const src = contentSource("plus-susceptible", { builtIn: AFFIRMATIONS });
   container.append(screenHead(game.title, "Vote anonyme · roi/reine de la soirée"));
   const stage = el("div");
   container.append(stage);
 
   introScreen();
-  reload();
+  src.reload();
 
-  async function reload() {
-    [custom, config] = await Promise.all([loadContent("plus-susceptible"), loadConfig("plus-susceptible")]);
-  }
-  function affirmations() {
-    return activeCards({ builtIn: AFFIRMATIONS, custom, config, keyOf: (t) => t, customToValue: (e) => e.text });
-  }
+  function affirmations() { return src.cards(); }
   function builtInList() {
     return AFFIRMATIONS.map((t) => ({ key: t, label: t }));
   }
@@ -44,7 +38,7 @@ export function render(container, { game }) {
       gameId: "plus-susceptible",
       schema: SCHEMA,
       builtInList: builtInList(),
-      onDone: async () => { await reload(); introScreen(); },
+      onDone: async () => { await src.reload(); introScreen(); },
     });
   }
 

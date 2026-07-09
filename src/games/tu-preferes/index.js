@@ -1,6 +1,7 @@
 import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { createDeck } from "../../deck.js";
-import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
+import { openEditor } from "../../content.js";
+import { contentSource } from "../../game-kit.js";
 import { DILEMMES } from "./data.js";
 
 const SCHEMA = {
@@ -13,8 +14,7 @@ const SCHEMA = {
 };
 
 export function render(container, { game }) {
-  let custom = [];
-  let config = { onlyCustom: false, disabled: {} };
+  const src = contentSource("tu-preferes", { builtIn: DILEMMES, keyOf: (d) => `${d.a}|${d.b}`, toValue: (e) => ({ a: e.a, b: e.b }) });
   let deck = createDeck(dilemmes());
   let counts = { a: 0, b: 0 };
   let revealed = false;
@@ -23,17 +23,12 @@ export function render(container, { game }) {
   const stage = el("div");
   container.append(stage);
 
-  reload();
-  async function reload() {
-    [custom, config] = await Promise.all([loadContent("tu-preferes"), loadConfig("tu-preferes")]);
-    deck = createDeck(dilemmes());
-  }
-  function dilemmes() {
-    return activeCards({ builtIn: DILEMMES, custom, config, keyOf: (d) => `${d.a}|${d.b}`, customToValue: (e) => ({ a: e.a, b: e.b }) });
-  }
+  src.reload().then(() => (deck = createDeck(dilemmes())));
+
+  function dilemmes() { return src.cards(); }
   function builtInList() { return DILEMMES.map((d) => ({ key: `${d.a}|${d.b}`, label: `${d.a} / ${d.b}` })); }
   function openEd() {
-    openEditor(stage, { gameId: "tu-preferes", schema: SCHEMA, builtInList: builtInList(), onDone: async () => { await reload(); draw(); } });
+    openEditor(stage, { gameId: "tu-preferes", schema: SCHEMA, builtInList: builtInList(), onDone: async () => { await src.reload(); deck = createDeck(dilemmes()); draw(); } });
   }
 
   function optionBtn(side, label) {

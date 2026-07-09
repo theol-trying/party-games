@@ -1,0 +1,4 @@
+{
+  "type": "module",
+  "//": "Permet à Node (tests/CI) de charger src/*.js en modules ES ; sans effet sur le site ni sur server.js (CommonJS à la racine)."
+}

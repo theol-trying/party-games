@@ -34,7 +34,7 @@ export function deviceId() {
 }
 const savedName = () => { try { return localStorage.getItem(NAME_KEY) || ""; } catch { return ""; } };
 
-export function liveSession(stage, { gameId, title, minPlayers = 2, assign, renderMine, renderReveal }) {
+export function liveSession(stage, { gameId, title, minPlayers = 2, assign, renderMine, renderReveal, lobbyExtra, onExit }) {
   const me = deviceId();
   const LOBBY = "lobby:" + gameId;
   const LIVE = "live:" + gameId;
@@ -49,6 +49,15 @@ export function liveSession(stage, { gameId, title, minPlayers = 2, assign, rend
     stopped = true;
     if (hbTimer) clearInterval(hbTimer);
     if (pollTimer) clearInterval(pollTimer);
+  }
+
+  // Quitte proprement : retire sa présence du salon (sinon elle expire en ~25 s).
+  async function leave() {
+    stop();
+    const l = (await getData(LOBBY, {})) || {};
+    delete l[me];
+    await setData(LOBBY, l);
+    onExit && onExit();
   }
 
   function nameScreen() {
@@ -103,12 +112,16 @@ export function liveSession(stage, { gameId, title, minPlayers = 2, assign, rend
     const action = isHost()
       ? el("button.btn.btn--full", { text: `Distribuer les rôles (${ps.length})`, disabled: ps.length < minPlayers, onClick: distribute })
       : el("p.screen__subtitle", { text: "L'hôte lancera la distribution." });
+    // Réglages spécifiques au jeu, visibles par l'hôte uniquement.
+    const extra = isHost() && lobbyExtra ? lobbyExtra(ps) : null;
     showPhase(stage, el("div.card.center", {}, [
       el("h3", { text: title }),
       el("p.screen__subtitle", { text: `Code soirée : ${currentRoom()}`, style: "margin:4px 0 8px" }),
       el("button.chip", { text: "🔗 Partager le lien", onClick: share, style: "margin-bottom:10px" }),
       list,
+      extra,
       el("div", { style: "margin-top:14px" }, [action]),
+      el("button.chip", { text: "🚪 Quitter le salon", style: "margin-top:12px", onClick: leave }),
     ]));
   }
 

@@ -3,6 +3,27 @@
    ========================================================================= */
 
 import { el, showPhase } from "./ui.js";
+import { loadContent, loadConfig, activeCards } from "./content.js";
+
+/**
+ * Source de contenu d'un jeu : contenu intégré + cartes perso, filtré par la
+ * config de sélection (source « perso uniquement », cartes désactivées).
+ * Évite de répéter le trio loadContent/loadConfig/activeCards dans chaque jeu.
+ *
+ * @param {string} gameId
+ * @param {object} opts  { builtIn, keyOf?, toValue? }
+ * @returns {{ reload:()=>Promise<void>, cards:()=>any[] }}
+ */
+export function contentSource(gameId, { builtIn, keyOf = (x) => x, toValue = (e) => e.text }) {
+  let custom = [];
+  let config = { onlyCustom: false, disabled: {} };
+  return {
+    async reload() {
+      [custom, config] = await Promise.all([loadContent(gameId), loadConfig(gameId)]);
+    },
+    cards: () => activeCards({ builtIn, custom, config, keyOf, customToValue: toValue }),
+  };
+}
 
 /**
  * Boucle « passe le téléphone » : pour chaque joueur, un écran tampon

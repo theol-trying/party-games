@@ -4,7 +4,8 @@ import { createScores, scoreboard } from "../../scoring.js";
 import { createDeck } from "../../deck.js";
 import { buzz } from "../../sound.js";
 import { teamBuilder } from "../../teams.js";
-import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
+import { openEditor } from "../../content.js";
+import { contentSource } from "../../game-kit.js";
 import { TRACKS } from "./data.js";
 
 const BT_SCHEMA = {
@@ -35,13 +36,12 @@ export function render(container, { game }) {
   container.append(stage);
   let currentAudio = null;
   const objectUrls = []; // URLs de fichiers locaux à libérer au cleanup
-  let custom = [];
-  let config = { onlyCustom: false, disabled: {} };
+  const src = contentSource("blind-test", { builtIn: TRACKS, keyOf: (t) => t.title, toValue: (e) => ({ title: e.title, artist: e.artist, audioUrl: e.url || "" }) });
 
   stage.append(
     playersCard({ min: 2, cta: "Suite →", onReady: (names) => modeScreen(names) })
   );
-  reload();
+  src.reload();
 
   // Nettoyage : coupe l'extrait et libère les fichiers locaux.
   return () => {
@@ -66,12 +66,7 @@ export function render(container, { game }) {
     );
   }
 
-  async function reload() {
-    [custom, config] = await Promise.all([loadContent("blind-test"), loadConfig("blind-test")]);
-  }
-  function defaultTracks() {
-    return activeCards({ builtIn: TRACKS, custom, config, keyOf: (t) => t.title, customToValue: (e) => ({ title: e.title, artist: e.artist, audioUrl: e.url || "" }) });
-  }
+  function defaultTracks() { return src.cards(); }
   function builtInTracks() { return TRACKS.map((t) => ({ key: t.title, label: `${t.title} — ${t.artist}` })); }
 
   /* ---------- Choix de la source + construction de la playlist ---------- */
@@ -171,7 +166,7 @@ export function render(container, { game }) {
         gameId: "blind-test",
         schema: BT_SCHEMA,
         builtInList: builtInTracks(),
-        onDone: async () => { await reload(); sourceScreen(players, scoreKey); },
+        onDone: async () => { await src.reload(); sourceScreen(players, scoreKey); },
       }),
     });
 

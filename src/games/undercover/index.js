@@ -1,8 +1,8 @@
 import { el, screenHead, shuffle, announce, showPhase } from "../../ui.js";
 import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
-import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
-import { passThePhone } from "../../game-kit.js";
+import { openEditor } from "../../content.js";
+import { passThePhone, contentSource } from "../../game-kit.js";
 import { liveSession } from "../../realtime.js";
 import { PAIRES } from "./data.js";
 
@@ -20,8 +20,7 @@ export function render(container, { game }) {
   const stage = el("div");
   container.append(stage);
 
-  let custom = [];
-  let config = { onlyCustom: false, disabled: {} };
+  const src = contentSource("undercover", { builtIn: PAIRES, keyOf: (p) => `${p.civils}|${p.imposteur}`, toValue: (e) => ({ civils: e.civils, imposteur: e.imposteur }) });
   let deck = createDeck(pairs()); // paires intégrées + perso, anti-répétition
   let currentPair = null;
   let liveStop = null;
@@ -43,47 +42,82 @@ export function render(container, { game }) {
   }
   function startLive() {
     if (liveStop) liveStop();
+    let liveImp = 1, liveWhite = 0; // réglages de l'hôte
     liveStop = liveSession(stage, {
       gameId: "undercover",
       title: "Undercover — multi",
       minPlayers: 3,
+      onExit: modeSelect,
+      lobbyExtra: (ps) => {
+        const n = ps.length;
+        const wrap = el("div.stack", { style: "margin:10px 0" });
+        function build() {
+          const mk = (label, get, set) =>
+            el("div.uc-step", {}, [
+              el("span.uc-step__label", { text: label }),
+              el("div.uc-step__ctrl", {}, [
+                el("button.btn.btn--ghost.uc-step__btn", { text: "−", onClick: () => { set(Math.max(0, get() - 1)); build(); } }),
+                el("span.uc-step__val", { text: String(get()) }),
+                el("button.btn.btn--ghost.uc-step__btn", { text: "+", onClick: () => { set(Math.min(Math.max(0, n - 1), get() + 1)); build(); } }),
+              ]),
+            ]);
+          wrap.replaceChildren(
+            mk("imposteurs", () => liveImp, (x) => (liveImp = x)),
+            mk("Mr White", () => liveWhite, (x) => (liveWhite = x))
+          );
+        }
+        build();
+        return wrap;
+      },
       assign: (ps) => {
         const pair = deck.next() || { civils: "?", imposteur: "?" };
-        const nImp = Math.max(1, Math.floor(ps.length / 4));
+        const n = ps.length;
+        // Clamp : au moins 1 civil ; si aucun rôle spécial, on force 1 imposteur.
+        let impN = Math.min(liveImp, n - 1);
+        const whiteN = Math.min(liveWhite, n - 1 - impN);
+        if (impN + whiteN === 0) impN = 1;
         const order = shuffle(ps.map((_, i) => i));
-        const imp = new Set(order.slice(0, nImp));
+        const imp = new Set(order.slice(0, impN));
+        const whites = new Set(order.slice(impN, impN + whiteN));
         const roles = {};
-        ps.forEach((p, i) => (roles[p.id] = { role: imp.has(i) ? "imposteur" : "civil", word: imp.has(i) ? pair.imposteur : pair.civils }));
+        ps.forEach((p, i) => {
+          if (whites.has(i)) roles[p.id] = { role: "blanc", word: null };
+          else if (imp.has(i)) roles[p.id] = { role: "imposteur", word: pair.imposteur };
+          else roles[p.id] = { role: "civil", word: pair.civils };
+        });
         return { roles, meta: { pair } };
       },
       renderMine: (mine) =>
-        el("div", {}, [
-          el("p.screen__subtitle", { text: "Ton mot :" }),
-          el("div.uc-word", { text: mine.word }),
-          el("p.screen__subtitle", { text: "Décris-le sans le dire. Démasquez l'intrus !" }),
-        ]),
+        mine.role === "blanc"
+          ? el("div", {}, [
+              el("div.uc-word.uc-blanc", { text: "Mr White" }),
+              el("p.screen__subtitle", { text: "Tu n'as pas de mot ! Écoute, bluffe, et devine celui des civils." }),
+            ])
+          : el("div", {}, [
+              el("p.screen__subtitle", { text: "Ton mot :" }),
+              el("div.uc-word", { text: mine.word }),
+              el("p.screen__subtitle", { text: "Décris-le sans le dire. Démasquez l'intrus !" }),
+            ]),
       renderReveal: (live) =>
         el("div", {}, [
           el("h3", { text: "Rôles", style: "margin-bottom:10px" }),
           el("div.stack", {},
-            Object.keys(live.roles).map((id) =>
-              el("div.uc-role-row" + (live.roles[id].role === "imposteur" ? ".is-imp" : ""), {}, [
-                el("span", { text: live.names[id] || "?" }),
-                el("span", { text: (live.roles[id].role === "imposteur" ? "🕵️ " : "😇 ") + live.roles[id].word }),
-              ])
-            )
+            Object.keys(live.roles).map((id) => {
+              const r = live.roles[id];
+              const cls = r.role === "imposteur" ? ".is-imp" : r.role === "blanc" ? ".is-blanc" : "";
+              const tag = r.role === "imposteur" ? "🕵️ " + r.word : r.role === "blanc" ? "🎭 Mr White" : "😇 " + r.word;
+              return el("div.uc-role-row" + cls, {}, [el("span", { text: live.names[id] || "?" }), el("span", { text: tag })]);
+            })
           ),
         ]),
     });
   }
 
   async function reload() {
-    [custom, config] = await Promise.all([loadContent("undercover"), loadConfig("undercover")]);
+    await src.reload();
     deck = createDeck(pairs());
   }
-  function pairs() {
-    return activeCards({ builtIn: PAIRES, custom, config, keyOf: (p) => `${p.civils}|${p.imposteur}`, customToValue: (e) => ({ civils: e.civils, imposteur: e.imposteur }) });
-  }
+  function pairs() { return src.cards(); }
   function builtInList() { return PAIRES.map((p) => ({ key: `${p.civils}|${p.imposteur}`, label: `${p.civils} / ${p.imposteur}` })); }
   function showSetupIntro() {
     showPhase(stage,

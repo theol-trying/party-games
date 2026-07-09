@@ -1,5 +1,6 @@
 import { el, screenHead, announce, showPhase } from "../../ui.js";
-import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
+import { openEditor } from "../../content.js";
+import { contentSource } from "../../game-kit.js";
 import { AMORCES } from "./data.js";
 
 const SCHEMA = {
@@ -11,20 +12,16 @@ const SCHEMA = {
 export function render(container, { game }) {
   let steps = 8; // nombre de contributions
   let seePrevious = false; // mode : voir la ligne précédente ou non
-  let custom = [];
-  let config = { onlyCustom: false, disabled: {} };
+  const src = contentSource("cadavre-exquis", { builtIn: AMORCES });
 
   container.append(screenHead(game.title, "Chacun écrit sans voir la suite"));
   const stage = el("div");
   container.append(stage);
 
   setup();
-  reload();
+  src.reload();
 
-  async function reload() {
-    [custom, config] = await Promise.all([loadContent("cadavre-exquis"), loadConfig("cadavre-exquis")]);
-  }
-  const amorces = () => activeCards({ builtIn: AMORCES, custom, config, keyOf: (t) => t, customToValue: (e) => e.text });
+  const amorces = () => src.cards();
   const builtInList = () => AMORCES.map((t) => ({ key: t, label: t }));
 
   function setup() {
@@ -63,7 +60,7 @@ export function render(container, { game }) {
       gameId: "cadavre-exquis",
       schema: SCHEMA,
       builtInList: builtInList(),
-      onDone: async () => { await reload(); setup(); },
+      onDone: async () => { await src.reload(); setup(); },
     });
   }
 
