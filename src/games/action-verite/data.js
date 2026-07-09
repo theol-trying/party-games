@@ -40,6 +40,8 @@ export const VERITES = {
     "Quel surnom ridicule t'a-t-on donné dans ta famille ?",
     "Si ta vie était une téléréalité, quel serait son titre ?",
     "Quelle célébrité es-tu secrètement convaincu·e de pouvoir séduire ?",
+    "Quel plat adores-tu alors que tout le monde le trouve dégoûtant ?",
+    "Quel est le tout dernier mensonge que tu as dit — et à qui ?",
   ],
   soiree: [
     "Qui dans cette pièce trouves-tu le plus séduisant ou charismatique à première vue ?",
@@ -62,6 +64,7 @@ export const VERITES = {
     "As-tu déjà menti sur ton nombre d'ex ? Dans quel sens ?",
     "Quel crush totalement improbable as-tu eu, que personne ici ne soupçonne ?",
     "Quelle soirée voudrais-tu revivre — ou effacer à jamais — et pourquoi ?",
+    "Si tu devais matcher deux personnes de cette pièce sur une appli de rencontre, qui — et pourquoi ?",
   ],
   x18: [
     "Quelle est ta position sexuelle préférée et décris pourquoi elle te procure le plus de plaisir ?",
@@ -79,6 +82,8 @@ export const VERITES = {
     "As-tu déjà craqué pour le ou la partenaire d'un·e ami·e ? Développe.",
     "Ta plus longue période d'abstinence — et la plus courte entre deux fois ?",
     "Quelle expérience aimerais-tu tenter sans jamais avoir osé la proposer ?",
+    "Quelle est la panne ou le fail le plus gênant que tu aies vécu au lit ?",
+    "Quelle célébrité rejoindrait ta liste « permis de tromper » sans la moindre hésitation ?",
   ],
 };
 
@@ -109,6 +114,7 @@ export const ACTIONS = {
     "Improvise un rap de quatre phrases sur la personne à ta gauche.",
     "Laisse la table choisir un mot que tu devras placer discrètement trois fois avant ton prochain tour.",
     "Bois ta prochaine gorgée en portant un toast solennel à un objet de la pièce.",
+    "Imite chaque personne de la table à tour de rôle jusqu'à ce que quelqu'un se reconnaisse.",
   ],
   soiree: [
     "Fais une danse de séduction totalement parodique et exagérée devant la personne de ton choix.",
@@ -127,6 +133,8 @@ export const ACTIONS = {
     "Prononce le prénom de chaque personne de la table de la façon la plus sensuelle possible.",
     "Danse collé-serré 20 secondes avec la personne désignée par la table.",
     "Appelle un ami, annonce-lui que tu as un énorme secret à lui avouer… puis raccroche.",
+    "Fais une déclaration théâtrale enflammée à la personne de la pièce que tu connais le moins.",
+    "Improvise 20 secondes de stand-up sur la personne de ton choix (gentiment… ou pas).",
   ],
   x18: [
     "Fais un lap dance sensuel et rythmé d'une minute sur les genoux de la personne de ton choix.",
@@ -144,6 +152,8 @@ export const ACTIONS = {
     "Strip-tease de 20 secondes : au moins un vêtement doit tomber.",
     "Susurre à l'oreille de ton voisin la chose la plus osée que tu oserais lui proposer.",
     "Fais un body shot sur la personne volontaire de ton choix.",
+    "Masse lentement les cuisses d'un·e volontaire pendant 30 secondes, regard assumé.",
+    "Colle-toi dos à dos contre un·e volontaire et ondulez en rythme pendant 15 secondes de musique.",
   ],
 };
 
