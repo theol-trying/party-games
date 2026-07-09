@@ -1,5 +1,10 @@
 /* Style propre au « Baccalauréat ». */
-.screen[data-game="baccalaureat"] { --accent: #63e6be; }
+.screen[data-game="baccalaureat"] {
+  --accent: #63e6be;
+  --g1: rgba(99, 230, 190, 0.16);
+  --g2: rgba(77, 208, 225, 0.12);
+  --wm: "⏱️";
+}
 .bc-letter { font-size: clamp(56px, 18vw, 96px); font-weight: 900; color: #63e6be; line-height: 1; margin: 4px 0; }
 .bc-timer { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .bc-timer.is-low { color: #ff4d6d; animation: pulse 1s infinite; }

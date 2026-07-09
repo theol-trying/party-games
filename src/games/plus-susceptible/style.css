@@ -1,5 +1,10 @@
 /* Style propre à « Qui est le plus susceptible de… ». */
-.screen[data-game="plus-susceptible"] { --accent: #c77dff; }
+.screen[data-game="plus-susceptible"] {
+  --accent: #c77dff;
+  --g1: rgba(199, 125, 255, 0.18);
+  --g2: rgba(92, 124, 250, 0.12);
+  --wm: "👉";
+}
 .ps-statement { font-size: 20px; font-weight: 700; line-height: 1.3; }
 .ps-winner { color: #c77dff; font-size: 26px; }
 .ps-choices .btn { text-align: center; }

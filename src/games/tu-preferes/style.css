@@ -1,5 +1,10 @@
 /* Style propre à « Tu préfères… ». */
-.screen[data-game="tu-preferes"] { --accent: #4dd0e1; }
+.screen[data-game="tu-preferes"] {
+  --accent: #4dd0e1;
+  --g1: rgba(77, 208, 225, 0.18);
+  --g2: rgba(41, 121, 255, 0.12);
+  --wm: "⚖️";
+}
 .tp-board { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: stretch; }
 .tp-option {
   cursor: pointer; font-family: inherit; color: var(--text);

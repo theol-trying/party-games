@@ -153,6 +153,26 @@ body {
 .game-card__title { font-weight: 700; font-size: 17px; }
 .game-card__desc { color: var(--text-dim); font-size: 13px; line-height: 1.4; }
 
+/* ---------- Identité visuelle par jeu ----------
+   Chaque style.css définit : --g1/--g2 (halos d'ambiance) et --wm (filigrane emoji).
+   Le reste (boutons, focus, chips actifs…) suit déjà --accent. */
+.screen[data-game]::before {
+  content: "";
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(900px 500px at 85% -5%, var(--g1, transparent), transparent 60%),
+    radial-gradient(700px 420px at 0% 105%, var(--g2, transparent), transparent 55%);
+}
+.screen[data-game]::after {
+  content: var(--wm, "");
+  position: fixed; right: -0.15em; bottom: -0.1em; z-index: -1; pointer-events: none;
+  font-size: clamp(130px, 32vw, 260px); line-height: 1;
+  opacity: 0.07; transform: rotate(-12deg);
+}
+/* L'accent colore aussi le bouton retour et le titre de l'écran. */
+.screen[data-game] .screen__back { border-color: var(--accent); }
+.screen[data-game] .screen__title { text-shadow: 0 0 24px color-mix(in srgb, var(--accent) 35%, transparent); }
+
 /* ---------- Composants réutilisables par les jeux ---------- */
 .screen { animation: fadeIn 0.25s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }

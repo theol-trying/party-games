@@ -1,5 +1,10 @@
 /* Style propre au « Blind Test ». */
-.screen[data-game="blind-test"] { --accent: #f783ac; }
+.screen[data-game="blind-test"] {
+  --accent: #f783ac;
+  --g1: rgba(247, 131, 172, 0.20);
+  --g2: rgba(199, 125, 255, 0.13);
+  --wm: "🎵";
+}
 .bt-audio { width: 100%; margin: 10px 0; }
 .bt-buzzers { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
 .bt-buzzer {

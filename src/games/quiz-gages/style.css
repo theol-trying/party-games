@@ -1,5 +1,10 @@
 /* Style propre au « Quiz à gages ». */
-.screen[data-game="quiz-gages"] { --accent: #ffd43b; }
+.screen[data-game="quiz-gages"] {
+  --accent: #ffd43b;
+  --g1: rgba(255, 212, 59, 0.16);
+  --g2: rgba(255, 122, 26, 0.11);
+  --wm: "🧠";
+}
 .qz-question { font-size: clamp(20px, 5vw, 26px); font-weight: 800; line-height: 1.3; }
 .qz-choice { text-align: left; }
 .qz-choice.is-correct { background: rgba(105,219,124,0.18); border-color: #69db7c; color: #b2f2bb; }

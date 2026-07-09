@@ -1,5 +1,10 @@
 /* Style propre à « Je n'ai jamais ». */
-.screen[data-game="jamais-jamais"] { --accent: #ffb84d; }
+.screen[data-game="jamais-jamais"] {
+  --accent: #ffb84d;
+  --g1: rgba(255, 184, 77, 0.18);
+  --g2: rgba(255, 77, 109, 0.10);
+  --wm: "🙅";
+}
 .jj-card { text-align: center; }
 .jj-counter { color: var(--text-dim); font-size: 13px; min-height: 18px; margin-bottom: 8px; }
 .jj-btn { background: #ffb84d; color: #241a00; }

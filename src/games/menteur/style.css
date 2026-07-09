@@ -1,5 +1,10 @@
 /* Style propre à « Le Menteur ». */
-.screen[data-game="menteur"] { --accent: #69db7c; }
+.screen[data-game="menteur"] {
+  --accent: #69db7c;
+  --g1: rgba(105, 219, 124, 0.16);
+  --g2: rgba(255, 212, 59, 0.10);
+  --wm: "🤥";
+}
 .mt-mission {
   font-size: clamp(20px, 5vw, 28px); font-weight: 700; line-height: 1.35;
   margin: 18px 0; color: #69db7c;
