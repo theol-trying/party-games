@@ -23,6 +23,8 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const { attachWebSocket } = require("./ws.js");
+const { handleSocket } = require("./live.js");
 
 const PORT = process.env.PORT || 5178;
 const ROOT = __dirname;
@@ -233,6 +235,7 @@ const server = http.createServer(async (req, res) => {
       node: process.version, // >= v18 requis pour que fetch existe
       fetch: typeof fetch === "function",
       originRestricted: ALLOWED_ORIGINS.length > 0,
+      ws: true, // WebSocket temps réel disponible sur /ws
     };
     // /api/health?deep=1 : teste vraiment la connexion Upstash (PING).
     // Permet de distinguer « variables absentes » de « variables erronées ».
@@ -317,6 +320,9 @@ const server = http.createServer(async (req, res) => {
 
   serveStatic(req, res, pathname);
 });
+
+// Multi-appareils temps réel : WebSocket maison sur /ws (voir ws.js / live.js).
+attachWebSocket(server, { path: "/ws", onConnection: handleSocket });
 
 server.listen(PORT, () => {
   const mode = REDIS_URL && REDIS_TOKEN ? "Upstash Redis" : "mémoire (non persistant)";
