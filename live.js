@@ -4,7 +4,8 @@
    Un salon = un couple (code de soirée, jeu). Protocole JSON :
    Client → serveur :
      { t:"join", room, game, id, name }
-     { t:"start", roles:{deviceId:payload}, meta? }   (hôte uniquement)
+     { t:"start", roles:{deviceId:payload}, meta?, open? }  (hôte ; open=true →
+                       les inputs sont diffusés en cours de manche via progress)
      { t:"input", data }                               (réponse du joueur, manche en cours)
      { t:"timer", seconds }                            (hôte : chrono synchronisé)
      { t:"state", data }                               (hôte : update diffusé en cours de manche)
@@ -13,7 +14,7 @@
    Serveur → client :
      { t:"lobby", players:[{id,name}], host }
      { t:"round", n, you, names, meta }               (rôle PRIVÉ du joueur)
-     { t:"progress", n, done:[ids], total }           (ordre d'arrivée = buzzer possible)
+     { t:"progress", n, done:[ids], total, inputs? }  (ordre = buzzer ; inputs si open)
      { t:"timer", n, endsAt, now }                    (horloge serveur pour compenser l'offset)
      { t:"state", n, data }
      { t:"revealed", n, roles, inputs, order, names, meta }
@@ -61,9 +62,10 @@ function namesOf(r) {
 function sendRoundTo(r, id) {
   const p = r.players.get(id);
   if (!p || !r.round) return;
-  const { n, roles, names, meta, revealed, inputs, order, timerEndsAt } = r.round;
+  const { n, roles, names, meta, revealed, inputs, order, timerEndsAt, open } = r.round;
   p.ws.send(JSON.stringify({ t: "round", n, you: roles[id] ?? null, names, meta }));
-  if (order.length) p.ws.send(JSON.stringify({ t: "progress", n, done: order, total: r.players.size }));
+  if (order.length)
+    p.ws.send(JSON.stringify({ t: "progress", n, done: order, total: r.players.size, ...(open ? { inputs } : {}) }));
   if (timerEndsAt && timerEndsAt > Date.now())
     p.ws.send(JSON.stringify({ t: "timer", n, endsAt: timerEndsAt, now: Date.now() }));
   if (revealed) p.ws.send(JSON.stringify({ t: "revealed", n, roles, inputs, order, names, meta }));
@@ -135,6 +137,7 @@ function handleSocket(ws) {
         inputs: {}, // deviceId -> réponse soumise
         order: [], // ordre d'arrivée des premières soumissions (fait office de buzzer)
         timerEndsAt: null,
+        open: msg.open === true, // inputs publics en cours de manche (votes visibles, choix…)
       };
       for (const id of r.players.keys()) sendRoundTo(r, id);
     } else if (msg.t === "input") {
@@ -143,7 +146,10 @@ function handleSocket(ws) {
       if (JSON.stringify(data).length > 4096) return; // réponse anormalement grosse
       if (!(myId in r.round.inputs)) r.round.order.push(myId); // 1re soumission : rang conservé
       r.round.inputs[myId] = data; // re-soumettre remplace la réponse, pas le rang
-      broadcast(r, JSON.stringify({ t: "progress", n: r.round.n, done: r.round.order, total: r.players.size }));
+      broadcast(r, JSON.stringify({
+        t: "progress", n: r.round.n, done: r.round.order, total: r.players.size,
+        ...(r.round.open ? { inputs: r.round.inputs } : {}),
+      }));
     } else if (msg.t === "timer") {
       if (myId !== hostId(r) || !r.round) return;
       const seconds = Math.max(1, Math.min(600, Number(msg.seconds) || 0));

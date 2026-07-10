@@ -1,6 +1,7 @@
 import { el, screenHead, announce, showPhase, shuffle, pick } from "../../ui.js";
 import { openEditor } from "../../content.js";
 import { contentSource } from "../../game-kit.js";
+import { liveSession } from "../../realtime.js";
 import { AMORCES, OUVERTURES, CLOTURES } from "./data.js";
 
 const SCHEMA = {
@@ -12,6 +13,7 @@ const SCHEMA = {
 export function render(container, { game }) {
   let steps = 8; // nombre de contributions
   let seePrevious = false; // mode : voir la ligne précédente ou non
+  let liveStop = null;
   const src = contentSource("cadavre-exquis", { builtIn: AMORCES });
 
   container.append(screenHead(game.title, "Chacun écrit sans voir la suite"));
@@ -49,10 +51,87 @@ export function render(container, { game }) {
         stepChips,
         el("h3", { text: "Mode", style: "margin-top:16px" }),
         modeChips,
-        el("button.btn.btn--full", { text: "Écrire l'histoire", style: "margin-top:18px", onClick: play }),
+        el("button.btn.btn--full", { text: "Écrire l'histoire (ce téléphone)", style: "margin-top:18px", onClick: play }),
+        el("button.btn.btn--full.btn--ghost", { text: "🌐 Multi — chacun écrit en même temps", style: "margin-top:10px", onClick: startLive }),
         el("div.row", { style: "justify-content:center;margin-top:12px" }, [el("button.chip", { text: "✏️ Mes amorces", onClick: openEd })]),
       ])
     );
+  }
+
+  /* ====== Mode multi : chaque joueur écrit SON fragment en parallèle ======
+     Chacun reçoit une amorce privée + une position secrète dans l'histoire ;
+     personne ne voit rien avant la révélation, où tout s'assemble. */
+  function startLive() {
+    if (liveStop) liveStop();
+    liveStop = liveSession(stage, {
+      gameId: "cadavre-exquis",
+      title: "Cadavre exquis — multi",
+      minPlayers: 2,
+      startLabel: "✍️ Écrire une histoire",
+      revealLabel: "📖 Révéler l'histoire",
+      newRoundLabel: "Nouvelle histoire",
+      onExit: setup,
+      assign: (ps) => {
+        const n = ps.length;
+        const positions = shuffle(ps.map((_, i) => i)); // position secrète de chacun
+        const mids = shuffle(amorces());
+        const roles = {};
+        ps.forEach((p, i) => {
+          const pos = positions[i];
+          const amorce =
+            pos === 0 ? pick(OUVERTURES)
+            : pos === n - 1 ? pick(CLOTURES)
+            : mids.length ? mids[(pos - 1) % mids.length]
+            : pick(AMORCES);
+          roles[p.id] = { amorce, pos };
+        });
+        return { roles, meta: { count: n } };
+      },
+      renderMine: (mine, { api, meta }) => {
+        let sent = false;
+        const ta = el("textarea.input.ce-input", { rows: "3", placeholder: "…" });
+        const status = el("p.screen__subtitle", { text: "Personne ne verra ta ligne avant la révélation 🤫", style: "margin-top:10px" });
+        const sendBtn = el("button.btn.btn--full", {
+          text: "Envoyer ma ligne ✍️",
+          style: "margin-top:12px",
+          onClick: () => {
+            if (sent) return;
+            const txt = ta.value.trim();
+            if (!txt) return;
+            sent = true;
+            ta.disabled = true;
+            sendBtn.disabled = true;
+            api.submit({ text: txt });
+            status.textContent = "✅ Envoyée — en attente des autres…";
+          },
+        });
+        api.on("progress", (done, total) => {
+          if (sent) status.textContent = `✅ Envoyée · ${done.length} / ${total} lignes écrites`;
+        });
+        const posLabel = mine.pos === 0 ? "🚀 Tu écris LE DÉBUT" : mine.pos === meta.count - 1 ? "🏁 Tu écris LA FIN" : `Tu écris la ligne ${mine.pos + 1} / ${meta.count}`;
+        return [
+          el("p.screen__subtitle", { text: posLabel }),
+          el("div.ce-amorce", { text: mine.amorce }),
+          ta, sendBtn, status,
+        ];
+      },
+      renderReveal: (live) => {
+        const roles = live.roles || {};
+        const inputs = live.inputs || {};
+        const names = live.names || {};
+        const ids = Object.keys(roles).sort((a, b) => (roles[a].pos || 0) - (roles[b].pos || 0));
+        announce("Histoire terminée, lisez-la à voix haute");
+        return el("div", {}, [
+          el("h2.center", { text: "📖 Votre chef-d'œuvre", style: "margin-bottom:16px" }),
+          el("div.ce-story", {}, ids.map((id) =>
+            el("p.ce-line", {}, [
+              `${roles[id].amorce} ${(inputs[id] && inputs[id].text) || "…"} `,
+              el("em", { text: `— ${names[id] || "?"}`, style: "opacity:.5;font-size:.8em" }),
+            ])
+          )),
+        ]);
+      },
+    });
   }
 
   function openEd() {
@@ -135,4 +214,7 @@ export function render(container, { game }) {
 
     passScreen();
   }
+
+  // Cleanup routeur : stoppe le salon multi si actif.
+  return () => { if (liveStop) liveStop(); };
 }

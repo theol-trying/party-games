@@ -1,7 +1,8 @@
-import { el, screenHead, announce } from "../../ui.js";
+import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { levelSelector, LEVELS } from "../../levels.js";
 import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
+import { liveSession } from "../../realtime.js";
 import { VERITES, ACTIONS } from "./data.js";
 
 const LEVEL_LABEL = { soft: "Soft", soiree: "Soirée", x18: "18+" };
@@ -26,9 +27,118 @@ export function render(container, { game }) {
   const stage = el("div");
   container.append(stage);
 
+  let liveStop = null;
   buildDecks();
-  mainScreen();
+  modeSelect();
   reload();
+
+  // Cleanup routeur : stoppe le salon multi si actif (déclarations suivantes hissées).
+  return () => { if (liveStop) liveStop(); };
+
+  function modeSelect() {
+    if (liveStop) { liveStop(); liveStop = null; }
+    showPhase(stage,
+      el("div.card.center", {}, [
+        el("h3", { text: "Comment jouer ?" }),
+        el("button.btn.btn--full", { text: "📱 Sur ce téléphone", onClick: mainScreen }),
+        el("button.btn.btn--full.btn--ghost", { text: "🌐 Multi-appareils (la roue désigne)", style: "margin-top:10px", onClick: startLive }),
+      ]),
+      el("div.row", { style: "justify-content:center;margin-top:14px" }, [el("button.chip", { text: "✏️ Mes cartes", onClick: openEd })])
+    );
+  }
+
+  /* ====== Mode multi : la roue désigne un joueur, il choisit sur SON tél ====== */
+  function startLive() {
+    if (liveStop) liveStop();
+    let turn = -1; // rotation équitable des joueurs désignés
+
+    liveStop = liveSession(stage, {
+      gameId: "action-verite",
+      title: "Action ou Vérité — multi",
+      minPlayers: 2,
+      startLabel: "Lancer la roue",
+      revealLabel: "Récap de la manche",
+      newRoundLabel: "🎯 Joueur suivant",
+      onExit: modeSelect,
+      lobbyExtra: () => {
+        const ui = levelSelector({ initial: level, onChange: (v) => (level = v) });
+        return el("div", { style: "margin:10px 0" }, [
+          el("p.screen__subtitle", { text: "Niveau", style: "margin-bottom:8px" }),
+          ui.node,
+        ]);
+      },
+      assign: (ps) => {
+        turn = (turn + 1) % ps.length;
+        const target = ps[turn];
+        const v = decks.verite[level].next() || "Aucune carte Vérité à ce niveau — ajoute-en via ✏️ Mes cartes.";
+        const a = decks.action[level].next() || "Aucune carte Action à ce niveau — ajoute-en via ✏️ Mes cartes.";
+        const roles = {};
+        ps.forEach((p) => (roles[p.id] = true));
+        // open : le choix du joueur désigné est diffusé à tous en direct.
+        return { roles, meta: { target: target.id, targetName: target.name, v, a, level }, open: true };
+      },
+      renderMine: (mine, { api, meta }) => {
+        const isTarget = api.me === meta.target;
+        const head = el("h3", { text: `🎯 Au tour de ${meta.targetName}${isTarget ? " (toi !)" : ""}` });
+        const zone = el("div", { style: "margin-top:14px" });
+
+        function showCard(choice) {
+          const kind = choice === "verite" ? "🗣️ Vérité" : "🔥 Action";
+          const card = choice === "verite" ? meta.v : meta.a;
+          zone.replaceChildren(
+            el("div.av-tag", { text: kind }),
+            el("div.big-prompt.av-prompt", { text: card }),
+            el("p.screen__subtitle", {
+              text: isTarget ? "À toi de jouer ! 🎬" : `${meta.targetName} doit s'exécuter… soyez témoins !`,
+              style: "margin-top:10px",
+            }),
+            api.isHost() ? el("p.screen__subtitle", { text: "« 🎯 Joueur suivant » pour continuer.", style: "margin-top:6px;opacity:.75" }) : null
+          );
+        }
+
+        if (isTarget) {
+          let chosen = false;
+          const bV = el("button.btn.av-btn-verite", { text: "Vérité" });
+          const bA = el("button.btn.av-btn-action", { text: "Action" });
+          const choose = (c) => {
+            if (chosen) return;
+            chosen = true;
+            api.submit({ choice: c });
+            showCard(c);
+          };
+          bV.addEventListener("click", () => choose("verite"));
+          bA.addEventListener("click", () => choose("action"));
+          zone.replaceChildren(
+            el("p", { text: "Choisis ton destin :", style: "font-weight:700" }),
+            el("div.row", { style: "justify-content:center;margin-top:12px" }, [bV, bA])
+          );
+        } else {
+          zone.replaceChildren(el("p.screen__subtitle", { text: `${meta.targetName} choisit… 🥁` }));
+        }
+
+        // Tout le monde voit la carte dès que le joueur désigné a choisi.
+        api.on("progress", (done, total, inputs) => {
+          const ch = inputs && inputs[meta.target] && inputs[meta.target].choice;
+          if (ch) showCard(ch);
+        });
+
+        return [head, zone];
+      },
+      renderReveal: (live) => {
+        const meta = live.meta || {};
+        const ch = live.inputs && live.inputs[meta.target] && live.inputs[meta.target].choice;
+        return el("div", {}, [
+          el("h3", { text: `Récap — ${meta.targetName || "?"}` }),
+          ch
+            ? el("div", {}, [
+                el("div.av-tag", { text: ch === "verite" ? "🗣️ Vérité" : "🔥 Action" }),
+                el("div.big-prompt.av-prompt", { text: ch === "verite" ? meta.v : meta.a }),
+              ])
+            : el("p.screen__subtitle", { text: "Aucun choix fait cette manche." }),
+        ]);
+      },
+    });
+  }
 
   async function reload() {
     [custom, config] = await Promise.all([loadContent("action-verite"), loadConfig("action-verite")]);

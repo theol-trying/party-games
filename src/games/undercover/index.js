@@ -43,10 +43,15 @@ export function render(container, { game }) {
   function startLive() {
     if (liveStop) liveStop();
     let liveImp = 1, liveWhite = 0; // réglages de l'hôte
+    // Autorité de l'hôte pour la partie en cours (dépouillement, éliminations).
+    let hostGame = null; // { roles:{id:{role,word}}, pair, alive:[ids], k }
     liveStop = liveSession(stage, {
       gameId: "undercover",
       title: "Undercover — multi",
       minPlayers: 3,
+      startLabel: "Distribuer les mots",
+      revealLabel: "Révéler tous les rôles",
+      newRoundLabel: "Nouvelle partie (nouveaux mots)",
       onExit: modeSelect,
       lobbyExtra: (ps) => {
         const n = ps.length;
@@ -85,19 +90,11 @@ export function render(container, { game }) {
           else if (imp.has(i)) roles[p.id] = { role: "imposteur", word: pair.imposteur };
           else roles[p.id] = { role: "civil", word: pair.civils };
         });
-        return { roles, meta: { pair } };
+        // Autorité hôte : la paire ne circule PAS dans meta (anti-triche).
+        hostGame = { roles, pair, alive: ps.map((p) => p.id), k: 0 };
+        return { roles, meta: { count: n }, open: true }; // open : votes visibles pour le dépouillement
       },
-      renderMine: (mine) =>
-        mine.role === "blanc"
-          ? el("div", {}, [
-              el("div.uc-word.uc-blanc", { text: "Mr White" }),
-              el("p.screen__subtitle", { text: "Tu n'as pas de mot ! Écoute, bluffe, et devine celui des civils." }),
-            ])
-          : el("div", {}, [
-              el("p.screen__subtitle", { text: "Ton mot :" }),
-              el("div.uc-word", { text: mine.word }),
-              el("p.screen__subtitle", { text: "Décris-le sans le dire. Démasquez l'intrus !" }),
-            ]),
+      renderMine: (mine, { api }) => liveGame(mine, api),
       renderReveal: (live) =>
         el("div", {}, [
           el("h3", { text: "Rôles", style: "margin-bottom:10px" }),
@@ -111,6 +108,122 @@ export function render(container, { game }) {
           ),
         ]),
     });
+
+    const ROLE_TAG = { imposteur: "🕵️ Imposteur", blanc: "🎭 Mr White", civil: "😇 Civil" };
+
+    /* ----- Arbitrage côté hôte (hostGame n'existe que sur son téléphone) ----- */
+    function hostVote(api) {
+      if (!hostGame) return;
+      hostGame.k++;
+      api.sendState({ phase: "vote", k: hostGame.k, alive: hostGame.alive.slice() });
+    }
+    function hostEvaluate(api, out, outRole, tally) {
+      const alive = hostGame.alive;
+      const specials = alive.filter((id) => hostGame.roles[id].role !== "civil").length;
+      const civils = alive.length - specials;
+      if (specials === 0) api.sendState({ phase: "over", winner: "civils", out, outRole, tally });
+      else if (specials >= civils) api.sendState({ phase: "over", winner: "imposteurs", out, outRole, tally });
+      else api.sendState({ phase: "result", k: hostGame.k, out, outRole, tally });
+    }
+    function hostResolve(api, cur, inputsCache) {
+      if (!hostGame || !cur || cur.phase !== "vote") return;
+      const { k, alive } = cur;
+      const allIn = alive.every((id) => inputsCache[id] && inputsCache[id].k === k);
+      if (!allIn) return;
+      const tally = {};
+      alive.forEach((t) => (tally[t] = 0));
+      alive.forEach((v) => { const t = inputsCache[v].vote; if (t in tally) tally[t]++; });
+      const max = Math.max(...Object.values(tally));
+      const tied = alive.filter((t) => tally[t] === max);
+      const out = tied[Math.floor(Math.random() * tied.length)]; // égalité : l'hôte tranche au hasard
+      hostGame.alive = hostGame.alive.filter((x) => x !== out);
+      const role = hostGame.roles[out].role;
+      if (role === "blanc") api.sendState({ phase: "whiteGuess", k, out, tally });
+      else hostEvaluate(api, out, role, tally);
+    }
+
+    /* ----- Écran de partie (état piloté par les messages state/progress) ----- */
+    function liveGame(mine, api) {
+      let cur = null; // dernier état reçu
+      let inputsCache = {}; // votes visibles (mode open)
+      let myVoteK = 0; // manche de vote où j'ai déjà voté
+      const nameOf = (id) => (api.players().find((p) => p.id === id) || {}).name || "?";
+
+      const myCard =
+        mine.role === "blanc"
+          ? el("div", {}, [
+              el("div.uc-word.uc-blanc", { text: "Mr White" }),
+              el("p.screen__subtitle", { text: "Tu n'as pas de mot ! Écoute, bluffe, et devine celui des civils." }),
+            ])
+          : el("div", {}, [
+              el("p.screen__subtitle", { text: "Ton mot :" }),
+              el("div.uc-word", { text: mine.word }),
+              el("p.screen__subtitle", { text: "Décris-le sans le dire. Démasquez l'intrus !" }),
+            ]);
+      const phaseArea = el("div", { style: "margin-top:16px" });
+
+      function tallyRows(tally) {
+        if (!tally) return null;
+        const rows = Object.keys(tally).sort((a, b) => tally[b] - tally[a])
+          .map((t) => el("div.uc-role-row", {}, [el("span", { text: nameOf(t) }), el("span", { text: `${tally[t]} voix` })]));
+        return el("div.stack", { style: "margin-top:10px" }, rows);
+      }
+
+      function renderPhase() {
+        const bits = [];
+        if (!cur) {
+          bits.push(el("p", { text: "🗣️ Discussion : chacun décrit son mot en UN mot, sans le dire.", style: "color:var(--text-dim)" }));
+          if (api.isHost()) bits.push(el("button.btn.btn--full", { text: "🗳️ Lancer le vote", style: "margin-top:12px", onClick: () => hostVote(api) }));
+          else bits.push(el("p.screen__subtitle", { text: "L'hôte lancera le vote.", style: "margin-top:8px" }));
+        } else if (cur.phase === "vote") {
+          const voted = cur.alive.filter((id) => inputsCache[id] && inputsCache[id].k === cur.k).length;
+          bits.push(el("h3", { text: `🗳️ Vote ${cur.k} — qui est l'intrus ?` }));
+          bits.push(el("p.screen__subtitle", { text: `${voted} / ${cur.alive.length} ont voté` }));
+          if (!cur.alive.includes(api.me)) {
+            bits.push(el("p", { text: "☠️ Tu es éliminé — spectateur.", style: "margin-top:10px" }));
+          } else if (myVoteK === cur.k) {
+            bits.push(el("p", { text: "✅ Vote envoyé — en attente des autres…", style: "margin-top:10px" }));
+          } else {
+            cur.alive.filter((id) => id !== api.me).forEach((id) =>
+              bits.push(el("button.btn.btn--ghost.btn--full", {
+                text: nameOf(id), style: "margin-top:8px",
+                onClick: () => { myVoteK = cur.k; api.submit({ k: cur.k, vote: id }); renderPhase(); },
+              }))
+            );
+          }
+        } else if (cur.phase === "result") {
+          bits.push(el("h3", { text: `❌ ${nameOf(cur.out)} est éliminé !` }));
+          bits.push(el("p", { text: `C'était : ${ROLE_TAG[cur.outRole] || cur.outRole}`, style: "font-weight:700;margin:8px 0" }));
+          if (cur.out === api.me) bits.push(el("p", { text: "☠️ Tu deviens spectateur.", style: "color:var(--text-dim)" }));
+          bits.push(tallyRows(cur.tally));
+          if (api.isHost()) bits.push(el("button.btn.btn--full", { text: "🗳️ Vote suivant", style: "margin-top:12px", onClick: () => hostVote(api) }));
+        } else if (cur.phase === "whiteGuess") {
+          bits.push(el("h3", { text: `🎭 ${nameOf(cur.out)} était Mr White !` }));
+          bits.push(el("p", { text: "Il annonce à voix haute le mot qu'il pense être celui des civils.", style: "color:var(--text-dim);margin:8px 0" }));
+          bits.push(tallyRows(cur.tally));
+          if (api.isHost()) {
+            bits.push(el("button.btn.btn--full", { text: "✅ Il a trouvé — Mr White gagne", style: "margin-top:12px", onClick: () => api.sendState({ phase: "over", winner: "white", out: cur.out, outRole: "blanc" }) }));
+            bits.push(el("button.btn.btn--full.btn--ghost", { text: "❌ Raté — la partie continue", style: "margin-top:10px", onClick: () => hostEvaluate(api, cur.out, "blanc", cur.tally) }));
+          }
+        } else if (cur.phase === "over") {
+          const label = cur.winner === "civils" ? "😇 Les civils gagnent !" : cur.winner === "white" ? "🎭 Mr White gagne !" : "🕵️ Les imposteurs gagnent !";
+          if (cur.out) bits.push(el("p", { text: `${nameOf(cur.out)} éliminé — c'était ${ROLE_TAG[cur.outRole] || cur.outRole}.`, style: "margin-bottom:8px" }));
+          bits.push(el("h2", { text: label }));
+          bits.push(el("p.screen__subtitle", { text: "L'hôte peut révéler tous les rôles.", style: "margin-top:8px" }));
+        }
+        phaseArea.replaceChildren(...bits.filter(Boolean));
+      }
+
+      api.on("state", (s) => { cur = s; renderPhase(); });
+      api.on("progress", (done, total, inputs) => {
+        inputsCache = inputs || {};
+        if (cur && cur.phase === "vote") renderPhase();
+        if (api.isHost()) hostResolve(api, cur, inputsCache);
+      });
+
+      renderPhase();
+      return [myCard, phaseArea];
+    }
   }
 
   async function reload() {

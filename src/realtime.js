@@ -214,8 +214,8 @@ export function liveSession(stage, {
 
   function distribute() {
     if (!net || players.length < minPlayers) return;
-    const { roles, meta } = assign(players.map((p) => ({ id: p.id, name: p.name })));
-    net.start(roles, meta);
+    const { roles, meta, open } = assign(players.map((p) => ({ id: p.id, name: p.name })));
+    net.start(roles, meta, open === true);
   }
 
   function leave() {
@@ -286,7 +286,7 @@ export function liveSession(stage, {
         try { m = JSON.parse(e.data); } catch { return; }
         if (m.t === "lobby") onLobby(m.players || [], m.host || null);
         else if (m.t === "round") onRound(m.n, m.you, m.names || {}, m.meta ?? null);
-        else if (m.t === "progress") { if (round && m.n === round.n) emit("progress", m.done || [], m.total || 0); }
+        else if (m.t === "progress") { if (round && m.n === round.n) emit("progress", m.done || [], m.total || 0, m.inputs || null); }
         else if (m.t === "timer") {
           // Convertit l'échéance serveur en horloge locale (compense l'offset).
           if (round && m.n === round.n) emit("timer", Date.now() + (m.endsAt - m.now));
@@ -310,7 +310,7 @@ export function liveSession(stage, {
     const sendJson = (o) => { if (sock && sock.readyState === 1) sock.send(JSON.stringify(o)); };
     return {
       mode: "ws",
-      start(roles, meta) { sendJson({ t: "start", roles, meta }); },
+      start(roles, meta, open) { sendJson({ t: "start", roles, meta, open: open === true }); },
       input(data) { sendJson({ t: "input", data }); },
       timer(seconds) { sendJson({ t: "timer", seconds }); },
       state(data) { sendJson({ t: "state", data }); },
@@ -355,9 +355,12 @@ export function liveSession(stage, {
         onRound(live.round, (live.roles || {})[me] ?? null, live.names || {}, live.meta ?? null);
       }
       const order = live.order || [];
-      if (order.length !== seenOrder) {
-        seenOrder = order.length;
-        emit("progress", order, players.length || Object.keys(live.names || {}).length);
+      // En mode open, une re-soumission change les inputs sans changer l'ordre :
+      // on compare une signature complète pour ne rien rater.
+      const sig = order.length + (live.open ? "|" + JSON.stringify(live.inputs || {}) : "");
+      if (sig !== seenOrder) {
+        seenOrder = sig;
+        emit("progress", order, players.length || Object.keys(live.names || {}).length, live.open ? live.inputs || {} : null);
       }
       if (live.timerEndsAt && live.timerEndsAt !== seenTimer) {
         seenTimer = live.timerEndsAt;
@@ -378,13 +381,14 @@ export function liveSession(stage, {
 
     return {
       mode: "poll",
-      async start(roles, meta) {
+      async start(roles, meta, open) {
         const prev = (await getData(LIVE, null)) || { round: 0 };
         const names = {};
         players.forEach((p) => (names[p.id] = p.name));
         await setData(LIVE, {
           round: (prev.round || 0) + 1, roles, names, meta: meta ?? null,
           revealed: false, inputs: {}, order: [], state: null, timerEndsAt: null,
+          open: open === true,
         });
         poll();
       },

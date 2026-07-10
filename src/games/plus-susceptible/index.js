@@ -4,6 +4,7 @@ import { createDeck } from "../../deck.js";
 import { createScores, scoreboard } from "../../scoring.js";
 import { openEditor } from "../../content.js";
 import { passThePhone, contentSource } from "../../game-kit.js";
+import { liveSession } from "../../realtime.js";
 import { AFFIRMATIONS } from "./data.js";
 
 const SCHEMA = {
@@ -18,19 +19,134 @@ export function render(container, { game }) {
   const stage = el("div");
   container.append(stage);
 
-  introScreen();
+  let liveStop = null;
+  modeSelect();
   src.reload();
+
+  // Cleanup routeur : stoppe le salon multi si actif.
+  return () => { if (liveStop) liveStop(); };
 
   function affirmations() { return src.cards(); }
   function builtInList() {
     return AFFIRMATIONS.map((t) => ({ key: t, label: t }));
   }
 
+  function modeSelect() {
+    if (liveStop) { liveStop(); liveStop = null; }
+    showPhase(stage,
+      el("div.card.center", {}, [
+        el("h3", { text: "Comment jouer ?" }),
+        el("button.btn.btn--full", { text: "📱 Sur ce téléphone", onClick: introScreen }),
+        el("button.btn.btn--full.btn--ghost", { text: "🌐 Multi-appareils (vote secret)", style: "margin-top:10px", onClick: startLive }),
+      ]),
+      el("div.row", { style: "justify-content:center;margin-top:14px" }, [el("button.chip", { text: "✏️ Mes cartes", onClick: openEd })])
+    );
+  }
+
   function introScreen() {
     stage.replaceChildren(
       playersCard({ min: 3, cta: "Lancer les votes", onReady: (names) => startGame(names) }),
-      el("div.row", { style: "justify-content:center;margin-top:14px" }, [el("button.chip", { text: "✏️ Mes cartes", onClick: openEd })])
+      el("div.row", { style: "justify-content:center;margin-top:14px" }, [
+        el("button.chip", { text: "← Mode", onClick: modeSelect }),
+        el("button.chip", { text: "✏️ Mes cartes", onClick: openEd }),
+      ])
     );
+  }
+
+  /* ============ Mode multi : chacun vote en secret sur son téléphone ============ */
+  function startLive() {
+    if (!affirmations().length) return modeSelect();
+    if (liveStop) liveStop();
+    const deck = createDeck(affirmations());
+    const crowns = {}; // deviceId -> couronnes cumulées (converge : base + delta déterministe)
+
+    liveStop = liveSession(stage, {
+      gameId: "plus-susceptible",
+      title: "Plus susceptible — multi",
+      minPlayers: 3,
+      startLabel: "Lancer la 1re affirmation",
+      revealLabel: "Révéler les votes",
+      newRoundLabel: "Affirmation suivante →",
+      onExit: modeSelect,
+      assign: (ps) => {
+        let s = deck.next();
+        if (s == null) { deck.reset(); s = deck.next(); }
+        const base = {};
+        ps.forEach((p) => (base[p.id] = crowns[p.id] || 0));
+        const roles = {};
+        ps.forEach((p) => (roles[p.id] = true));
+        return { roles, meta: { statement: s, base } };
+      },
+      renderMine: (mine, { api, meta }) => {
+        let voted = false;
+        const others = api.players().filter((p) => p.id !== api.me);
+        const status = el("p.screen__subtitle", { text: "Vote en secret 🤫", style: "margin-top:12px" });
+        const btns = others.map((p) =>
+          el("button.btn.btn--ghost.btn--full", {
+            text: p.name,
+            style: "margin-top:8px",
+            onClick: (e) => {
+              if (voted) return;
+              voted = true;
+              api.submit({ vote: p.id });
+              btns.forEach((b) => (b.disabled = true));
+              e.currentTarget.style.borderColor = "var(--accent)";
+              status.textContent = "✅ Vote envoyé — en attente des autres…";
+            },
+          })
+        );
+        api.on("progress", (done, total) => {
+          if (!voted) return;
+          status.textContent = `✅ Voté · ${done.length} / ${total} ont voté`;
+        });
+        return [
+          el("p.ps-statement", { text: `Qui est le plus susceptible de ${meta.statement}` }),
+          el("div.stack.ps-choices", { style: "margin-top:14px" }, btns),
+          status,
+        ];
+      },
+      renderReveal: (live, { api }) => {
+        const names = live.names || {};
+        const ids = Object.keys(names);
+        const tally = {};
+        ids.forEach((id) => (tally[id] = 0));
+        Object.values(live.inputs || {}).forEach((d) => {
+          if (d && d.vote != null && d.vote in tally) tally[d.vote]++;
+        });
+        const max = Math.max(0, ...Object.values(tally));
+        const winners = ids.filter((id) => max > 0 && tally[id] === max);
+        // Couronnes : base autoritative + delta → aucun décalage entre appareils.
+        const base = (live.meta && live.meta.base) || {};
+        ids.forEach((id) => (crowns[id] = (base[id] || 0) + (winners.includes(id) ? 1 : 0)));
+        const ranking = ids.map((id) => ({ id, v: tally[id] })).sort((a, b) => b.v - a.v);
+        const wNames = winners.map((id) => names[id]);
+        return el("div", {}, [
+          el("p.ps-statement", { text: `Qui est le plus susceptible de ${(live.meta || {}).statement || "…"}` }),
+          el("h2.ps-winner", {
+            text: wNames.length ? (wNames.length > 1 ? wNames.join(" & ") + " 🍻" : wNames[0] + " boit ! 🍻") : "Personne n'a voté 🤷",
+            style: "margin:14px 0",
+          }),
+          el("div.ps-ranking", {},
+            ranking.map((r) =>
+              el("div.ps-rank-row", {}, [
+                el("span", { text: names[r.id] + (r.id === api.me ? " (toi)" : "") }),
+                el("span.ps-rank-bar", { style: `--v:${max ? r.v / max : 0}` }),
+                el("span", { text: String(r.v) }),
+              ])
+            )
+          ),
+          el("h3", { text: "👑 Couronnes", style: "margin-top:16px;margin-bottom:8px" }),
+          el("div.stack", {},
+            ids.map((id) => ({ id, c: crowns[id] })).sort((a, b) => b.c - a.c).map((r) =>
+              el("div.uc-role-row", {}, [
+                el("span", { text: names[r.id] + (r.id === api.me ? " (toi)" : "") }),
+                el("span", { text: "👑".repeat(Math.min(r.c, 10)) + (r.c > 10 ? ` ×${r.c}` : r.c === 0 ? "—" : "") }),
+              ])
+            )
+          ),
+        ]);
+      },
+    });
   }
 
   function openEd() {

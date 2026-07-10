@@ -41,27 +41,74 @@ export function render(container, { game }) {
       gameId: "menteur",
       title: "Le Menteur — multi",
       minPlayers: 2,
+      startLabel: "Distribuer les missions",
+      revealLabel: "Révéler missions & accusations",
+      newRoundLabel: "Nouvelles missions",
       onExit: modeSelect,
       assign: (ps) => {
         const roles = {};
-        ps.forEach((p) => (roles[p.id] = { mission: deck.next() }));
+        ps.forEach((p) => {
+          let m = deck.next();
+          if (m == null) { deck.reset(); m = deck.next(); }
+          roles[p.id] = { mission: m };
+        });
         return { roles };
       },
-      renderMine: (mine) =>
-        el("div", {}, [
+      renderMine: (mine, { api }) => {
+        // Mission privée + accusation secrète (optionnelle) avant la révélation.
+        let accused = false;
+        const status = el("p.screen__subtitle", { text: "", style: "margin-top:8px" });
+        const btns = api.players().filter((p) => p.id !== api.me).map((p) =>
+          el("button.btn.btn--ghost.btn--full", {
+            text: p.name,
+            style: "margin-top:8px",
+            onClick: (e) => {
+              if (accused) return;
+              accused = true;
+              api.submit({ vote: p.id });
+              btns.forEach((b) => (b.disabled = true));
+              e.currentTarget.style.borderColor = "var(--accent)";
+              status.textContent = "✅ Accusation enregistrée.";
+            },
+          })
+        );
+        api.on("progress", (done, total) => {
+          if (accused) status.textContent = `✅ Accusé · ${done.length} / ${total} ont accusé`;
+        });
+        return [
           el("p.screen__subtitle", { text: "Ta mission :" }),
           el("div.mt-mission", { text: mine.mission }),
           el("p.screen__subtitle", { text: "Accomplis-la sans te faire griller." }),
-        ]),
-      renderReveal: (live) =>
-        el("div", {}, [
+          el("h3", { text: "🕵️ Qui accuses-tu ?", style: "margin-top:18px" }),
+          el("p.screen__subtitle", { text: "Vote secret : qui s'est fait griller selon toi ?" }),
+          el("div.stack", {}, btns),
+          status,
+        ];
+      },
+      renderReveal: (live, { api }) => {
+        const names = live.names || {};
+        const inputs = live.inputs || {};
+        const ids = Object.keys(names);
+        const tally = {};
+        ids.forEach((id) => (tally[id] = 0));
+        Object.values(inputs).forEach((d) => { if (d && d.vote in tally) tally[d.vote]++; });
+        const max = Math.max(0, ...Object.values(tally));
+        const grilled = ids.filter((id) => max > 0 && tally[id] === max);
+        return el("div", {}, [
           el("h3.center", { text: "Les missions", style: "margin-bottom:10px" }),
           el("div.stack", {},
             Object.keys(live.roles).map((id) =>
-              el("div.mt-reveal-row", {}, [el("strong", { text: live.names[id] || "?" }), el("span", { text: live.roles[id].mission })])
+              el("div.mt-reveal-row", {}, [
+                el("strong", { text: (names[id] || "?") + (id === api.me ? " (toi)" : "") }),
+                el("span", { text: live.roles[id].mission + (tally[id] ? ` · 🕵️ ${tally[id]} accusation${tally[id] > 1 ? "s" : ""}` : "") }),
+              ])
             )
           ),
-        ]),
+          grilled.length
+            ? el("p", { text: `🔥 Le plus grillé : ${grilled.map((id) => names[id]).join(" & ")} → il boit !`, style: "font-weight:700;margin-top:12px" })
+            : null,
+        ]);
+      },
     });
   }
 

@@ -6,6 +6,7 @@ import { buzz } from "../../sound.js";
 import { teamBuilder } from "../../teams.js";
 import { openEditor } from "../../content.js";
 import { contentSource } from "../../game-kit.js";
+import { liveSession } from "../../realtime.js";
 import { TRACKS } from "./data.js";
 
 const BT_SCHEMA = {
@@ -35,20 +36,32 @@ export function render(container, { game }) {
   const stage = el("div");
   container.append(stage);
   let currentAudio = null;
+  let liveStop = null;
   const objectUrls = []; // URLs de fichiers locaux à libérer au cleanup
   const src = contentSource("blind-test", { builtIn: TRACKS, keyOf: (t) => t.title, toValue: (e) => ({ title: e.title, artist: e.artist, audioUrl: e.url || "" }) });
 
-  stage.append(
-    playersCard({ min: 2, cta: "Suite →", onReady: (names) => modeScreen(names) })
-  );
+  modeSelect0();
   src.reload();
 
-  // Nettoyage : coupe l'extrait et libère les fichiers locaux.
+  // Nettoyage : coupe l'extrait, libère les fichiers locaux, stoppe le salon.
   return () => {
     if (currentAudio) currentAudio.pause();
     currentAudio = null;
     objectUrls.forEach((u) => URL.revokeObjectURL(u));
+    if (liveStop) liveStop();
   };
+
+  // Choix du support : un téléphone (buzzers partagés) ou multi (buzzer chacun).
+  function modeSelect0() {
+    if (liveStop) { liveStop(); liveStop = null; }
+    showPhase(stage,
+      el("div.card.center", {}, [
+        el("h3", { text: "Comment jouer ?" }),
+        el("button.btn.btn--full", { text: "📱 Sur ce téléphone", onClick: () => showPhase(stage, playersCard({ min: 2, cta: "Suite →", onReady: (names) => modeScreen(names) })) }),
+        el("button.btn.btn--full.btn--ghost", { text: "🌐 Multi — buzzer sur chaque tél", style: "margin-top:10px", onClick: () => sourceScreen(null, "blind-test", (q) => startLive(q)) }),
+      ])
+    );
+  }
 
   // Choix : chacun pour soi ou en équipes.
   function modeScreen(names) {
@@ -70,13 +83,13 @@ export function render(container, { game }) {
   function builtInTracks() { return TRACKS.map((t) => ({ key: t.title, label: `${t.title} — ${t.artist}` })); }
 
   /* ---------- Choix de la source + construction de la playlist ---------- */
-  function sourceScreen(players, scoreKey) {
+  function sourceScreen(players, scoreKey, onLaunch) {
     const queue = [];
     let provider = "itunes";
 
     const queueInfo = el("p.bt-queue", { text: "0 titre dans la playlist" });
     const launch = el("button.btn.btn--full", { text: "Lancer le blind test", disabled: true });
-    launch.addEventListener("click", () => startGame(players, queue.slice(), scoreKey));
+    launch.addEventListener("click", () => (onLaunch || ((q) => startGame(players, q, scoreKey)))(queue.slice()));
 
     function refreshQueue() {
       queueInfo.textContent = `${queue.length} titre${queue.length > 1 ? "s" : ""} dans la playlist`;
@@ -166,7 +179,7 @@ export function render(container, { game }) {
         gameId: "blind-test",
         schema: BT_SCHEMA,
         builtInList: builtInTracks(),
-        onDone: async () => { await src.reload(); sourceScreen(players, scoreKey); },
+        onDone: async () => { await src.reload(); sourceScreen(players, scoreKey, onLaunch); },
       }),
     });
 
@@ -292,5 +305,175 @@ export function render(container, { game }) {
     }
 
     sc.ready.then(playRound);
+  }
+
+  /* ================= Mode multi : l'hôte est DJ, chacun buzze sur son tél =================
+     Le morceau ne circule JAMAIS sur le réseau avant le résultat : il ne vit que
+     dans la closure de l'hôte. L'ordre de buzz vient du serveur (progress). */
+  function startLive(tracks) {
+    if (liveStop) liveStop();
+    const deck = createDeck(tracks);
+    const scores = {}; // deviceId -> total (autorité hôte, diffusé via state)
+    let roundTrack = null; // secret DJ
+    let lastTotals = null; // pour l'écran final
+
+    liveStop = liveSession(stage, {
+      gameId: "blind-test",
+      title: "Blind Test — multi",
+      minPlayers: 2,
+      startLabel: "Lancer le 1er extrait",
+      revealLabel: "🏁 Terminer la partie",
+      newRoundLabel: "Morceau suivant →",
+      onExit: modeSelect0,
+      assign: (ps) => {
+        let t = deck.next();
+        if (!t) { deck.reset(); t = deck.next(); }
+        roundTrack = t || { title: "?", artist: "", src: "" };
+        const base = {};
+        ps.forEach((p) => (base[p.id] = scores[p.id] || 0));
+        const roles = {};
+        ps.forEach((p) => (roles[p.id] = true));
+        return { roles, meta: { base } };
+      },
+      renderMine: (mine, ctx) => liveRound(ctx),
+      renderReveal: (live, { api }) => {
+        const names = live.names || {};
+        const totals = lastTotals || (live.meta && live.meta.base) || {};
+        const rows = Object.keys(names).map((id) => ({ id, t: totals[id] || 0 })).sort((a, b) => b.t - a.t);
+        return el("div", {}, [
+          el("h3", { text: "🏁 Classement final", style: "margin-bottom:10px" }),
+          el("div.stack", {}, rows.map((r, i) =>
+            el("div.uc-role-row", {}, [
+              el("span", { text: `${i + 1}. ${names[r.id] || "?"}${r.id === api.me ? " (toi)" : ""}` }),
+              el("span", { text: `${r.t} pts` }),
+            ])
+          )),
+        ]);
+      },
+    });
+
+    function liveRound({ api, meta }) {
+      let order = [];
+      let rejected = [];
+      let decided = false;
+      let audioEl = null;
+      let buzzBtn = null;
+      const nameOf = (id) => (api.players().find((p) => p.id === id) || {}).name || "?";
+
+      const info = el("p.bt-buzzinfo.center", {
+        text: api.isHost() ? "🎧 La musique joue sur TON téléphone — les autres buzzent !" : "Écoute… et BUZZ !",
+        style: "font-weight:700;margin:12px 0",
+      });
+      const orderBox = el("div.stack");
+      const judgeBox = el("div", { style: "margin-top:12px" });
+      const resultBox = el("div", { style: "margin-top:12px" });
+
+      const firstPending = () => order.find((id) => !rejected.includes(id));
+
+      function refreshOrder() {
+        orderBox.replaceChildren(...order.map((id, i) =>
+          el("div.uc-role-row", {}, [
+            el("span", { text: `${i + 1}. ${nameOf(id)}${id === api.me ? " (toi)" : ""}` }),
+            el("span", { text: rejected.includes(id) ? "❌" : id === firstPending() ? "🎤" : "🔔" }),
+          ])
+        ));
+      }
+      function refreshJudge() {
+        if (!api.isHost() || decided) return judgeBox.replaceChildren();
+        const kids = [];
+        const id = firstPending();
+        if (id) {
+          kids.push(el("p", { text: `🎤 ${nameOf(id)} répond à voix haute :`, style: "font-weight:700" }));
+          kids.push(el("div.row", { style: "justify-content:center;margin-top:8px" }, [
+            el("button.btn", { text: "✅ Correct (+10)", onClick: () => hostAward(id) }),
+            el("button.btn.btn--ghost", { text: "❌ Faux", onClick: () => hostReject(id) }),
+          ]));
+        }
+        kids.push(el("button.chip", { text: "🔎 Personne — révéler la réponse", style: "margin-top:10px", onClick: hostFlop }));
+        judgeBox.replaceChildren(...kids);
+      }
+      const baseTotals = () => {
+        const t = {};
+        api.players().forEach((p) => (t[p.id] = (meta.base || {})[p.id] || 0));
+        return t;
+      };
+      function hostAward(id) {
+        const totals = baseTotals();
+        totals[id] = (totals[id] || 0) + 10;
+        Object.assign(scores, totals);
+        api.sendState({ phase: "won", id, pts: 10, answer: { title: roundTrack.title, artist: roundTrack.artist }, totals });
+      }
+      function hostReject(id) {
+        rejected = [...rejected, id];
+        api.sendState({ phase: "rejected", ids: rejected });
+      }
+      function hostFlop() {
+        const totals = baseTotals();
+        Object.assign(scores, totals);
+        api.sendState({ phase: "flop", answer: { title: roundTrack.title, artist: roundTrack.artist }, totals });
+      }
+      function showResult(s) {
+        decided = true;
+        lastTotals = s.totals || lastTotals;
+        const ids = Object.keys(s.totals || {}).sort((a, b) => (s.totals[b] || 0) - (s.totals[a] || 0));
+        resultBox.replaceChildren(
+          el("div.bt-answer", {}, [
+            el("div.bt-answer__title", { text: s.answer ? s.answer.title : "?" }),
+            el("div.bt-answer__artist", { text: (s.answer && s.answer.artist) || "" }),
+          ]),
+          el("p", { text: s.phase === "won" ? `🏆 ${nameOf(s.id)} +${s.pts} !` : "🤷 Personne n'a trouvé.", style: "font-weight:800;margin:10px 0" }),
+          el("div.stack", {}, ids.map((id, i) =>
+            el("div.uc-role-row", {}, [
+              el("span", { text: `${i + 1}. ${nameOf(id)}${id === api.me ? " (toi)" : ""}` }),
+              el("span", { text: `${s.totals[id]} pts` }),
+            ])
+          ))
+        );
+        info.textContent = "";
+        judgeBox.replaceChildren();
+        if (buzzBtn) buzzBtn.disabled = true;
+        if (audioEl && audioEl.pause) audioEl.pause();
+      }
+
+      api.on("progress", (done) => {
+        order = done;
+        refreshOrder();
+        refreshJudge();
+        if (!api.isHost() && order.length && !decided) info.textContent = `🔔 ${nameOf(order[0])} a buzzé en premier !`;
+      });
+      api.on("state", (s) => {
+        if (s.phase === "rejected") {
+          rejected = s.ids || [];
+          refreshOrder();
+          refreshJudge();
+          if (rejected.includes(api.me)) info.textContent = "❌ Raté — les autres peuvent encore buzzer.";
+        } else if (s.phase === "won" || s.phase === "flop") showResult(s);
+      });
+
+      const bits = [];
+      if (api.isHost()) {
+        audioEl = roundTrack && roundTrack.src
+          ? el("audio.bt-audio", { src: roundTrack.src, controls: "", autoplay: "", "aria-label": "Extrait à deviner" })
+          : el("div.placeholder", { text: "Pas d'audio pour ce titre — chante-le ou lance-le à la main 🎤" });
+        if (currentAudio) currentAudio.pause();
+        currentAudio = audioEl && audioEl.pause ? audioEl : null;
+        bits.push(el("p.screen__subtitle", { text: "🎧 Tu es le DJ" }), audioEl);
+      } else {
+        buzzBtn = el("button.bt-buzzer", {
+          text: "🔔 BUZZ !",
+          style: "width:100%;font-size:1.5rem;padding:24px",
+          onClick: () => {
+            buzzBtn.disabled = true;
+            buzz();
+            api.submit(true);
+            info.textContent = "🔔 Buzzé ! Attends la validation du DJ…";
+          },
+        });
+        bits.push(buzzBtn);
+      }
+      bits.push(info, orderBox, judgeBox, resultBox);
+      refreshJudge();
+      return bits;
+    }
   }
 }
