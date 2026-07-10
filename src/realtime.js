@@ -42,6 +42,26 @@ export function deviceId() {
 }
 const savedName = () => { try { return localStorage.getItem(NAME_KEY) || ""; } catch { return ""; } };
 
+/** Compte à rebours synchronisé : endsAtClient vient de api.on("timer", …).
+    onTick(secondesRestantes) à chaque seconde, onEnd() une seule fois à zéro.
+    Renvoie stop() — à appeler quand l'écran est remplacé. */
+export function syncCountdown(endsAtClient, { onTick, onEnd }) {
+  let stopped = false;
+  let ended = false;
+  function tick() {
+    if (stopped) return;
+    const left = Math.max(0, Math.ceil((endsAtClient - Date.now()) / 1000));
+    onTick && onTick(left);
+    if (left <= 0) {
+      if (!ended) { ended = true; onEnd && onEnd(); }
+      return;
+    }
+    timer = setTimeout(tick, 250);
+  }
+  let timer = setTimeout(tick, 0);
+  return () => { stopped = true; clearTimeout(timer); };
+}
+
 export function liveSession(stage, { gameId, title, minPlayers = 2, assign, renderMine, renderReveal, lobbyExtra, onExit }) {
   const me = deviceId();
   let stopped = false;
@@ -56,6 +76,26 @@ export function liveSession(stage, { gameId, title, minPlayers = 2, assign, rend
   let shownReveal = false;
   let view = "name";
   let status = ""; // ⚡ / 🐢 / reconnexion…
+  let listeners = { progress: [], state: [], timer: [] }; // abonnements de la manche en cours
+
+  function emit(ev, ...args) {
+    for (const cb of listeners[ev] || []) {
+      try { cb(...args); } catch (e) { console.error(e); }
+    }
+  }
+
+  // API donnée aux jeux (renderMine) pour les manches synchronisées.
+  const api = {
+    me,
+    isHost: () => host === me,
+    players: () => players.slice(),
+    submit: (data) => net && net.input(data), // ma réponse (l'ordre d'arrivée sert de buzzer)
+    startTimer: (s) => net && net.timer(s), // hôte : chrono synchronisé pour tous
+    sendState: (d) => net && net.state(d), // hôte : update diffusé en cours de manche
+    reveal: () => net && net.reveal(),
+    newRound: () => distribute(),
+    on: (ev, cb) => { (listeners[ev] || (listeners[ev] = [])).push(cb); }, // progress | state | timer
+  };
 
   nameScreen();
   return stop;
@@ -124,7 +164,7 @@ export function liveSession(stage, { gameId, title, minPlayers = 2, assign, rend
     if (stopped || !round) return;
     view = "role";
     const body = round.you != null
-      ? renderMine(round.you, { name: myName })
+      ? renderMine(round.you, { name: myName, api, meta: round.meta, n: round.n })
       : el("p", { text: "Tu as rejoint après la distribution — attends la prochaine manche." });
     const actions = [];
     if (host === me) {
@@ -181,14 +221,15 @@ export function liveSession(stage, { gameId, title, minPlayers = 2, assign, rend
     if (n !== shownRound) {
       shownRound = n;
       shownReveal = false;
+      listeners = { progress: [], state: [], timer: [] }; // nouvelle manche : abonnements frais
       roleScreen();
     }
   }
-  function onRevealed(n, roles, names, meta) {
+  function onRevealed(n, roles, names, meta, inputs, order) {
     if (shownReveal && n === shownRound) return;
     shownReveal = true;
     shownRound = n;
-    revealScreen({ roles, names, meta });
+    revealScreen({ roles, names, meta, inputs: inputs || {}, order: order || [] });
   }
 
   /* ============================ TRANSPORTS ============================= */
@@ -230,7 +271,13 @@ export function liveSession(stage, { gameId, title, minPlayers = 2, assign, rend
         try { m = JSON.parse(e.data); } catch { return; }
         if (m.t === "lobby") onLobby(m.players || [], m.host || null);
         else if (m.t === "round") onRound(m.n, m.you, m.names || {}, m.meta ?? null);
-        else if (m.t === "revealed") onRevealed(m.n, m.roles || {}, m.names || {}, m.meta ?? null);
+        else if (m.t === "progress") { if (round && m.n === round.n) emit("progress", m.done || [], m.total || 0); }
+        else if (m.t === "timer") {
+          // Convertit l'échéance serveur en horloge locale (compense l'offset).
+          if (round && m.n === round.n) emit("timer", Date.now() + (m.endsAt - m.now));
+        }
+        else if (m.t === "state") { if (round && m.n === round.n) emit("state", m.data ?? null); }
+        else if (m.t === "revealed") onRevealed(m.n, m.roles || {}, m.names || {}, m.meta ?? null, m.inputs, m.order);
       };
       sock.onclose = () => {
         if (destroyed) return;
@@ -245,11 +292,15 @@ export function liveSession(stage, { gameId, title, minPlayers = 2, assign, rend
     }
     open();
 
+    const sendJson = (o) => { if (sock && sock.readyState === 1) sock.send(JSON.stringify(o)); };
     return {
       mode: "ws",
-      start(roles, meta) { if (sock && sock.readyState === 1) sock.send(JSON.stringify({ t: "start", roles, meta })); },
-      reveal() { if (sock && sock.readyState === 1) sock.send(JSON.stringify({ t: "reveal" })); },
-      leave() { if (sock && sock.readyState === 1) sock.send(JSON.stringify({ t: "leave" })); },
+      start(roles, meta) { sendJson({ t: "start", roles, meta }); },
+      input(data) { sendJson({ t: "input", data }); },
+      timer(seconds) { sendJson({ t: "timer", seconds }); },
+      state(data) { sendJson({ t: "state", data }); },
+      reveal() { sendJson({ t: "reveal" }); },
+      leave() { sendJson({ t: "leave" }); },
       destroy() {
         destroyed = true;
         if (reconnectTimer) clearTimeout(reconnectTimer);
@@ -276,12 +327,33 @@ export function liveSession(stage, { gameId, title, minPlayers = 2, assign, rend
       onLobby(list, Object.keys(l).sort()[0] || null);
     }
 
+    let seenOrder = 0;
+    let seenTimer = 0;
+    let seenState = "";
+
     async function poll() {
       if (destroyed || stopped) return;
       const live = await getData(LIVE, null);
       if (!live) return;
-      if (live.round !== shownRound) onRound(live.round, (live.roles || {})[me] ?? null, live.names || {}, live.meta ?? null);
-      if (live.revealed) onRevealed(live.round, live.roles || {}, live.names || {}, live.meta ?? null);
+      if (live.round !== shownRound) {
+        seenOrder = 0; seenTimer = 0; seenState = "";
+        onRound(live.round, (live.roles || {})[me] ?? null, live.names || {}, live.meta ?? null);
+      }
+      const order = live.order || [];
+      if (order.length !== seenOrder) {
+        seenOrder = order.length;
+        emit("progress", order, players.length || Object.keys(live.names || {}).length);
+      }
+      if (live.timerEndsAt && live.timerEndsAt !== seenTimer) {
+        seenTimer = live.timerEndsAt;
+        emit("timer", live.timerEndsAt); // horloges clients supposées proches (mode dégradé)
+      }
+      const st = JSON.stringify(live.state ?? null);
+      if (st !== seenState) {
+        seenState = st;
+        if (live.state !== undefined && live.state !== null) emit("state", live.state);
+      }
+      if (live.revealed) onRevealed(live.round, live.roles || {}, live.names || {}, live.meta ?? null, live.inputs, live.order);
     }
 
     beat();
@@ -295,7 +367,32 @@ export function liveSession(stage, { gameId, title, minPlayers = 2, assign, rend
         const prev = (await getData(LIVE, null)) || { round: 0 };
         const names = {};
         players.forEach((p) => (names[p.id] = p.name));
-        await setData(LIVE, { round: (prev.round || 0) + 1, roles, names, meta: meta ?? null, revealed: false });
+        await setData(LIVE, {
+          round: (prev.round || 0) + 1, roles, names, meta: meta ?? null,
+          revealed: false, inputs: {}, order: [], state: null, timerEndsAt: null,
+        });
+        poll();
+      },
+      async input(data) {
+        // Lecture-modification-écriture : suffisant pour le mode dégradé.
+        const live = (await getData(LIVE, null)) || {};
+        live.inputs = live.inputs || {};
+        live.order = live.order || [];
+        if (!(me in live.inputs)) live.order.push(me);
+        live.inputs[me] = data === undefined ? true : data;
+        await setData(LIVE, live);
+        poll();
+      },
+      async timer(seconds) {
+        const live = (await getData(LIVE, null)) || {};
+        live.timerEndsAt = Date.now() + Math.max(1, seconds) * 1000;
+        await setData(LIVE, live);
+        poll();
+      },
+      async state(data) {
+        const live = (await getData(LIVE, null)) || {};
+        live.state = data ?? null;
+        await setData(LIVE, live);
         poll();
       },
       async reveal() {

@@ -5,12 +5,18 @@
    Client → serveur :
      { t:"join", room, game, id, name }
      { t:"start", roles:{deviceId:payload}, meta? }   (hôte uniquement)
+     { t:"input", data }                               (réponse du joueur, manche en cours)
+     { t:"timer", seconds }                            (hôte : chrono synchronisé)
+     { t:"state", data }                               (hôte : update diffusé en cours de manche)
      { t:"reveal" }                                    (hôte uniquement)
      { t:"leave" }
    Serveur → client :
      { t:"lobby", players:[{id,name}], host }
      { t:"round", n, you, names, meta }               (rôle PRIVÉ du joueur)
-     { t:"revealed", n, roles, names, meta }
+     { t:"progress", n, done:[ids], total }           (ordre d'arrivée = buzzer possible)
+     { t:"timer", n, endsAt, now }                    (horloge serveur pour compenser l'offset)
+     { t:"state", n, data }
+     { t:"revealed", n, roles, inputs, order, names, meta }
      { t:"error", error }
 
    L'état vit en mémoire (une seule instance Render) ; les scores durables
@@ -55,9 +61,12 @@ function namesOf(r) {
 function sendRoundTo(r, id) {
   const p = r.players.get(id);
   if (!p || !r.round) return;
-  const { n, roles, names, meta, revealed } = r.round;
+  const { n, roles, names, meta, revealed, inputs, order, timerEndsAt } = r.round;
   p.ws.send(JSON.stringify({ t: "round", n, you: roles[id] ?? null, names, meta }));
-  if (revealed) p.ws.send(JSON.stringify({ t: "revealed", n, roles, names, meta }));
+  if (order.length) p.ws.send(JSON.stringify({ t: "progress", n, done: order, total: r.players.size }));
+  if (timerEndsAt && timerEndsAt > Date.now())
+    p.ws.send(JSON.stringify({ t: "timer", n, endsAt: timerEndsAt, now: Date.now() }));
+  if (revealed) p.ws.send(JSON.stringify({ t: "revealed", n, roles, inputs, order, names, meta }));
 }
 
 function removePlayer(key, id, ws) {
@@ -123,13 +132,31 @@ function handleSocket(ws) {
         names: namesOf(r),
         meta: msg.meta ?? null,
         revealed: false,
+        inputs: {}, // deviceId -> réponse soumise
+        order: [], // ordre d'arrivée des premières soumissions (fait office de buzzer)
+        timerEndsAt: null,
       };
       for (const id of r.players.keys()) sendRoundTo(r, id);
+    } else if (msg.t === "input") {
+      if (!r.round || r.round.revealed) return;
+      const data = msg.data === undefined ? true : msg.data;
+      if (JSON.stringify(data).length > 4096) return; // réponse anormalement grosse
+      if (!(myId in r.round.inputs)) r.round.order.push(myId); // 1re soumission : rang conservé
+      r.round.inputs[myId] = data; // re-soumettre remplace la réponse, pas le rang
+      broadcast(r, JSON.stringify({ t: "progress", n: r.round.n, done: r.round.order, total: r.players.size }));
+    } else if (msg.t === "timer") {
+      if (myId !== hostId(r) || !r.round) return;
+      const seconds = Math.max(1, Math.min(600, Number(msg.seconds) || 0));
+      r.round.timerEndsAt = Date.now() + seconds * 1000;
+      broadcast(r, JSON.stringify({ t: "timer", n: r.round.n, endsAt: r.round.timerEndsAt, now: Date.now() }));
+    } else if (msg.t === "state") {
+      if (myId !== hostId(r) || !r.round) return;
+      broadcast(r, JSON.stringify({ t: "state", n: r.round.n, data: msg.data ?? null }));
     } else if (msg.t === "reveal") {
       if (myId !== hostId(r) || !r.round) return;
       r.round.revealed = true;
-      const { n, roles, names, meta } = r.round;
-      broadcast(r, JSON.stringify({ t: "revealed", n, roles, names, meta }));
+      const { n, roles, inputs, order, names, meta } = r.round;
+      broadcast(r, JSON.stringify({ t: "revealed", n, roles, inputs, order, names, meta }));
     } else if (msg.t === "leave") {
       removePlayer(key, myId, null);
       key = null;
