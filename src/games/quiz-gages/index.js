@@ -7,7 +7,14 @@ import { levelSelector } from "../../levels.js";
 import { teamBuilder } from "../../teams.js";
 import { openEditor } from "../../content.js";
 import { contentSource } from "../../game-kit.js";
+import { liveSession, syncCountdown } from "../../realtime.js";
 import { QUESTIONS } from "./data.js";
+
+// Points d'une bonne réponse : base + bonus de rapidité selon le rang d'arrivée.
+const SPEED_BONUS = [50, 30, 20, 10];
+function roundPoints(correctRank) {
+  return 100 + (correctRank < SPEED_BONUS.length ? SPEED_BONUS[correctRank] : 5);
+}
 
 const SCHEMA = {
   title: "Quiz à gages",
@@ -26,24 +33,45 @@ function toQuestion(e) {
 }
 
 export function render(container, { game }) {
-  container.append(screenHead(game.title, "Chacun son tour · bonne réponse = point, sinon gage"));
+  container.append(screenHead(game.title, "Bonne réponse = point, sinon gage"));
   const stage = el("div");
   container.append(stage);
 
   const src = contentSource("quiz-gages", { builtIn: QUESTIONS, keyOf: (q) => q.q, toValue: toQuestion });
-  introScreen();
+  let liveStop = null;
+  modeSelect();
   src.reload();
+
+  // Cleanup routeur : stoppe les timers/socket du mode multi si actif.
+  return () => { if (liveStop) liveStop(); };
 
   function questions() { return src.cards(); }
   function builtInList() { return QUESTIONS.map((q) => ({ key: q.q, label: `${q.q} → ${q.choices[q.correct]}` })); }
-  function introScreen() {
+
+  // Choix du mode : sur ce téléphone (passe-le) ou chacun sur le sien.
+  function modeSelect() {
+    if (liveStop) { liveStop(); liveStop = null; }
     showPhase(stage,
-      playersCard({ min: 2, cta: "Suite →", onReady: (names) => modeScreen(names) }),
+      el("div.card.center", {}, [
+        el("h3", { text: "Comment jouer ?" }),
+        el("button.btn.btn--full", { text: "📱 Sur ce téléphone", onClick: introScreen }),
+        el("button.btn.btn--full.btn--ghost", { text: "🌐 Multi-appareils", style: "margin-top:10px", onClick: startLive }),
+      ]),
       el("div.row", { style: "justify-content:center;margin-top:14px" }, [el("button.chip", { text: "✏️ Mes cartes", onClick: openEd })])
     );
   }
+
+  function introScreen() {
+    showPhase(stage,
+      playersCard({ min: 2, cta: "Suite →", onReady: (names) => modeScreen(names) }),
+      el("div.row", { style: "justify-content:center;margin-top:14px" }, [
+        el("button.chip", { text: "← Mode", onClick: modeSelect }),
+        el("button.chip", { text: "✏️ Mes cartes", onClick: openEd }),
+      ])
+    );
+  }
   function openEd() {
-    openEditor(stage, { gameId: "quiz-gages", schema: SCHEMA, builtInList: builtInList(), onDone: async () => { await src.reload(); introScreen(); } });
+    openEditor(stage, { gameId: "quiz-gages", schema: SCHEMA, builtInList: builtInList(), onDone: async () => { await src.reload(); modeSelect(); } });
   }
 
   // Choix : chacun pour soi ou en équipes.
@@ -60,6 +88,150 @@ export function render(container, { game }) {
         }),
       ])
     );
+  }
+
+  /* ================= Mode multi-appareils (chacun son téléphone) =================
+     La même question s'affiche sur tous les téléphones ; chacun répond chez soi.
+     Points = bonne réponse + bonus de rapidité (ordre d'arrivée = buzzer).
+     Scores autoritatifs via meta.base + delta déterministe → aucun décalage entre
+     appareils, même pour un retardataire. (meta.correct transite dès l'ouverture de
+     la manche : l'UI ne l'affiche jamais avant la révélation — acceptable pour un
+     jeu de soirée.) */
+  function startLive() {
+    if (!questions().length) {
+      showPhase(stage, el("div.card.center", {}, [
+        el("p", { text: "Aucune question active — ajoute-en ou change la source via ✏️ Mes cartes." }),
+        el("button.btn", { text: "✏️ Mes cartes", style: "margin-top:12px", onClick: openEd }),
+        el("button.btn.btn--ghost", { text: "← Mode", style: "margin-top:10px", onClick: modeSelect }),
+      ]));
+      return;
+    }
+    if (liveStop) liveStop();
+    const deck = createDeck(questions());
+    const scores = {}; // deviceId -> total cumulé (converge sur tous les clients)
+    let level = "soft"; // niveau des gages, réglé par l'hôte
+
+    liveStop = liveSession(stage, {
+      gameId: "quiz-gages",
+      title: "Quiz — multi",
+      minPlayers: 2,
+      startLabel: "Lancer la 1re question",
+      revealLabel: "Révéler les réponses",
+      newRoundLabel: "Question suivante →",
+      onExit: modeSelect,
+      lobbyExtra: () => {
+        const ui = levelSelector({ initial: level, onChange: (v) => (level = v) });
+        return el("div", { style: "margin:10px 0" }, [
+          el("p.screen__subtitle", { text: "Niveau des gages", style: "margin-bottom:8px" }),
+          ui.node,
+        ]);
+      },
+      assign: (ps) => {
+        const item = deck.next() || { q: "?", choices: ["?"], correct: 0 };
+        const base = {};
+        ps.forEach((p) => (base[p.id] = scores[p.id] || 0));
+        const roles = {};
+        ps.forEach((p) => (roles[p.id] = true)); // tout le monde reçoit la même question
+        return { roles, meta: { q: item.q, choices: item.choices, correct: item.correct, level, base } };
+      },
+      renderMine: (mine, ctx) => liveRound(ctx),
+      renderReveal: (live, ctx) => liveReveal(live, scores, ctx),
+    });
+  }
+
+  // Écran de réponse (identique sur chaque téléphone).
+  function liveRound({ api, meta, n }) {
+    let answered = false;
+    const total = api.players().length;
+    const prog = el("p.screen__subtitle", { text: `0 / ${total} ont répondu`, style: "margin-top:14px" });
+    const timerLine = el("p", { style: "min-height:22px;font-weight:800;font-size:1.2rem;margin-top:10px" });
+    const feedback = el("div.qz-feedback", { style: "min-height:24px;margin-top:8px" });
+
+    const btns = meta.choices.map((c, idx) =>
+      el("button.btn.btn--ghost.btn--full.qz-choice", {
+        text: c,
+        style: "margin-top:8px",
+        onClick: () => {
+          if (answered) return;
+          answered = true;
+          api.submit({ choice: idx });
+          btns.forEach((b) => (b.disabled = true));
+          btns[idx].style.borderColor = "var(--accent)";
+          btns[idx].style.color = "var(--accent)";
+          feedback.textContent = "✅ Réponse envoyée — en attente des autres…";
+        },
+      })
+    );
+
+    function lockOut() {
+      if (answered) return;
+      answered = true;
+      btns.forEach((b) => (b.disabled = true));
+      feedback.textContent = "⏰ Temps écoulé !";
+    }
+
+    api.on("progress", (done) => { prog.textContent = `${done.length} / ${total} ont répondu`; });
+    api.on("timer", (endsAt) =>
+      syncCountdown(endsAt, {
+        onTick: (s) => (timerLine.textContent = s > 0 ? `⏱️ ${s}` : "⏰"),
+        onEnd: lockOut,
+      })
+    );
+
+    const hostCtrl = api.isHost()
+      ? el("button.chip", { text: "⏱️ Lancer un chrono (20 s)", style: "margin-top:14px", onClick: () => api.startTimer(20) })
+      : null;
+
+    return [
+      el("p.screen__subtitle", { text: `Question ${n}` }),
+      el("h2.qz-question", { text: meta.q, style: "margin:8px 0 8px" }),
+      el("div.stack", {}, btns),
+      timerLine,
+      feedback,
+      prog,
+      hostCtrl,
+    ];
+  }
+
+  // Résultats de la manche + classement (calcul déterministe partagé).
+  function liveReveal(live, scores, { api }) {
+    const { choices, correct, base = {}, level = "soft" } = live.meta || {};
+    const inputs = live.inputs || {};
+    const order = live.order || [];
+    const names = live.names || {};
+
+    // Delta de la manche : bonne réponse + bonus au rang d'arrivée (déterministe).
+    const delta = {};
+    let rank = 0;
+    order.forEach((id) => {
+      if (inputs[id] && inputs[id].choice === correct) delta[id] = roundPoints(rank++);
+    });
+    // Totaux recalculés depuis la base autoritative → aucune dérive entre appareils.
+    const ids = Object.keys(names);
+    ids.forEach((id) => (scores[id] = (base[id] || 0) + (delta[id] || 0)));
+
+    const rows = ids
+      .map((id) => ({ id, name: names[id], total: scores[id], d: delta[id] || 0, choice: inputs[id] ? inputs[id].choice : null }))
+      .sort((a, b) => b.total - a.total);
+
+    const me = api.me;
+    const myChoice = inputs[me] ? inputs[me].choice : null;
+    const myCallout = myChoice === correct
+      ? el("div.qz-feedback", { text: `✅ Bravo ! +${delta[me] || 0} points`, style: "margin:6px 0 14px" })
+      : el("div.qz-feedback", { style: "margin:6px 0 14px" }, [`❌ Raté. Ton gage : `, el("strong", { text: pickGage(level) })]);
+
+    return el("div", {}, [
+      el("h3", { text: "Résultats", style: "margin-bottom:6px" }),
+      el("p.screen__subtitle", { text: "Bonne réponse :", style: "margin-bottom:4px" }),
+      el("div", { text: choices ? choices[correct] : "?", style: "font-weight:800;font-size:1.15rem;margin-bottom:12px;color:var(--accent)" }),
+      myCallout,
+      el("div.stack", {}, rows.map((r, i) =>
+        el("div.uc-role-row", {}, [
+          el("span", { text: `${i + 1}. ${r.name}${r.id === me ? " (toi)" : ""}` }),
+          el("span", { text: `${r.total} pts${r.d ? ` (+${r.d})` : ""} ${r.choice === correct ? "✅" : r.choice == null ? "⏳" : "❌"}` }),
+        ])
+      )),
+    ]);
   }
 
   function startGame(players, scoreKey = "quiz-gages") {

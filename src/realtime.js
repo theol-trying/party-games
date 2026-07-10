@@ -7,15 +7,25 @@
    Repli automatique : polling du store partagé (Upstash) si le WebSocket est
    indisponible (dev local via serve.ps1, réseau capricieux…).
 
-   API (inchangée pour les jeux) :
+   API :
    liveSession(stage, {
      gameId, title, minPlayers,
-     assign(players) -> { roles:{deviceId: payload}, meta? },
-     renderMine(payload, {name}) -> Node|Node[],
-     renderReveal(live) -> Node,           // live.roles / live.names / live.meta
-     lobbyExtra?(players) -> Node,         // réglages hôte
-     onExit?()                             // sortie propre du salon
+     assign(players) -> { roles:{deviceId: payload}, meta? },  // hôte : prépare la manche
+     renderMine(payload, {name, api, meta, n}) -> Node|Node[], // écran privé du joueur
+     renderReveal(live, {api}) -> Node,     // live.roles/names/meta/inputs/order
+     lobbyExtra?(players) -> Node,          // réglages hôte (niveau, options…)
+     onExit?(),                             // sortie propre du salon
+     revealLabel?, newRoundLabel?, startLabel?,  // libellés des boutons hôte
    }) -> stop()
+
+   api (passé à renderMine/renderReveal pour les manches interactives) :
+     me, isHost(), players(),
+     submit(data)      -> envoie ma réponse (l'ordre d'arrivée = buzzer),
+     startTimer(sec)   -> hôte : chrono synchronisé pour tous,
+     sendState(data)   -> hôte : diffuse un état en cours de manche,
+     reveal(), newRound(),
+     on("progress"|"state"|"timer", cb)   -> abonnements (remis à zéro à chaque manche)
+   Helper exporté : syncCountdown(endsAtClient, {onTick, onEnd}) -> stop()
    ========================================================================= */
 
 import { el, showPhase, announce } from "./ui.js";
@@ -62,7 +72,12 @@ export function syncCountdown(endsAtClient, { onTick, onEnd }) {
   return () => { stopped = true; clearTimeout(timer); };
 }
 
-export function liveSession(stage, { gameId, title, minPlayers = 2, assign, renderMine, renderReveal, lobbyExtra, onExit }) {
+export function liveSession(stage, {
+  gameId, title, minPlayers = 2, assign, renderMine, renderReveal, lobbyExtra, onExit,
+  revealLabel = "Révéler les rôles", // libellé du bouton hôte (jeux interactifs : « Révéler les réponses »)
+  newRoundLabel = "Nouvelle manche", // libellé « manche suivante » (ex : « Question suivante »)
+  startLabel, // libellé du bouton de lancement dans le lobby (défaut : « Distribuer les rôles »)
+}) {
   const me = deviceId();
   let stopped = false;
   let myName = "";
@@ -146,8 +161,8 @@ export function liveSession(stage, { gameId, title, minPlayers = 2, assign, rend
     const isHost = host === me;
     const extra = isHost && lobbyExtra ? lobbyExtra(players) : null;
     const action = isHost
-      ? el("button.btn.btn--full", { text: `Distribuer les rôles (${players.length})`, disabled: players.length < minPlayers, onClick: distribute })
-      : el("p.screen__subtitle", { text: "L'hôte lancera la distribution." });
+      ? el("button.btn.btn--full", { text: `${startLabel || "Distribuer les rôles"} (${players.length})`, disabled: players.length < minPlayers, onClick: distribute })
+      : el("p.screen__subtitle", { text: "L'hôte lancera la partie." });
     showPhase(stage, el("div.card.center", {}, [
       el("h3", { text: title }),
       el("p.screen__subtitle", { text: `Code soirée : ${currentRoom()}`, style: "margin:4px 0 8px" }),
@@ -168,8 +183,8 @@ export function liveSession(stage, { gameId, title, minPlayers = 2, assign, rend
       : el("p", { text: "Tu as rejoint après la distribution — attends la prochaine manche." });
     const actions = [];
     if (host === me) {
-      actions.push(el("button.btn.btn--full", { text: "Révéler les rôles", onClick: () => net && net.reveal() }));
-      actions.push(el("button.btn.btn--full.btn--ghost", { text: "Nouvelle manche", style: "margin-top:10px", onClick: distribute }));
+      actions.push(el("button.btn.btn--full", { text: revealLabel, onClick: () => net && net.reveal() }));
+      actions.push(el("button.btn.btn--full.btn--ghost", { text: newRoundLabel, style: "margin-top:10px", onClick: distribute }));
     }
     actions.push(el("button.btn.btn--ghost.btn--full", { text: "Retour au salon", style: "margin-top:10px", onClick: lobbyScreen }));
     showPhase(stage, el("div.card.center", {}, [
@@ -183,10 +198,10 @@ export function liveSession(stage, { gameId, title, minPlayers = 2, assign, rend
     if (stopped) return;
     view = "reveal";
     const actions = [];
-    if (host === me) actions.push(el("button.btn.btn--full", { text: "Nouvelle manche", onClick: distribute }));
+    if (host === me) actions.push(el("button.btn.btn--full", { text: newRoundLabel, onClick: distribute }));
     actions.push(el("button.btn.btn--ghost.btn--full", { text: "Retour au salon", style: "margin-top:10px", onClick: lobbyScreen }));
     showPhase(stage, el("div.card.center", {}, [
-      renderReveal(revealed),
+      renderReveal(revealed, { api }),
       el("div", { style: "margin-top:16px" }, actions),
       statusLine(),
     ]));
