@@ -3,12 +3,16 @@ import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
 import { createScores, scoreboard } from "../../scoring.js";
 import { getData, setData } from "../../store.js";
+import { liveSession, syncCountdown } from "../../realtime.js";
 import { CATEGORIES_DEFAUT, LETTRES, DUREE_DEFAUT } from "./data.js";
+
+const GRACE_SECONDS = 12; // sprint final déclenché quand le 1er joueur crie « STOP »
 
 export function render(container, { game }) {
   let duree = DUREE_DEFAUT;
   let categories = [...CATEGORIES_DEFAUT];
   let activeTimer = null; // chrono en cours, réf. au niveau du jeu pour pouvoir l'arrêter
+  let liveStop = null; // arrêt du salon multi si actif
   const deck = createDeck(LETTRES); // tirage des lettres sans répétition
 
   container.append(screenHead(game.title, "Une lettre, des catégories, le chrono tourne"));
@@ -21,10 +25,11 @@ export function render(container, { game }) {
     if (Array.isArray(saved) && saved.length) { categories = saved; setup(); }
   });
 
-  // Nettoyage appelé par le routeur quand on quitte le jeu : stoppe le chrono.
+  // Nettoyage appelé par le routeur quand on quitte le jeu : stoppe chrono + salon.
   return () => {
     if (activeTimer) clearInterval(activeTimer);
     activeTimer = null;
+    if (liveStop) { liveStop(); liveStop = null; }
   };
 
   /* ---------- Réglages + choix du mode ---------- */
@@ -64,8 +69,195 @@ export function render(container, { game }) {
             showPhase(stage, playersCard({ min: 2, cta: "Jouer à la ronde", onReady: (names) => rondeStart(names) }));
           },
         }),
+        el("button.btn.btn--full.btn--ghost", {
+          text: "🌐 Multi-appareils (chacun son tél)",
+          style: "margin-top:10px",
+          onClick: () => { readCats(); startLive(); },
+        }),
       ])
     );
+  }
+
+  /* ================= Mode multi-appareils (chacun son téléphone) =================
+     Même lettre pour tous, chrono synchronisé. L'hôte fait l'arbitre : dès qu'un
+     joueur crie « STOP », il déclenche un sprint final commun (GRACE_SECONDS).
+     À l'échéance, chaque téléphone envoie ses réponses ; correction + classement
+     synchronisés. Totaux = meta.base autoritative + points de la manche
+     (déterministes) → aucune dérive entre appareils. */
+  function startLive() {
+    if (liveStop) liveStop();
+    const scores = {}; // deviceId -> total cumulé (converge sur tous les clients)
+
+    liveStop = liveSession(stage, {
+      gameId: "baccalaureat",
+      title: "Baccalauréat — multi",
+      minPlayers: 2,
+      startLabel: "Lancer la manche",
+      revealLabel: "Corriger la manche",
+      newRoundLabel: "Nouvelle manche",
+      onExit: setup,
+      lobbyExtra: () =>
+        el("div", { style: "margin:10px 0" }, [
+          el("p.screen__subtitle", { text: `${categories.length} catégories · ${duree}s par manche`, style: "text-align:center" }),
+          el("p.screen__subtitle", { text: "Reviens aux Réglages pour les modifier avant de lancer.", style: "text-align:center;opacity:.75;font-size:.85em" }),
+        ]),
+      assign: (ps) => {
+        const letter = drawLetter();
+        announce("Lettre : " + letter);
+        const base = {};
+        ps.forEach((p) => (base[p.id] = scores[p.id] || 0));
+        const roles = {};
+        ps.forEach((p) => (roles[p.id] = true)); // tout le monde reçoit la même lettre
+        return { roles, meta: { letter, categories: [...categories], duree, base } };
+      },
+      renderMine: (mine, ctx) => liveFill(ctx),
+      renderReveal: (live, ctx) => liveScore(live, scores, ctx),
+    });
+  }
+
+  // Écran de remplissage synchronisé (identique sur chaque téléphone).
+  function liveFill({ api, meta }) {
+    const cats = meta.categories || [];
+    const letter = meta.letter;
+    const total = api.players().length;
+    let submitted = false;
+    let mainLeft = meta.duree; // secondes restantes du chrono principal (suivi par l'hôte)
+    let graceStarted = false;
+    let cdStop = null;
+    let barMax = null;
+
+    const timeEl = el("div.bc-timer", { text: fmt(meta.duree) });
+    const bar = el("div.bc-bar__fill");
+    const inputs = cats.map((cat) =>
+      el("label.bc-field", {}, [
+        el("span.bc-field__label", { text: cat }),
+        el("input.input", { placeholder: `en ${letter}…`, maxlength: "30", autocapitalize: "words" }),
+      ])
+    );
+    const prog = el("p.screen__subtitle", { text: `0 / ${total} ont fini`, style: "margin-top:10px" });
+    const status = el("div.qz-feedback", { style: "min-height:22px;margin-top:6px" });
+    const stopBtn = el("button.btn.btn--full", { text: "STOP ! J'ai fini", style: "margin-top:16px" });
+
+    function collect() {
+      const a = {};
+      cats.forEach((c, i) => (a[c] = inputs[i].querySelector("input").value.trim()));
+      return a;
+    }
+    function doSubmit(auto) {
+      if (submitted) return;
+      submitted = true;
+      inputs.forEach((l) => (l.querySelector("input").disabled = true));
+      stopBtn.disabled = true;
+      api.submit({ answers: collect() });
+      status.textContent = auto ? "⏰ Temps écoulé — réponses envoyées." : "✋ Envoyé ! En attente des autres…";
+    }
+    stopBtn.onclick = () => doSubmit(false);
+
+    // Chrono synchronisé (principal puis, éventuellement, sprint final).
+    api.on("timer", (endsAt) => {
+      if (cdStop) cdStop();
+      barMax = null;
+      cdStop = syncCountdown(endsAt, {
+        onTick: (s) => {
+          mainLeft = s;
+          if (barMax === null) barMax = Math.max(s, 1);
+          timeEl.textContent = fmt(s);
+          bar.style.transform = `scaleX(${Math.max(0, s / barMax)})`;
+          if (s <= 10) timeEl.classList.add("is-low");
+        },
+        onEnd: () => doSubmit(true),
+      });
+    });
+
+    // Progression + arbitrage de l'hôte : 1er « STOP » (assez tôt) → sprint final.
+    api.on("progress", (done) => {
+      prog.textContent = `${done.length} / ${total} ont fini`;
+      if (api.isHost() && !graceStarted && done.length >= 1 && done.length < total && mainLeft > GRACE_SECONDS) {
+        graceStarted = true;
+        status.textContent = "⚡ Quelqu'un a fini ! Sprint final…";
+        api.startTimer(GRACE_SECONDS);
+      }
+    });
+
+    // L'hôte lance le chrono principal au démarrage de la manche.
+    if (api.isHost()) api.startTimer(meta.duree);
+
+    return [
+      el("div.card.center.bc-header", {}, [
+        el("p.screen__subtitle", { text: "Lettre" }),
+        el("div.bc-letter", { text: letter }),
+        timeEl,
+        el("div.bc-bar", {}, [bar]),
+      ]),
+      el("div.card", { style: "margin-top:14px" }, [
+        el("div.stack", {}, inputs),
+        stopBtn,
+        status,
+        prog,
+      ]),
+    ];
+  }
+
+  // Correction + classement (calcul déterministe partagé par tous les clients).
+  function liveScore(live, scores, { api }) {
+    const cats = (live.meta && live.meta.categories) || [];
+    const letter = live.meta && live.meta.letter;
+    const base = (live.meta && live.meta.base) || {};
+    const inputs = live.inputs || {};
+    const names = live.names || {};
+    const order = live.order || [];
+    const ids = Object.keys(names);
+
+    const roundPts = {};
+    ids.forEach((id) => (roundPts[id] = 0));
+    const catResults = cats.map((cat) => {
+      const entries = ids.map((id) => {
+        const raw = (inputs[id] && inputs[id].answers && inputs[id].answers[cat]) || "";
+        return { id, raw, valid: startsWithLetter(raw, letter) };
+      });
+      const counts = {};
+      entries.filter((e) => e.valid).forEach((e) => (counts[norm(e.raw)] = (counts[norm(e.raw)] || 0) + 1));
+      entries.forEach((e) => {
+        e.pts = !e.valid ? 0 : counts[norm(e.raw)] === 1 ? 2 : 1;
+        roundPts[e.id] += e.pts;
+      });
+      return { cat, entries };
+    });
+    // Totaux recalculés depuis la base autoritative → aucune dérive entre appareils.
+    ids.forEach((id) => (scores[id] = (base[id] || 0) + roundPts[id]));
+    const ranking = ids
+      .map((id) => ({ id, name: names[id], total: scores[id], d: roundPts[id] }))
+      .sort((a, b) => b.total - a.total);
+    const first = order[0];
+
+    return el("div", {}, [
+      el("h3", { text: "Résultats", style: "margin-bottom:4px" }),
+      el("p.screen__subtitle", { text: `Lettre : ${letter} · unique = 2 pts, partagée = 1 pt`, style: "margin-bottom:8px" }),
+      first ? el("p.screen__subtitle", { text: `⚡ ${names[first]} a fini en premier`, style: "margin-bottom:12px" }) : null,
+      el("div.stack", {},
+        catResults.map((cr) =>
+          el("div.bc-cat", {}, [
+            el("div.bc-field__label", { text: cr.cat }),
+            ...cr.entries.map((e) =>
+              el("div.bc-score-row" + (e.valid ? "" : ".is-invalid"), {}, [
+                el("span", { text: names[e.id] + (e.id === api.me ? " (toi)" : "") }),
+                el("span.bc-ans", { text: e.raw || "—" }),
+                el("span.bc-pts", { text: "+" + e.pts }),
+              ])
+            ),
+          ])
+        )
+      ),
+      el("h3", { text: "👑 Classement", style: "margin-top:16px;margin-bottom:8px" }),
+      el("div.stack", {},
+        ranking.map((r, i) =>
+          el("div.uc-role-row", {}, [
+            el("span", { text: `${i + 1}. ${r.name}${r.id === api.me ? " (toi)" : ""}` }),
+            el("span", { text: `${r.total} pts (+${r.d})` }),
+          ])
+        )
+      ),
+    ]);
   }
 
   /* ---------- Mode classique (une manche, un remplisseur) ---------- */
