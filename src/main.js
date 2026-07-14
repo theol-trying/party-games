@@ -37,6 +37,10 @@ function roomBanner() {
   const shareBtn = el("button.chip", { text: "🔗 Partager", "aria-label": "Copier le lien de la soirée" });
   shareBtn.addEventListener("click", async () => {
     const link = `${location.origin}${location.pathname}#/r/${code}`;
+    if (navigator.share) {
+      // Mobile : feuille de partage native (WhatsApp, SMS…), bien plus fiable.
+      try { await navigator.share({ title: "Soirée 🎉", text: `Rejoins ma soirée — code ${code}`, url: link }); return; } catch {}
+    }
     try {
       await navigator.clipboard.writeText(link);
       shareBtn.textContent = "Copié ✓";

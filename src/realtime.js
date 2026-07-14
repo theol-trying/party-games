@@ -30,7 +30,7 @@
 
 import { el, showPhase, announce } from "./ui.js";
 import { getData, setData } from "./store.js";
-import { currentRoom } from "./room.js";
+import { currentRoom, setRoom, normalizeCode } from "./room.js";
 
 const DEV_KEY = "soiree.device";
 const NAME_KEY = "soiree.name";
@@ -40,6 +40,9 @@ const POLL_MS = 4000;
 const STALE_MS = 25000;
 const WS_RECONNECT_MS = 3000;
 const WS_MAX_RETRIES = 4;
+// En repli polling, on re-tente le WebSocket régulièrement : dès que le serveur
+// répond (réveil Render…), TOUS les téléphones convergent dans le salon temps réel.
+const WS_UPGRADE_MS = 8000;
 
 export function deviceId() {
   let id = null;
@@ -115,8 +118,11 @@ export function liveSession(stage, {
   nameScreen();
   return stop;
 
+  let upgradeTimer = null;
+
   function stop() {
     stopped = true;
+    if (upgradeTimer) clearTimeout(upgradeTimer);
     if (net) net.destroy();
     net = null;
   }
@@ -130,22 +136,34 @@ export function liveSession(stage, {
   function nameScreen() {
     view = "name";
     const input = el("input.input", { placeholder: "Ton prénom", maxlength: "20", value: savedName() });
+    const codeInput = el("input.input", {
+      placeholder: "CODE", maxlength: "8", value: currentRoom(),
+      autocapitalize: "characters", autocomplete: "off",
+      style: "text-transform:uppercase;letter-spacing:.25em;font-weight:800;text-align:center",
+      "aria-label": "Code de la soirée",
+    });
     const go = el("button.btn.btn--full", {
       text: "Rejoindre la partie",
-      style: "margin-top:12px",
+      style: "margin-top:14px",
       onClick: () => {
         const name = input.value.trim();
         if (!name) return;
+        const code = normalizeCode(codeInput.value);
+        if (!code) { codeInput.focus(); return; }
+        setRoom(code); // rejoint la soirée saisie (ou garde la sienne)
         try { localStorage.setItem(NAME_KEY, name); } catch {}
         myName = name;
         connect();
       },
     });
-    input.addEventListener("keydown", (e) => { if (e.key === "Enter") go.click(); });
+    [input, codeInput].forEach((f) => f.addEventListener("keydown", (e) => { if (e.key === "Enter") go.click(); }));
     showPhase(stage, el("div.card.center", {}, [
       el("h3", { text: "🌐 Multi-appareils" }),
-      el("p.screen__subtitle", { text: `Soirée ${currentRoom()} · chacun sur son téléphone`, style: "margin:6px 0 12px" }),
-      input, go,
+      el("p.screen__subtitle", { text: "Chacun sur son téléphone", style: "margin:6px 0 12px" }),
+      input,
+      el("p.screen__subtitle", { text: "Code de la soirée — le MÊME pour tous les joueurs :", style: "margin:14px 0 6px" }),
+      codeInput,
+      go,
     ]));
   }
 
@@ -208,8 +226,13 @@ export function liveSession(stage, {
   }
 
   async function share() {
-    const link = `${location.origin}${location.pathname}#/r/${currentRoom()}`;
-    try { await navigator.clipboard.writeText(link); announce("Lien copié"); } catch {}
+    const code = currentRoom();
+    const link = `${location.origin}${location.pathname}#/r/${code}`;
+    if (navigator.share) {
+      try { await navigator.share({ title: "Soirée 🎉", text: `Rejoins ma soirée — code ${code}`, url: link }); return; } catch {}
+    }
+    try { await navigator.clipboard.writeText(link); announce("Lien copié"); }
+    catch { window.prompt("Copie ce lien pour inviter :", link); }
   }
 
   function distribute() {
@@ -250,23 +273,60 @@ export function liveSession(stage, {
   /* ============================ TRANSPORTS ============================= */
 
   function connect() {
-    // WebSocket d'abord ; en cas d'échec initial → repli polling.
-    net = wsTransport({
-      onFail: () => {
-        if (stopped) return;
-        status = "🐢 mode compatible (sans temps réel)";
-        net = pollTransport();
-      },
-    });
+    // WebSocket d'abord ; en cas d'échec → repli polling + retour auto au temps réel.
+    status = "🔌 connexion au serveur…";
+    net = wsTransport({ onFail: fallbackToPoll });
     lobbyScreen();
   }
 
-  function wsTransport({ onFail }) {
+  function fallbackToPoll() {
+    if (stopped) return;
+    status = "🐢 mode compatible — retour au temps réel dès que possible…";
+    net = pollTransport();
+    if (view === "lobby") lobbyScreen();
+    scheduleUpgrade();
+  }
+
+  function scheduleUpgrade() {
+    if (upgradeTimer) clearTimeout(upgradeTimer);
+    if (stopped) return;
+    upgradeTimer = setTimeout(tryUpgrade, WS_UPGRADE_MS);
+  }
+
+  // Depuis le repli polling : sonde le WebSocket ; s'il répond, on bascule
+  // (quitte le salon polling, rejoint le salon temps réel avec le même socket).
+  function tryUpgrade() {
+    if (stopped || !net || net.mode !== "poll") return;
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    let probe;
+    try { probe = new WebSocket(`${proto}//${location.host}/ws`); } catch { return scheduleUpgrade(); }
+    const abort = setTimeout(() => { try { probe.close(); } catch {} }, 5000);
+    probe.onopen = () => {
+      clearTimeout(abort);
+      if (stopped || !net || net.mode !== "poll") { try { probe.close(); } catch {} return; }
+      const old = net;
+      try { old.leave(); } catch {}
+      old.destroy();
+      net = wsTransport({ onFail: fallbackToPoll, adopt: probe });
+    };
+    probe.onclose = () => { clearTimeout(abort); if (!stopped && net && net.mode === "poll") scheduleUpgrade(); };
+    probe.onerror = () => { try { probe.close(); } catch {} };
+  }
+
+  function wsTransport({ onFail, adopt = null }) {
     let sock = null;
     let opened = false;
     let retries = 0;
     let destroyed = false;
     let reconnectTimer = null;
+
+    function onOpen() {
+      opened = true;
+      retries = 0;
+      status = "⚡ temps réel";
+      if (view === "lobby") lobbyScreen();
+      sock.send(JSON.stringify({ t: "join", room: currentRoom(), game: gameId, id: me, name: myName }));
+    }
 
     function open() {
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
@@ -275,12 +335,11 @@ export function liveSession(stage, {
       } catch {
         return onFail();
       }
-      sock.onopen = () => {
-        opened = true;
-        retries = 0;
-        status = "⚡ temps réel";
-        sock.send(JSON.stringify({ t: "join", room: currentRoom(), game: gameId, id: me, name: myName }));
-      };
+      wire();
+    }
+
+    function wire() {
+      sock.onopen = onOpen;
       sock.onmessage = (e) => {
         let m;
         try { m = JSON.parse(e.data); } catch { return; }
@@ -305,7 +364,8 @@ export function liveSession(stage, {
       };
       sock.onerror = () => { try { sock.close(); } catch {} };
     }
-    open();
+
+    if (adopt) { sock = adopt; wire(); onOpen(); } else open();
 
     const sendJson = (o) => { if (sock && sock.readyState === 1) sock.send(JSON.stringify(o)); };
     return {
