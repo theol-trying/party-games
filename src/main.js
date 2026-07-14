@@ -7,6 +7,7 @@
 import { CATEGORIES, getGame, gamesByCategory } from "./registry.js";
 import { el, ensureGameStyle, announce } from "./ui.js";
 import { currentRoom, newRoom, setRoom, normalizeCode } from "./room.js";
+import { qrCanvas } from "./qr.js";
 
 const app = document.getElementById("app");
 
@@ -53,13 +54,26 @@ function roomBanner() {
 
   const joinBtn = el("button.chip", { text: "Rejoindre" });
   const newBtn = el("button.chip", { text: "Nouvelle" });
+
+  // QR d'invitation : déplié/replié à la demande (scanner = rejoindre).
+  const qrWrap = el("div", { style: "text-align:center" });
+  const qrBtn = el("button.chip", { text: "📱 QR", "aria-label": "Afficher le QR code d'invitation" });
+  qrBtn.addEventListener("click", () => {
+    if (qrWrap.childElementCount) { qrWrap.replaceChildren(); return; }
+    try {
+      const cv = qrCanvas(`${location.origin}${location.pathname}#/r/${code}`, { scale: 4 });
+      cv.style.cssText = "margin:10px auto 2px;border-radius:12px;max-width:180px";
+      cv.setAttribute("aria-label", "QR code d'invitation à la soirée");
+      qrWrap.replaceChildren(cv, el("p.screen__subtitle", { text: `Scanne-moi pour rejoindre la soirée ${code}` }));
+    } catch {}
+  });
   newBtn.addEventListener("click", () => {
     newRoom();
     announce("Nouvelle soirée créée");
     renderHome();
   });
 
-  const actions = el("div.room-banner__actions", {}, [shareBtn, joinBtn, newBtn]);
+  const actions = el("div.room-banner__actions", {}, [shareBtn, qrBtn, joinBtn, newBtn]);
 
   joinBtn.addEventListener("click", () => {
     const input = el("input.input.room-banner__input", { placeholder: "CODE", maxlength: "8", "aria-label": "Code de la soirée à rejoindre" });
@@ -78,7 +92,7 @@ function roomBanner() {
     input.focus();
   });
 
-  return el("section.room-banner", {}, [info, actions]);
+  return el("div", {}, [el("section.room-banner", {}, [info, actions]), qrWrap]);
 }
 
 /* ---------- Accueil ---------- */

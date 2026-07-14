@@ -2,7 +2,7 @@ import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { playersCard } from "../../players.js";
 import { createScores, scoreboard } from "../../scoring.js";
 import { createDeck } from "../../deck.js";
-import { buzz } from "../../sound.js";
+import { buzz, vibrate } from "../../sound.js";
 import { teamBuilder } from "../../teams.js";
 import { openEditor } from "../../content.js";
 import { contentSource } from "../../game-kit.js";
@@ -435,11 +435,15 @@ export function render(container, { game }) {
         if (audioEl && audioEl.pause) audioEl.pause();
       }
 
+      let feltFirstBuzz = false;
       api.on("progress", (done) => {
         order = done;
         refreshOrder();
         refreshJudge();
-        if (!api.isHost() && order.length && !decided) info.textContent = `🔔 ${nameOf(order[0])} a buzzé en premier !`;
+        if (order.length && !decided) {
+          if (!api.isHost()) info.textContent = `🔔 ${nameOf(order[0])} a buzzé en premier !`;
+          if (!feltFirstBuzz) { feltFirstBuzz = true; if (order[0] !== api.me) vibrate(40); }
+        }
       });
       api.on("state", (s) => {
         if (s.phase === "rejected") {

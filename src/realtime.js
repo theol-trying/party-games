@@ -31,6 +31,8 @@
 import { el, showPhase, announce } from "./ui.js";
 import { getData, setData } from "./store.js";
 import { currentRoom, setRoom, normalizeCode } from "./room.js";
+import { pop, roundCue, jingle } from "./sound.js";
+import { qrCanvas } from "./qr.js";
 
 const DEV_KEY = "soiree.device";
 const NAME_KEY = "soiree.name";
@@ -181,9 +183,17 @@ export function liveSession(stage, {
     const action = isHost
       ? el("button.btn.btn--full", { text: `${startLabel || "Distribuer les rôles"} (${players.length})`, disabled: players.length < minPlayers, onClick: distribute })
       : el("p.screen__subtitle", { text: "L'hôte lancera la partie." });
+    // QR d'invitation : scanner = rejoindre la soirée (généré en local, zéro réseau).
+    let qr = null;
+    try {
+      qr = qrCanvas(`${location.origin}${location.pathname}#/r/${currentRoom()}`, { scale: 3 });
+      qr.style.cssText = "display:block;margin:0 auto 10px;border-radius:10px;max-width:140px";
+      qr.setAttribute("aria-label", "QR code d'invitation à la soirée");
+    } catch {}
     showPhase(stage, el("div.card.center", {}, [
       el("h3", { text: title }),
       el("p.screen__subtitle", { text: `Code soirée : ${currentRoom()}`, style: "margin:4px 0 8px" }),
+      qr,
       el("button.chip", { text: "🔗 Partager le lien", onClick: share, style: "margin-bottom:10px" }),
       list,
       extra,
@@ -249,7 +259,10 @@ export function liveSession(stage, {
 
   /* ========================= ÉVÉNEMENTS RÉSEAU ========================= */
 
+  let lastCount = 0;
   function onLobby(list, hostId) {
+    if (view === "lobby" && list.length > lastCount && lastCount > 0) pop(); // un joueur arrive
+    lastCount = list.length;
     players = list;
     host = hostId;
     if (view === "lobby" || view === "name") lobbyScreen();
@@ -260,6 +273,7 @@ export function liveSession(stage, {
       shownRound = n;
       shownReveal = false;
       listeners = { progress: [], state: [], timer: [] }; // nouvelle manche : abonnements frais
+      roundCue();
       roleScreen();
     }
   }
@@ -267,6 +281,7 @@ export function liveSession(stage, {
     if (shownReveal && n === shownRound) return;
     shownReveal = true;
     shownRound = n;
+    jingle();
     revealScreen({ roles, names, meta, inputs: inputs || {}, order: order || [] });
   }
 

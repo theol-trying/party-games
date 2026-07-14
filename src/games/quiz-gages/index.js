@@ -8,6 +8,7 @@ import { teamBuilder } from "../../teams.js";
 import { openEditor } from "../../content.js";
 import { contentSource } from "../../game-kit.js";
 import { liveSession, syncCountdown } from "../../realtime.js";
+import { tick, vibrate } from "../../sound.js";
 import { QUESTIONS } from "./data.js";
 
 // Points d'une bonne réponse : base + bonus de rapidité selon le rang d'arrivée.
@@ -173,8 +174,11 @@ export function render(container, { game }) {
     api.on("progress", (done) => { prog.textContent = `${done.length} / ${total} ont répondu`; });
     api.on("timer", (endsAt) =>
       syncCountdown(endsAt, {
-        onTick: (s) => (timerLine.textContent = s > 0 ? `⏱️ ${s}` : "⏰"),
-        onEnd: lockOut,
+        onTick: (s) => {
+          timerLine.textContent = s > 0 ? `⏱️ ${s}` : "⏰";
+          if (s <= 3 && s > 0 && !answered) tick(); // tension des dernières secondes
+        },
+        onEnd: () => { if (!answered) vibrate(150); lockOut(); },
       })
     );
 

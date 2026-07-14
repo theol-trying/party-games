@@ -4,6 +4,7 @@ import { createDeck } from "../../deck.js";
 import { createScores, scoreboard } from "../../scoring.js";
 import { getData, setData } from "../../store.js";
 import { liveSession, syncCountdown } from "../../realtime.js";
+import { tick, vibrate } from "../../sound.js";
 import { CATEGORIES_DEFAUT, LETTRES, DUREE_DEFAUT } from "./data.js";
 
 const GRACE_SECONDS = 12; // sprint final déclenché quand le 1er joueur crie « STOP »
@@ -164,8 +165,9 @@ export function render(container, { game }) {
           timeEl.textContent = fmt(s);
           bar.style.transform = `scaleX(${Math.max(0, s / barMax)})`;
           if (s <= 10) timeEl.classList.add("is-low");
+          if (s <= 3 && s > 0 && !submitted) tick(); // tension des dernières secondes
         },
-        onEnd: () => doSubmit(true),
+        onEnd: () => { if (!submitted) vibrate(150); doSubmit(true); },
       });
     });
 

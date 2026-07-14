@@ -45,3 +45,27 @@ export function buzz() {
   beep(760, 140, "square", 0.06);
   vibrate(60);
 }
+
+/** « Pop » discret : un joueur rejoint le salon. */
+export function pop() {
+  beep(520, 60, "sine", 0.04);
+}
+
+/** Tic de compte à rebours (3 dernières secondes). */
+export function tick() {
+  beep(980, 45, "square", 0.04);
+}
+
+/** Début de manche : signal bref + vibration. */
+export function roundCue() {
+  beep(660, 80, "triangle", 0.05);
+  vibrate(70);
+}
+
+/** Jingle de révélation (3 notes montantes) + vibration. */
+export function jingle() {
+  beep(523, 90);
+  setTimeout(() => beep(659, 90), 100);
+  setTimeout(() => beep(784, 150, "sine", 0.06), 200);
+  vibrate([50, 40, 90]);
+}
