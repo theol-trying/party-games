@@ -115,10 +115,10 @@ export function liveSession(stage, {
     on: (ev, cb) => { (listeners[ev] || (listeners[ev] = [])).push(cb); }, // progress | state | timer
   };
 
+  let upgradeTimer = null; // sonde de retour au temps réel (doit être initialisé AVANT le return)
+
   nameScreen();
   return stop;
-
-  let upgradeTimer = null;
 
   function stop() {
     stopped = true;
