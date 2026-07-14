@@ -8,7 +8,9 @@
                        les inputs sont diffusés en cours de manche via progress)
      { t:"input", data }                               (réponse du joueur, manche en cours)
      { t:"timer", seconds }                            (hôte : chrono synchronisé)
-     { t:"state", data }                               (hôte : update diffusé en cours de manche)
+     { t:"state", data }                               (hôte : update diffusé en cours de manche,
+                                                        mémorisé pour resynchroniser les reconnectés)
+     { t:"goto", game }                                (hôte : toute la soirée change de jeu)
      { t:"reveal" }                                    (hôte uniquement)
      { t:"leave" }
    Serveur → client :
@@ -62,12 +64,14 @@ function namesOf(r) {
 function sendRoundTo(r, id) {
   const p = r.players.get(id);
   if (!p || !r.round) return;
-  const { n, roles, names, meta, revealed, inputs, order, timerEndsAt, open } = r.round;
+  const { n, roles, names, meta, revealed, inputs, order, timerEndsAt, open, lastState } = r.round;
   p.ws.send(JSON.stringify({ t: "round", n, you: roles[id] ?? null, names, meta }));
   if (order.length)
     p.ws.send(JSON.stringify({ t: "progress", n, done: order, total: r.players.size, ...(open ? { inputs } : {}) }));
   if (timerEndsAt && timerEndsAt > Date.now())
     p.ws.send(JSON.stringify({ t: "timer", n, endsAt: timerEndsAt, now: Date.now() }));
+  if (lastState !== undefined && lastState !== null)
+    p.ws.send(JSON.stringify({ t: "state", n, data: lastState })); // reconnexion en pleine manche
   if (revealed) p.ws.send(JSON.stringify({ t: "revealed", n, roles, inputs, order, names, meta }));
 }
 
@@ -157,7 +161,14 @@ function handleSocket(ws) {
       broadcast(r, JSON.stringify({ t: "timer", n: r.round.n, endsAt: r.round.timerEndsAt, now: Date.now() }));
     } else if (msg.t === "state") {
       if (myId !== hostId(r) || !r.round) return;
+      r.round.lastState = msg.data ?? null; // mémorisé pour les reconnexions
       broadcast(r, JSON.stringify({ t: "state", n: r.round.n, data: msg.data ?? null }));
+    } else if (msg.t === "goto") {
+      // L'hôte emmène toute la soirée vers un autre jeu (pas besoin de manche en cours).
+      if (myId !== hostId(r)) return;
+      const game = String(msg.game || "");
+      if (!GAME_RE.test(game)) return;
+      broadcast(r, JSON.stringify({ t: "goto", game }));
     } else if (msg.t === "reveal") {
       if (myId !== hostId(r) || !r.round) return;
       r.round.revealed = true;

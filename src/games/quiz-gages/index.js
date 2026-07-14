@@ -7,7 +7,7 @@ import { levelSelector } from "../../levels.js";
 import { teamBuilder } from "../../teams.js";
 import { openEditor } from "../../content.js";
 import { contentSource } from "../../game-kit.js";
-import { liveSession, syncCountdown } from "../../realtime.js";
+import { liveSession, syncCountdown, peekAutoLive } from "../../realtime.js";
 import { tick, vibrate } from "../../sound.js";
 import { QUESTIONS } from "./data.js";
 
@@ -40,7 +40,7 @@ export function render(container, { game }) {
 
   const src = contentSource("quiz-gages", { builtIn: QUESTIONS, keyOf: (q) => q.q, toValue: toQuestion });
   let liveStop = null;
-  modeSelect();
+  if (peekAutoLive()) startLive(); else modeSelect(); // « suivre l'hôte » : salon direct
   src.reload();
 
   // Cleanup routeur : stoppe les timers/socket du mode multi si actif.

@@ -33,9 +33,12 @@ import { getData, setData } from "./store.js";
 import { currentRoom, setRoom, normalizeCode } from "./room.js";
 import { pop, roundCue, jingle } from "./sound.js";
 import { qrCanvas } from "./qr.js";
+import { GAMES } from "./registry.js";
 
 const DEV_KEY = "soiree.device";
 const NAME_KEY = "soiree.name";
+const AUTO_KEY = "soiree.autolive"; // « suivre l'hôte » : le prochain jeu ouvre direct son salon
+const JOINED_KEY = "soiree.joined"; // déjà connecté cette session : plus de re-saisie du prénom
 // Repli polling (identique à l'ancienne version, volontairement économe).
 const HEARTBEAT_MS = 8000;
 const POLL_MS = 4000;
@@ -56,6 +59,21 @@ export function deviceId() {
   return id;
 }
 const savedName = () => { try { return localStorage.getItem(NAME_KEY) || ""; } catch { return ""; } };
+
+/** Le jeu qui se charge doit-il ouvrir directement son salon multi ?
+    (posé par « Changer de jeu » avant la navigation ; lu par chaque jeu). */
+export function peekAutoLive() {
+  try { return sessionStorage.getItem(AUTO_KEY) === "1"; } catch { return false; }
+}
+function consumeAutoLive() {
+  const v = peekAutoLive();
+  try { sessionStorage.removeItem(AUTO_KEY); } catch {}
+  return v;
+}
+function requestAutoLive() {
+  try { sessionStorage.setItem(AUTO_KEY, "1"); } catch {}
+}
+const hasJoined = () => { try { return sessionStorage.getItem(JOINED_KEY) === "1"; } catch { return false; } };
 
 /** Compte à rebours synchronisé : endsAtClient vient de api.on("timer", …).
     onTick(secondesRestantes) à chaque seconde, onEnd() une seule fois à zéro.
@@ -117,9 +135,18 @@ export function liveSession(stage, {
     on: (ev, cb) => { (listeners[ev] || (listeners[ev] = [])).push(cb); }, // progress | state | timer
   };
 
-  let upgradeTimer = null; // sonde de retour au temps réel (doit être initialisé AVANT le return)
+  // ⚠️ TOUTE variable `let/const` de session doit être déclarée ICI, avant le
+  // `return stop` — plus bas, son initialisation ne s'exécuterait jamais (TDZ).
+  let upgradeTimer = null; // sonde de retour au temps réel
+  let lastCount = 0; // taille du salon au dernier rendu (son « pop » à l'arrivée)
 
-  nameScreen();
+  // Salon persistant : déjà connecté cette session (ou « suivre l'hôte ») → entrée directe.
+  if ((consumeAutoLive() || hasJoined()) && savedName()) {
+    myName = savedName();
+    connect();
+  } else {
+    nameScreen();
+  }
   return stop;
 
   function stop() {
@@ -155,6 +182,7 @@ export function liveSession(stage, {
         setRoom(code); // rejoint la soirée saisie (ou garde la sienne)
         try { localStorage.setItem(NAME_KEY, name); } catch {}
         myName = name;
+        if (net) { try { net.leave(); } catch {} net.destroy(); net = null; } // re-saisie depuis le salon
         connect();
       },
     });
@@ -198,8 +226,26 @@ export function liveSession(stage, {
       list,
       extra,
       el("div", { style: "margin-top:14px" }, [action]),
-      el("button.chip", { text: "🚪 Quitter le salon", style: "margin-top:12px", onClick: leave }),
+      el("div.row", { style: "justify-content:center;margin-top:12px" }, [
+        isHost ? el("button.chip", { text: "🎮 Changer de jeu", onClick: switchScreen }) : null,
+        el("button.chip", { text: "👤 Prénom / code", onClick: nameScreen }),
+        el("button.chip", { text: "🚪 Quitter", onClick: leave }),
+      ]),
       statusLine(),
+    ]));
+  }
+
+  // L'hôte choisit un autre jeu : toute la soirée y est emmenée (message goto).
+  function switchScreen() {
+    view = "switch";
+    const choices = GAMES.filter((g) => g.id !== gameId && g.id !== "blind-test"); // blind test : playlist DJ à préparer
+    showPhase(stage, el("div.card.center", {}, [
+      el("h3", { text: "🎮 Changer de jeu" }),
+      el("p.screen__subtitle", { text: "Tous les téléphones du salon suivront automatiquement.", style: "margin:6px 0 12px" }),
+      el("div.stack", {}, choices.map((g) =>
+        el("button.btn.btn--ghost.btn--full", { text: `${g.emoji ? g.emoji + " " : ""}${g.title}`, style: "margin-top:8px", onClick: () => net && net.goto(g.id) })
+      )),
+      el("button.chip", { text: "← Retour au salon", style: "margin-top:14px", onClick: lobbyScreen }),
     ]));
   }
 
@@ -259,7 +305,6 @@ export function liveSession(stage, {
 
   /* ========================= ÉVÉNEMENTS RÉSEAU ========================= */
 
-  let lastCount = 0;
   function onLobby(list, hostId) {
     if (view === "lobby" && list.length > lastCount && lastCount > 0) pop(); // un joueur arrive
     lastCount = list.length;
@@ -284,11 +329,20 @@ export function liveSession(stage, {
     jingle();
     revealScreen({ roles, names, meta, inputs: inputs || {}, order: order || [] });
   }
+  // L'hôte a choisi un autre jeu : on suit (le jeu cible ouvrira direct son salon).
+  function onGoto(game) {
+    if (stopped || !game || game === gameId) return;
+    requestAutoLive();
+    stop();
+    announce("Changement de jeu !");
+    location.hash = "#/jeu/" + game;
+  }
 
   /* ============================ TRANSPORTS ============================= */
 
   function connect() {
     // WebSocket d'abord ; en cas d'échec → repli polling + retour auto au temps réel.
+    try { sessionStorage.setItem(JOINED_KEY, "1"); } catch {} // salon persistant inter-jeux
     status = "🔌 connexion au serveur…";
     net = wsTransport({ onFail: fallbackToPoll });
     lobbyScreen();
@@ -366,6 +420,7 @@ export function liveSession(stage, {
           if (round && m.n === round.n) emit("timer", Date.now() + (m.endsAt - m.now));
         }
         else if (m.t === "state") { if (round && m.n === round.n) emit("state", m.data ?? null); }
+        else if (m.t === "goto") onGoto(m.game);
         else if (m.t === "revealed") onRevealed(m.n, m.roles || {}, m.names || {}, m.meta ?? null, m.inputs, m.order);
       };
       sock.onclose = () => {
@@ -389,6 +444,7 @@ export function liveSession(stage, {
       input(data) { sendJson({ t: "input", data }); },
       timer(seconds) { sendJson({ t: "timer", seconds }); },
       state(data) { sendJson({ t: "state", data }); },
+      goto(game) { sendJson({ t: "goto", game }); },
       reveal() { sendJson({ t: "reveal" }); },
       leave() { sendJson({ t: "leave" }); },
       destroy() {
@@ -420,12 +476,18 @@ export function liveSession(stage, {
     let seenOrder = 0;
     let seenTimer = 0;
     let seenState = "";
+    let seenGoto; // undefined = pas encore lu (ignore une valeur périmée d'une partie passée)
 
     async function poll() {
       if (destroyed || stopped) return;
       const live = await getData(LIVE, null);
+      // Garde goto AVANT le retour anticipé : une clé absente compte comme
+      // initialisation (sinon le premier goto légitime serait avalé).
+      const g = (live && live.gotoGame) || null;
+      if (seenGoto === undefined) seenGoto = g;
+      else if (g && g !== seenGoto) { seenGoto = g; return onGoto(g); }
       if (!live) return;
-      if (live.round !== shownRound) {
+      if (typeof live.round === "number" && live.round !== shownRound) {
         seenOrder = 0; seenTimer = 0; seenState = "";
         onRound(live.round, (live.roles || {})[me] ?? null, live.names || {}, live.meta ?? null);
       }
@@ -486,6 +548,13 @@ export function liveSession(stage, {
       async state(data) {
         const live = (await getData(LIVE, null)) || {};
         live.state = data ?? null;
+        await setData(LIVE, live);
+        poll();
+      },
+      async goto(game) {
+        const live = (await getData(LIVE, null)) || {};
+        live.gotoGame = game;
+        live.gotoTs = Date.now();
         await setData(LIVE, live);
         poll();
       },

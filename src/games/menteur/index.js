@@ -3,7 +3,7 @@ import { createDeck } from "../../deck.js";
 import { playersCard } from "../../players.js";
 import { openEditor } from "../../content.js";
 import { passThePhone, contentSource } from "../../game-kit.js";
-import { liveSession } from "../../realtime.js";
+import { liveSession, peekAutoLive } from "../../realtime.js";
 import { MISSIONS } from "./data.js";
 
 const SCHEMA = {
@@ -20,7 +20,7 @@ export function render(container, { game }) {
   const stage = el("div");
   container.append(stage);
 
-  modeSelect();
+  if (peekAutoLive()) startLive(); else modeSelect(); // « suivre l'hôte » : salon direct
   reload();
 
   // Cleanup appelé par le routeur : stoppe les timers du mode multi si actif.

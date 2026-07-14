@@ -2,7 +2,7 @@ import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { openEditor } from "../../content.js";
 import { contentSource } from "../../game-kit.js";
-import { liveSession } from "../../realtime.js";
+import { liveSession, peekAutoLive } from "../../realtime.js";
 import { DILEMMES } from "./data.js";
 
 const SCHEMA = {
@@ -175,7 +175,7 @@ export function render(container, { game }) {
     });
   }
 
-  modeSelect();
+  if (peekAutoLive()) startLive(); else modeSelect(); // « suivre l'hôte » : salon direct
 
   // Cleanup routeur : stoppe le salon multi si actif.
   return () => { if (liveStop) liveStop(); };

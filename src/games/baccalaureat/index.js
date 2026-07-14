@@ -3,7 +3,7 @@ import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
 import { createScores, scoreboard } from "../../scoring.js";
 import { getData, setData } from "../../store.js";
-import { liveSession, syncCountdown } from "../../realtime.js";
+import { liveSession, syncCountdown, peekAutoLive } from "../../realtime.js";
 import { tick, vibrate } from "../../sound.js";
 import { CATEGORIES_DEFAUT, LETTRES, DUREE_DEFAUT } from "./data.js";
 
@@ -20,10 +20,10 @@ export function render(container, { game }) {
   const stage = el("div");
   container.append(stage);
 
-  setup();
-  // Catégories personnalisées mémorisées par soirée.
+  if (peekAutoLive()) startLive(); else setup(); // « suivre l'hôte » : salon direct
+  // Catégories personnalisées mémorisées par soirée (sans écraser un salon en cours).
   getData("bac-categories", null).then((saved) => {
-    if (Array.isArray(saved) && saved.length) { categories = saved; setup(); }
+    if (Array.isArray(saved) && saved.length) { categories = saved; if (!liveStop) setup(); }
   });
 
   // Nettoyage appelé par le routeur quand on quitte le jeu : stoppe chrono + salon.

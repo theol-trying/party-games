@@ -1,7 +1,7 @@
 import { el, screenHead, announce, showPhase, shuffle, pick } from "../../ui.js";
 import { openEditor } from "../../content.js";
 import { contentSource } from "../../game-kit.js";
-import { liveSession } from "../../realtime.js";
+import { liveSession, peekAutoLive } from "../../realtime.js";
 import { AMORCES, OUVERTURES, CLOTURES } from "./data.js";
 
 const SCHEMA = {
@@ -20,7 +20,7 @@ export function render(container, { game }) {
   const stage = el("div");
   container.append(stage);
 
-  setup();
+  if (peekAutoLive()) startLive(); else setup(); // « suivre l'hôte » : salon direct
   src.reload();
 
   const amorces = () => src.cards();

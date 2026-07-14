@@ -2,7 +2,7 @@ import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { levelSelector } from "../../levels.js";
 import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
-import { liveSession } from "../../realtime.js";
+import { liveSession, peekAutoLive } from "../../realtime.js";
 import { PHRASES } from "./data.js";
 
 const LEVEL_LABEL = { soft: "Soft", soiree: "Soirée", x18: "18+" };
@@ -26,7 +26,7 @@ export function render(container, { game }) {
   container.append(stage);
   let liveStop = null;
 
-  modeSelect();
+  if (peekAutoLive()) startLive(); else modeSelect(); // « suivre l'hôte » : salon direct
   reload();
 
   // Cleanup routeur : stoppe le salon multi si actif (les déclarations suivantes sont hissées).
