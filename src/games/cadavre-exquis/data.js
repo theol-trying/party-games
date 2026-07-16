@@ -131,6 +131,82 @@ export const AMORCES = [
   "L'histoire aurait pu s'arrêter là, mais",
 ];
 
+/* Thèmes d'histoire : consigne d'écriture + ouvertures/clôtures dédiées.
+   Les connecteurs de milieu (AMORCES) restent communs à tous les thèmes. */
+export const THEMES = [
+  { id: "libre", label: "🎲 Libre" },
+  {
+    id: "horreur", label: "👻 Horreur",
+    consigne: "Ambiance frissons : nuit, craquements, ombres, cave humide…",
+    ouvertures: [
+      "La nuit où le vent s'est tu d'un coup,",
+      "Personne ne retournait jamais dans la maison du 13, et pourtant",
+      "Le miroir de l'entrée renvoyait un reflet de trop quand",
+    ],
+    clotures: [
+      "On n'a jamais retrouvé que ses chaussures, et encore,",
+      "Depuis, chaque nuit à 3h33 précises,",
+      "La police a classé l'affaire, mais les voisins jurent que",
+    ],
+  },
+  {
+    id: "romance", label: "💘 Romance",
+    consigne: "Cœurs qui battent, regards appuyés, quiproquos amoureux…",
+    ouvertures: [
+      "Leurs mains se sont frôlées au rayon surgelés quand",
+      "Le mariage devait être parfait, jusqu'au moment où",
+      "Trois ans qu'ils se croisaient dans l'ascenseur sans oser, mais ce matin-là",
+    ],
+    clotures: [
+      "Et c'est ainsi qu'ils s'aimèrent, malgré",
+      "Le faire-part précisait simplement que",
+      "On raconte qu'ils se disputent encore pour savoir qui a embrassé l'autre en premier, car",
+    ],
+  },
+  {
+    id: "bureau", label: "💼 Bureau",
+    consigne: "Open space, réunions absurdes, machine à café, mails « urgents »…",
+    ouvertures: [
+      "La réunion de 9h aurait dû durer quinze minutes, mais",
+      "Le stagiaire cliqua sur « Répondre à tous » et",
+      "Le jour de l'audit, la photocopieuse choisit de",
+    ],
+    clotures: [
+      "Le compte-rendu officiel mentionne seulement que",
+      "Depuis, la machine à café est sous surveillance, parce que",
+      "Les RH ont créé une nouvelle règle spécialement pour que",
+    ],
+  },
+  {
+    id: "sf", label: "🚀 Science-fiction",
+    consigne: "Vaisseaux, robots, planètes étranges, paradoxes temporels…",
+    ouvertures: [
+      "L'an 3042 commença comme les autres, jusqu'à ce que le vaisseau",
+      "Le robot domestique afficha une émotion non répertoriée quand",
+      "À l'ouverture du portail temporel,",
+    ],
+    clotures: [
+      "L'humanité décida d'un commun accord que",
+      "Le rapport intergalactique conclut sobrement que",
+      "Et c'est pour ça que, depuis, les robots ont interdiction de",
+    ],
+  },
+  {
+    id: "polar", label: "🕵️ Polar",
+    consigne: "Enquête, suspects, indices douteux, imperméable et pluie…",
+    ouvertures: [
+      "Le corps du règlement intérieur avait disparu quand l'inspecteur",
+      "Il pleuvait sur la ville, comme toujours, quand le téléphone",
+      "Trois suspects, deux alibis, un seul cendrier plein :",
+    ],
+    clotures: [
+      "Le coupable était donc, depuis le début,",
+      "L'inspecteur ralluma une cigarette en concluant que",
+      "L'affaire fut close, même si personne n'expliqua jamais",
+    ],
+  },
+];
+
 export const CLOTURES = [
   "Et pour finir,",
   "Et c'est ainsi que",

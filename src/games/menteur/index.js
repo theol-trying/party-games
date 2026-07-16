@@ -55,17 +55,35 @@ export function render(container, { game }) {
         return { roles };
       },
       renderMine: (mine, { api }) => {
-        // Mission privée + accusation secrète (optionnelle) avant la révélation.
-        let accused = false;
+        // Mission privée + mission bonus risquée + accusation secrète.
+        let myVote = null;
+        let myBonus = null;
         const status = el("p.screen__subtitle", { text: "", style: "margin-top:8px" });
+        const bonusBox = el("div");
+        const bonusBtn = el("button.chip", {
+          text: "🔥 Mission bonus (risqué : grillé = double)",
+          style: "margin-top:10px",
+          onClick: () => {
+            if (myBonus) return;
+            let m = deck.next();
+            if (m == null) { deck.reset(); m = deck.next(); }
+            myBonus = m;
+            api.submit({ vote: myVote || undefined, bonus: myBonus });
+            bonusBtn.style.display = "none";
+            bonusBox.replaceChildren(
+              el("div.mt-mission", { text: myBonus }),
+              el("p.screen__subtitle", { text: "Réussis les DEUX : distribue 2 gorgées. Grillé : tu bois double." })
+            );
+          },
+        });
         const btns = api.players().filter((p) => p.id !== api.me).map((p) =>
           el("button.btn.btn--ghost.btn--full", {
             text: p.name,
             style: "margin-top:8px",
             onClick: (e) => {
-              if (accused) return;
-              accused = true;
-              api.submit({ vote: p.id });
+              if (myVote) return;
+              myVote = p.id;
+              api.submit({ vote: p.id, bonus: myBonus || undefined });
               btns.forEach((b) => (b.disabled = true));
               e.currentTarget.style.borderColor = "var(--accent)";
               status.textContent = "✅ Accusation enregistrée.";
@@ -73,14 +91,16 @@ export function render(container, { game }) {
           })
         );
         api.on("progress", (done, total) => {
-          if (accused) status.textContent = `✅ Accusé · ${done.length} / ${total} ont accusé`;
+          if (myVote) status.textContent = `✅ Accusé · ${done.length} / ${total} ont accusé`;
         });
         return [
           el("p.screen__subtitle", { text: "Ta mission :" }),
           el("div.mt-mission", { text: mine.mission }),
           el("p.screen__subtitle", { text: "Accomplis-la sans te faire griller." }),
+          bonusBtn,
+          bonusBox,
           el("h3", { text: "🕵️ Qui accuses-tu ?", style: "margin-top:18px" }),
-          el("p.screen__subtitle", { text: "Vote secret : qui s'est fait griller selon toi ?" }),
+          el("p.screen__subtitle", { text: "Vote secret : qui s'est fait griller selon toi ? ⚠️ Accuser à tort se paie…" }),
           el("div.stack", {}, btns),
           status,
         ];
@@ -94,20 +114,56 @@ export function render(container, { game }) {
         Object.values(inputs).forEach((d) => { if (d && d.vote in tally) tally[d.vote]++; });
         const max = Math.max(0, ...Object.values(tally));
         const grilled = ids.filter((id) => max > 0 && tally[id] === max);
-        return el("div", {}, [
-          el("h3.center", { text: "Les missions", style: "margin-bottom:10px" }),
-          el("div.stack", {},
-            Object.keys(live.roles).map((id) =>
-              el("div.mt-reveal-row", {}, [
-                el("strong", { text: (names[id] || "?") + (id === api.me ? " (toi)" : "") }),
-                el("span", { text: live.roles[id].mission + (tally[id] ? ` · 🕵️ ${tally[id]} accusation${tally[id] > 1 ? "s" : ""}` : "") }),
-              ])
-            )
-          ),
-          grilled.length
-            ? el("p", { text: `🔥 Le plus grillé : ${grilled.map((id) => names[id]).join(" & ")} → il boit !`, style: "font-weight:700;margin-top:12px" })
-            : null,
-        ]);
+        const accusers = ids.filter((id) => inputs[id] && grilled.includes(inputs[id].vote));
+        let verdict = null; // 'grille' | 'infonde' — décidé par l'hôte après débat
+        const wrap = el("div");
+
+        function render() {
+          const bits = [
+            el("h3.center", { text: "Les missions", style: "margin-bottom:10px" }),
+            el("div.stack", {},
+              Object.keys(live.roles).map((id) =>
+                el("div.mt-reveal-row", {}, [
+                  el("strong", { text: (names[id] || "?") + (id === api.me ? " (toi)" : "") }),
+                  el("span", { text: live.roles[id].mission
+                    + (inputs[id] && inputs[id].bonus ? ` · 🔥 bonus : ${inputs[id].bonus}` : "")
+                    + (tally[id] ? ` · 🕵️ ${tally[id]} accusation${tally[id] > 1 ? "s" : ""}` : "") }),
+                ])
+              )
+            ),
+          ];
+          if (grilled.length) {
+            const gNames = grilled.map((id) => names[id]).join(" & ");
+            bits.push(el("p", { text: `🔥 Le plus accusé : ${gNames}`, style: "font-weight:700;margin-top:12px" }));
+            // ⚖️ Double tranchant : l'hôte tranche après l'aveu / le débat.
+            if (!verdict && api.isHost()) {
+              bits.push(el("p.screen__subtitle", { text: "L'accusé avoue-t-il s'être fait griller ?" }));
+              bits.push(el("div.row", { style: "justify-content:center;margin-top:8px" }, [
+                el("button.btn", { text: "✅ Grillé confirmé", onClick: () => api.sendState({ menteurVerdict: "grille" }) }),
+                el("button.btn.btn--ghost", { text: "❌ Accusation infondée", onClick: () => api.sendState({ menteurVerdict: "infonde" }) }),
+              ]));
+            } else if (!verdict) {
+              bits.push(el("p.screen__subtitle", { text: "L'hôte va trancher…" }));
+            } else if (verdict === "grille") {
+              const hasBonus = grilled.some((id) => inputs[id] && inputs[id].bonus);
+              bits.push(el("p", { text: `🍺 ${gNames} boit${hasBonus ? " DOUBLE (mission bonus) 🔥" : ""} !`, style: "font-weight:800;margin-top:8px" }));
+            } else {
+              bits.push(el("p", {
+                text: accusers.length
+                  ? `⚖️ Accusation infondée : ${accusers.map((id) => names[id]).join(", ")} boi${accusers.length > 1 ? "vent" : "t"} !`
+                  : "⚖️ Accusation infondée… mais personne à punir 🤷",
+                style: "font-weight:800;margin-top:8px",
+              }));
+            }
+          }
+          wrap.replaceChildren(...bits);
+        }
+
+        api.on("state", (s) => {
+          if (s && s.menteurVerdict) { verdict = s.menteurVerdict; render(); }
+        });
+        render();
+        return wrap;
       },
     });
   }
