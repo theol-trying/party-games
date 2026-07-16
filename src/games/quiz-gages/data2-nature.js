@@ -1,7 +1,7 @@
-/* Quiz bank NATURE - correct = 0-based index. */
+/* Quiz bank NATURE - correct = 0-based index. Fact-checked. */
 export const Q_NATURE = [
   { q: "Quel est l'animal terrestre le plus rapide du monde ?", choices: ["Le lion", "Le guépard", "L'antilope", "Le lévrier"], correct: 1 },
-  { q: "Quel est le plus grand animal ayant jamais existé sur Terre ?", choices: ["Le baleine bleue", "Le diplodocus", "Le cachalot", "L'éléphant de savane"], correct: 0 },
+  { q: "Quel est le plus grand animal ayant jamais existé sur Terre ?", choices: ["La baleine bleue", "Le diplodocus", "Le cachalot", "L'éléphant de savane"], correct: 0 },
   { q: "Combien de cœurs possède une pieuvre ?", choices: ["Un", "Deux", "Trois", "Quatre"], correct: 2 },
   { q: "Quel oiseau est capable de voler en marche arrière ?", choices: ["Le martinet", "Le colibri", "L'hirondelle", "Le rouge-gorge"], correct: 1 },
   { q: "Quel est le plus grand mammifère terrestre actuel ?", choices: ["Le rhinocéros", "L'hippopotame", "L'éléphant d'Afrique", "La girafe"], correct: 2 },
@@ -25,7 +25,6 @@ export const Q_NATURE = [
   { q: "Quel est le plus grand désert chaud du monde ?", choices: ["Le désert de Gobi", "Le Sahara", "Le désert d'Arabie", "Le Kalahari"], correct: 1 },
   { q: "Quel animal change de couleur pour se camoufler ?", choices: ["Le caméléon", "Le gecko", "L'iguane", "Le varan"], correct: 0 },
   { q: "Quel est le plus grand félin du monde ?", choices: ["Le lion", "Le tigre", "Le jaguar", "Le léopard"], correct: 1 },
-  { q: "Combien de pattes possède un mille-pattes de l'espèce la plus commune ?", choices: ["Toujours mille", "Un nombre variable selon l'espèce", "Exactement cent", "Exactement cinquante"], correct: 1 },
   { q: "Quel oiseau est le plus grand du monde ?", choices: ["Le condor", "L'aigle royal", "L'autruche", "L'émeu"], correct: 2 },
   { q: "Quelle est la plante à la croissance la plus rapide du monde ?", choices: ["Le bambou", "Le nénuphar", "Le lierre", "Le liseron"], correct: 0 },
   { q: "Quel dinosaure carnivore est célèbre pour ses petits bras ?", choices: ["Le vélociraptor", "Le tyrannosaure", "L'allosaure", "Le spinosaure"], correct: 1 },
@@ -67,10 +66,8 @@ export const Q_NATURE = [
   { q: "Quel animal possède une trompe préhensile ?", choices: ["Le tapir", "L'éléphant", "Le fourmilier", "Le rhinocéros"], correct: 1 },
   { q: "Quel arbre produit les glands ?", choices: ["Le hêtre", "Le chêne", "Le châtaignier", "Le noyer"], correct: 1 },
   { q: "Quelle est la principale composante de l'atmosphère terrestre ?", choices: ["L'oxygène", "L'azote", "Le dioxyde de carbone", "L'argon"], correct: 1 },
-  { q: "Quel animal est le symbole de la lenteur ?", choices: ["La tortue", "Le paresseux", "L'escargot", "Le koala"], correct: 1 },
   { q: "Quel est le plus grand rongeur du monde ?", choices: ["Le castor", "Le capybara", "Le ragondin", "Le porc-épic"], correct: 1 },
   { q: "Quelle est la structure qui donne leur couleur verte aux feuilles ?", choices: ["La cellulose", "La chlorophylle", "La sève", "Le xylème"], correct: 1 },
-  { q: "Quel animal peut fermer ses narines pour rester sous l'eau très longtemps ?", choices: ["Le castor", "L'hippopotame", "La loutre", "Le phoque"], correct: 3 },
   { q: "Quel dinosaure herbivore portait des plaques osseuses sur le dos et des pointes à la queue ?", choices: ["Le tricératops", "Le stégosaure", "L'ankylosaure", "Le brachiosaure"], correct: 1 },
   { q: "Quel est le plus grand océan par superficie ?", choices: ["L'Atlantique", "Le Pacifique", "L'Indien", "L'Arctique"], correct: 1 },
   { q: "Quel animal possède une langue plus longue que son corps ?", choices: ["Le fourmilier", "Le caméléon", "Le tamandua", "La grenouille"], correct: 1 },
@@ -78,9 +75,7 @@ export const Q_NATURE = [
   { q: "Quel phénomène désigne le cycle de l'eau dans la nature ?", choices: ["La condensation seule", "Le cycle hydrologique", "L'érosion", "La sédimentation"], correct: 1 },
   { q: "Quel animal a la gestation la plus longue parmi les mammifères ?", choices: ["La baleine bleue", "L'éléphant", "Le rhinocéros", "La girafe"], correct: 1 },
   { q: "Quel oiseau est célèbre pour imiter les sons et les voix ?", choices: ["Le perroquet", "Le corbeau", "Le merle", "Le rossignol"], correct: 0 },
-  { q: "Quelle est la plante la plus haute du monde par sa taille adulte ?", choices: ["Le bambou géant", "L'eucalyptus régnant", "Le palmier", "Le peuplier"], correct: 1 },
   { q: "Quel type de nuage annonce généralement les orages ?", choices: ["Le cirrus", "Le cumulonimbus", "Le stratus", "L'altocumulus"], correct: 1 },
-  { q: "Quel animal possède le plus grand nombre de dents ?", choices: ["Le requin", "Le crocodile", "La limace", "L'escargot"], correct: 3 },
   { q: "Quel est l'animal le plus grand du monde à vivre sur la terre ferme durant la préhistoire, un dinosaure sauropode ?", choices: ["Le tyrannosaure", "L'argentinosaure", "Le vélociraptor", "Le ptéranodon"], correct: 1 },
   { q: "Quelle est la fonction de la sève brute chez une plante ?", choices: ["Transporter les sucres", "Transporter l'eau et les minéraux des racines aux feuilles", "Fabriquer l'oxygène", "Protéger contre le froid"], correct: 1 },
   { q: "Quel animal hiberne durant l'hiver en réduisant fortement son métabolisme ?", choices: ["Le renard", "La marmotte", "Le cerf", "Le lièvre"], correct: 1 },
