@@ -145,8 +145,11 @@ export function render(container, { game }) {
     /* ----- Écran de partie (état piloté par les messages state/progress) ----- */
     function liveGame(mine, api) {
       let cur = null; // dernier état reçu
-      let inputsCache = {}; // votes visibles (mode open)
+      let inputsCache = {}; // votes + indices visibles (mode open)
       let myVoteK = 0; // manche de vote où j'ai déjà voté
+      let myVote = null; // ma dernière cible de vote
+      let myClue = ""; // mon indice écrit courant
+      const dead = new Set(); // éliminés connus côté client
       const nameOf = (id) => (api.players().find((p) => p.id === id) || {}).name || "?";
 
       const myCard =
@@ -161,6 +164,37 @@ export function render(container, { game }) {
               el("p.screen__subtitle", { text: "Décris-le sans le dire. Démasquez l'intrus !" }),
             ]);
       const phaseArea = el("div", { style: "margin-top:16px" });
+
+      // Indices ÉCRITS (anti-triche du ton de voix) : zone persistante, hors
+      // phaseArea pour que l'input survive aux re-rendus de phase.
+      const clueInput = el("input.input", { placeholder: "Ton indice (un mot)", maxlength: "24" });
+      const clueList = el("div.stack", { style: "margin-top:8px" });
+      const clueSend = el("button.chip", {
+        text: "📝 Publier",
+        onClick: () => {
+          const c = clueInput.value.trim();
+          if (!c || dead.has(api.me)) return;
+          myClue = c;
+          // Fusion avec mon éventuel vote : re-soumettre remplace la valeur, pas le rang.
+          api.submit({ k: myVoteK || undefined, vote: myVote || undefined, clue: myClue });
+          refreshClues();
+        },
+      });
+      clueInput.addEventListener("keydown", (e) => { if (e.key === "Enter") clueSend.click(); });
+      const clueBox = el("div", { style: "margin-top:14px" }, [
+        el("p.screen__subtitle", { text: "🗨️ Indices écrits — décris ton mot en UN mot :" }),
+        el("div.row", {}, [clueInput, clueSend]),
+        clueList,
+      ]);
+      function refreshClues() {
+        const rows = api.players()
+          .filter((p) => inputsCache[p.id] && inputsCache[p.id].clue)
+          .map((p) => el("div.uc-role-row", {}, [
+            el("span", { text: nameOf(p.id) + (dead.has(p.id) ? " ☠️" : "") }),
+            el("span", { text: "« " + inputsCache[p.id].clue + " »" }),
+          ]));
+        clueList.replaceChildren(...(rows.length ? rows : [el("p.screen__subtitle", { text: "Aucun indice publié pour l'instant.", style: "opacity:.7" })]));
+      }
 
       function tallyRows(tally) {
         if (!tally) return null;
@@ -187,7 +221,7 @@ export function render(container, { game }) {
             cur.alive.filter((id) => id !== api.me).forEach((id) =>
               bits.push(el("button.btn.btn--ghost.btn--full", {
                 text: nameOf(id), style: "margin-top:8px",
-                onClick: () => { myVoteK = cur.k; api.submit({ k: cur.k, vote: id }); renderPhase(); },
+                onClick: () => { myVoteK = cur.k; myVote = id; api.submit({ k: cur.k, vote: id, clue: myClue || undefined }); renderPhase(); },
               }))
             );
           }
@@ -214,15 +248,23 @@ export function render(container, { game }) {
         phaseArea.replaceChildren(...bits.filter(Boolean));
       }
 
-      api.on("state", (s) => { cur = s; renderPhase(); });
+      api.on("state", (s) => {
+        cur = s;
+        if ((s.phase === "result" || s.phase === "whiteGuess") && s.out) dead.add(s.out);
+        if (dead.has(api.me)) { clueInput.disabled = true; clueSend.disabled = true; }
+        refreshClues();
+        renderPhase();
+      });
       api.on("progress", (done, total, inputs) => {
         inputsCache = inputs || {};
+        refreshClues();
         if (cur && cur.phase === "vote") renderPhase();
         if (api.isHost()) hostResolve(api, cur, inputsCache);
       });
 
+      refreshClues();
       renderPhase();
-      return [myCard, phaseArea];
+      return [myCard, clueBox, phaseArea];
     }
   }
 

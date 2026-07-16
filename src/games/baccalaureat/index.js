@@ -201,6 +201,9 @@ export function render(container, { game }) {
   }
 
   // Correction + classement (calcul déterministe partagé par tous les clients).
+  // Contestation : l'hôte touche une réponse pour l'invalider (ou la revalider)
+  // après le débat de la table ; l'override est diffusé via state et TOUS les
+  // téléphones recalculent — aucune dérive possible.
   function liveScore(live, scores, { api }) {
     const cats = (live.meta && live.meta.categories) || [];
     const letter = live.meta && live.meta.letter;
@@ -209,57 +212,87 @@ export function render(container, { game }) {
     const names = live.names || {};
     const order = live.order || [];
     const ids = Object.keys(names);
-
-    const roundPts = {};
-    ids.forEach((id) => (roundPts[id] = 0));
-    const catResults = cats.map((cat) => {
-      const entries = ids.map((id) => {
-        const raw = (inputs[id] && inputs[id].answers && inputs[id].answers[cat]) || "";
-        return { id, raw, valid: startsWithLetter(raw, letter) };
-      });
-      const counts = {};
-      entries.filter((e) => e.valid).forEach((e) => (counts[norm(e.raw)] = (counts[norm(e.raw)] || 0) + 1));
-      entries.forEach((e) => {
-        e.pts = !e.valid ? 0 : counts[norm(e.raw)] === 1 ? 2 : 1;
-        roundPts[e.id] += e.pts;
-      });
-      return { cat, entries };
-    });
-    // Totaux recalculés depuis la base autoritative → aucune dérive entre appareils.
-    ids.forEach((id) => (scores[id] = (base[id] || 0) + roundPts[id]));
-    const ranking = ids
-      .map((id) => ({ id, name: names[id], total: scores[id], d: roundPts[id] }))
-      .sort((a, b) => b.total - a.total);
     const first = order[0];
 
-    return el("div", {}, [
-      el("h3", { text: "Résultats", style: "margin-bottom:4px" }),
-      el("p.screen__subtitle", { text: `Lettre : ${letter} · unique = 2 pts, partagée = 1 pt`, style: "margin-bottom:8px" }),
-      first ? el("p.screen__subtitle", { text: `⚡ ${names[first]} a fini en premier`, style: "margin-bottom:12px" }) : null,
-      el("div.stack", {},
-        catResults.map((cr) =>
-          el("div.bc-cat", {}, [
-            el("div.bc-field__label", { text: cr.cat }),
-            ...cr.entries.map((e) =>
-              el("div.bc-score-row" + (e.valid ? "" : ".is-invalid"), {}, [
-                el("span", { text: names[e.id] + (e.id === api.me ? " (toi)" : "") }),
-                el("span.bc-ans", { text: e.raw || "—" }),
-                el("span.bc-pts", { text: "+" + e.pts }),
-              ])
-            ),
-          ])
+    let overrides = new Set(); // "id|cat" invalidés par contestation
+    const wrap = el("div");
+
+    function render() {
+      const roundPts = {};
+      ids.forEach((id) => (roundPts[id] = 0));
+      const catResults = cats.map((cat) => {
+        const entries = ids.map((id) => {
+          const raw = (inputs[id] && inputs[id].answers && inputs[id].answers[cat]) || "";
+          const contested = overrides.has(id + "|" + cat);
+          return { id, raw, contested, valid: !contested && startsWithLetter(raw, letter) };
+        });
+        const counts = {};
+        entries.filter((e) => e.valid).forEach((e) => (counts[norm(e.raw)] = (counts[norm(e.raw)] || 0) + 1));
+        entries.forEach((e) => {
+          e.pts = !e.valid ? 0 : counts[norm(e.raw)] === 1 ? 2 : 1;
+          roundPts[e.id] += e.pts;
+        });
+        return { cat, entries };
+      });
+      // Totaux recalculés depuis la base autoritative → aucune dérive entre appareils.
+      ids.forEach((id) => (scores[id] = (base[id] || 0) + roundPts[id]));
+      const ranking = ids
+        .map((id) => ({ id, name: names[id], total: scores[id], d: roundPts[id] }))
+        .sort((a, b) => b.total - a.total);
+
+      wrap.replaceChildren(
+        el("h3", { text: "Résultats", style: "margin-bottom:4px" }),
+        el("p.screen__subtitle", { text: `Lettre : ${letter} · unique = 2 pts, partagée = 1 pt`, style: "margin-bottom:4px" }),
+        first ? el("p.screen__subtitle", { text: `⚡ ${names[first]} a fini en premier`, style: "margin-bottom:8px" }) : el("span"),
+        api.isHost()
+          ? el("p.screen__subtitle", { text: "⚖️ Contestation : touche une réponse pour l'invalider / la rétablir.", style: "margin-bottom:8px;opacity:.8" })
+          : el("span"),
+        el("div.stack", {},
+          catResults.map((cr) =>
+            el("div.bc-cat", {}, [
+              el("div.bc-field__label", { text: cr.cat }),
+              ...cr.entries.map((e) => {
+                const row = el("div.bc-score-row" + (e.valid ? "" : ".is-invalid"), {}, [
+                  el("span", { text: names[e.id] + (e.id === api.me ? " (toi)" : "") }),
+                  el("span.bc-ans", { text: (e.raw || "—") + (e.contested ? " ⚖️" : "") }),
+                  el("span.bc-pts", { text: "+" + e.pts }),
+                ]);
+                if (api.isHost() && e.raw) {
+                  row.style.cursor = "pointer";
+                  row.addEventListener("click", () => {
+                    const k = e.id + "|" + cr.cat;
+                    if (overrides.has(k)) overrides.delete(k); else overrides.add(k);
+                    render();
+                    api.sendState({ bacOverrides: [...overrides] });
+                  });
+                }
+                return row;
+              }),
+            ])
+          )
+        ),
+        el("h3", { text: "👑 Classement", style: "margin-top:16px;margin-bottom:8px" }),
+        el("div.stack", {},
+          ranking.map((r, i) =>
+            el("div.uc-role-row", {}, [
+              el("span", { text: `${i + 1}. ${r.name}${r.id === api.me ? " (toi)" : ""}` }),
+              el("span", { text: `${r.total} pts (+${r.d})` }),
+            ])
+          )
         )
-      ),
-      el("h3", { text: "👑 Classement", style: "margin-top:16px;margin-bottom:8px" }),
-      el("div.stack", {},
-        ranking.map((r, i) =>
-          el("div.uc-role-row", {}, [
-            el("span", { text: `${i + 1}. ${r.name}${r.id === api.me ? " (toi)" : ""}` }),
-            el("span", { text: `${r.total} pts (+${r.d})` }),
-          ])
-        )
-      ),
-    ]);
+      );
+    }
+
+    // Tout le monde suit les contestations de l'hôte.
+    api.on("state", (s) => {
+      if (s && Array.isArray(s.bacOverrides)) {
+        overrides = new Set(s.bacOverrides);
+        render();
+      }
+    });
+
+    render();
+    return wrap;
   }
 
   /* ---------- Mode classique (une manche, un remplisseur) ---------- */
