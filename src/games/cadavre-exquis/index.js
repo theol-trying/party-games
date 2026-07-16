@@ -183,7 +183,7 @@ export function render(container, { game }) {
       function renderStory() {
         const voteRow = el("div.row", { style: "justify-content:center;flex-wrap:wrap;margin-top:12px" });
         Object.keys(meta.order).filter((id) => id !== api.me).forEach((id) => {
-          const c = el("button.chip", {
+          const c = el("button.chip" + (myVote === id ? ".is-active" : ""), {
             text: `🏅 ${nameOf(id)}`,
             onClick: (e) => {
               if (myVote) return;
@@ -193,6 +193,7 @@ export function render(container, { game }) {
               e.currentTarget.classList.add("is-active");
             },
           });
+          if (myVote) c.disabled = true; // l'écran se re-rend à chaque vote reçu : conserver l'état
           voteRow.appendChild(c);
         });
         zone.replaceChildren(

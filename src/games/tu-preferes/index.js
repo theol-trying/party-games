@@ -223,7 +223,8 @@ export function render(container, { game }) {
               ])
             : null,
           el("p.screen__subtitle", {
-            text: `📊 Soirée : accord moyen ${agreePct}% · ${stats.unanimous} manche${stats.unanimous > 1 ? "s" : ""} unanime${stats.unanimous > 1 ? "s" : ""} sur ${stats.rounds}`,
+            // Cumul local à chaque téléphone : un retardataire compte depuis SON arrivée.
+            text: `📊 Depuis ton arrivée : accord moyen ${agreePct}% · ${stats.unanimous} manche${stats.unanimous > 1 ? "s" : ""} unanime${stats.unanimous > 1 ? "s" : ""} sur ${stats.rounds}`,
             style: "margin-top:12px",
           }),
         ]);
