@@ -1,6 +1,31 @@
+import { Q_GEO } from "./data2-geo.js";
+import { Q_HISTOIRE } from "./data2-histoire.js";
+import { Q_SCIENCES } from "./data2-sciences.js";
+import { Q_CULTURE } from "./data2-culture.js";
+import { Q_SPORT } from "./data2-sport.js";
+import { Q_NATURE } from "./data2-nature.js";
+import { Q_GASTRO } from "./data2-gastro.js";
+import { Q_CINEMA } from "./data2-cinema.js";
+import { Q_SERIES } from "./data2-series.js";
+import { Q_MUSIQUE } from "./data2-musique.js";
+import { Q_JEUXVIDEO } from "./data2-jeuxvideo.js";
+import { Q_BDMANGA } from "./data2-bdmanga.js";
+import { Q_TECHWEB } from "./data2-techweb.js";
+import { Q_MARQUES } from "./data2-marques.js";
+import { Q_FRANCE } from "./data2-france.js";
+import { Q_INSTITUTIONS } from "./data2-institutions.js";
+import { Q_ECONOMIE } from "./data2-economie.js";
+import { Q_RELIGIONS } from "./data2-religions.js";
+import { Q_SANTE } from "./data2-sante.js";
+import { Q_RECORDS } from "./data2-records.js";
+import { Q_INVENTIONS } from "./data2-inventions.js";
+import { Q_LANGUE } from "./data2-langue.js";
+import { Q_CITATIONS } from "./data2-citations.js";
+import { Q_INSOLITE } from "./data2-insolite.js";
+
 /* Quiz culture générale. correct = index de la bonne réponse (0-based).
    Banque rédigée à la main (90). Les gages sont centralisés dans src/gages.js. */
-export const QUESTIONS = [
+const BASE = [
   { q: "Quelle est la capitale de l'Australie ?", choices: ["Sydney", "Canberra", "Melbourne", "Perth"], correct: 1 },
   { q: "Combien de côtés a un hexagone ?", choices: ["5", "6", "7", "8"], correct: 1 },
   { q: "Qui a peint la Joconde ?", choices: ["Michel-Ange", "Raphaël", "Léonard de Vinci", "Botticelli"], correct: 2 },
@@ -199,3 +224,15 @@ export const QUESTIONS = [
   { q: "Combien de cœurs a, selon la culture populaire, un lombric (ver de terre) ?", choices: ["1", "5", "10", "20"], correct: 1 },
   { q: "Quel animal est le symbole de la sagesse dans de nombreuses cultures ?", choices: ["Le renard", "La chouette", "Le corbeau", "Le loup"], correct: 1 },
 ];
+
+/* Agregation de toutes les banques + deduplication par enonce (insensible casse/espaces). */
+const ALL_QUIZ = [].concat(BASE, Q_GEO, Q_HISTOIRE, Q_SCIENCES, Q_CULTURE, Q_SPORT, Q_NATURE, Q_GASTRO, Q_CINEMA, Q_SERIES, Q_MUSIQUE, Q_JEUXVIDEO, Q_BDMANGA, Q_TECHWEB, Q_MARQUES, Q_FRANCE, Q_INSTITUTIONS, Q_ECONOMIE, Q_RELIGIONS, Q_SANTE, Q_RECORDS, Q_INVENTIONS, Q_LANGUE, Q_CITATIONS, Q_INSOLITE);
+const _seen = new Set();
+export const QUESTIONS = ALL_QUIZ.filter((x) => {
+  const k = (x.q || "").trim().toLowerCase();
+  if (!x.q || !Array.isArray(x.choices) || x.choices.length !== 4) return false;
+  if (x.correct < 0 || x.correct > 3) return false;
+  if (_seen.has(k)) return false;
+  _seen.add(k);
+  return true;
+});
