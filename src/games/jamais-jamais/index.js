@@ -44,35 +44,53 @@ export function render(container, { game }) {
     );
   }
 
-  /* ====== Mode multi : chacun avoue en secret, révélation collective ====== */
+  /* ====== Mode multi : aveux secrets (classique) ou pièges écrits (grill) ====== */
   function startLive() {
     if (liveStop) liveStop();
     const liveDecks = {}; // un deck par niveau, construit à la demande
     const deckFor = (lv) => (liveDecks[lv] ||= createDeck(pool(lv)));
+    let liveMode = "classic"; // classique : phrase de la banque · grill : la table piège une cible
+    let grillTurn = -1; // rotation équitable de la cible du grill
 
     liveStop = liveSession(stage, {
       gameId: "jamais-jamais",
       title: "Je n'ai jamais — multi",
       minPlayers: 2,
-      startLabel: "Lancer la 1re phrase",
-      revealLabel: "Révéler les aveux",
-      newRoundLabel: "Phrase suivante →",
+      startLabel: "Lancer la manche",
+      revealLabel: "🔎 Révéler",
+      newRoundLabel: "Manche suivante →",
       onExit: modeSelect,
       lobbyExtra: () => {
         const ui = levelSelector({ initial: level, onChange: (v) => (level = v) });
+        const mkMode = (id, label) => {
+          const c = el("button.chip" + (liveMode === id ? ".is-active" : ""), { text: label });
+          c.addEventListener("click", () => { liveMode = id; [...c.parentNode.children].forEach((x) => x.classList.toggle("is-active", x === c)); });
+          return c;
+        };
         return el("div", { style: "margin:10px 0" }, [
+          el("p.screen__subtitle", { text: "Mode", style: "margin-bottom:8px" }),
+          el("div.row", { style: "justify-content:center;margin-bottom:10px" }, [
+            mkMode("classic", "🎲 Classique"),
+            mkMode("grill", "🔥 Grill (piégez une cible)"),
+          ]),
           el("p.screen__subtitle", { text: "Niveau", style: "margin-bottom:8px" }),
           ui.node,
         ]);
       },
       assign: (ps) => {
-        let p = deckFor(level).next();
-        if (p == null) { deckFor(level).reset(); p = deckFor(level).next(); }
         const roles = {};
         ps.forEach((pl) => (roles[pl.id] = true));
+        if (liveMode === "grill" && ps.length >= 3) {
+          grillTurn = (grillTurn + 1) % ps.length;
+          const target = ps[grillTurn];
+          return { roles, meta: { mode: "grill", target: target.id, targetName: target.name, level } };
+        }
+        let p = deckFor(level).next();
+        if (p == null) { deckFor(level).reset(); p = deckFor(level).next(); }
         return { roles, meta: { phrase: p || "…", level } };
       },
       renderMine: (mine, { api, meta }) => {
+        if (meta && meta.mode === "grill") return grillRound(api, meta);
         let done = false;
         const status = el("p.screen__subtitle", { text: "Réponds en secret 🤫", style: "margin-top:12px" });
         const bYes = el("button.btn.btn--full", { text: "🙋 Je l'ai fait", style: "margin-top:14px" });
@@ -97,6 +115,7 @@ export function render(container, { game }) {
         ];
       },
       renderReveal: (live, { api }) => {
+        if (live.meta && live.meta.mode === "grill") return grillReveal(live, api);
         const names = live.names || {};
         const inputs = live.inputs || {};
         const ids = Object.keys(names);
@@ -123,6 +142,60 @@ export function render(container, { game }) {
         ]);
       },
     });
+
+    // 🔥 Grill : chacun écrit en secret un « je n'ai jamais » pour piéger la cible.
+    function grillRound(api, meta) {
+      const isTarget = api.me === meta.target;
+      const others = api.players().filter((p) => p.id !== meta.target).length;
+      const prog = el("p.screen__subtitle", { text: `0 / ${others} pièges écrits`, style: "margin-top:10px" });
+      api.on("progress", (done) => { prog.textContent = `${done.length} / ${others} pièges écrits`; });
+      if (isTarget) {
+        return [
+          el("h3", { text: "🔥 C'est TOI qu'on grille !" }),
+          el("p", { text: "Les autres écrivent des « je n'ai jamais » sur mesure pour te faire boire. Prépare-toi…", style: "color:var(--text-dim);margin-top:10px" }),
+          prog,
+        ];
+      }
+      let sent = false;
+      const ta = el("input.input", { placeholder: `… (piège pour ${meta.targetName})`, maxlength: "120" });
+      const status = el("p.screen__subtitle", { text: "Ta phrase restera secrète jusqu'à la révélation 🤫", style: "margin-top:8px" });
+      const send = el("button.btn.btn--full", {
+        text: "😈 Envoyer mon piège",
+        style: "margin-top:10px",
+        onClick: () => {
+          const t = ta.value.trim();
+          if (!t || sent) return;
+          sent = true;
+          ta.disabled = true;
+          api.submit({ phrase: t });
+          status.textContent = "✅ Piège envoyé — en attente des autres…";
+        },
+      });
+      ta.addEventListener("keydown", (e) => { if (e.key === "Enter") send.click(); });
+      return [
+        el("h3", { text: `🔥 On grille ${meta.targetName} !` }),
+        el("p.screen__subtitle", { text: "Complète : « Je n'ai jamais… » — vise juste !", style: "margin:8px 0" }),
+        ta, send, status, prog,
+      ];
+    }
+
+    function grillReveal(live, api) {
+      const names = live.names || {};
+      const inputs = live.inputs || {};
+      const phrases = Object.keys(inputs)
+        .filter((id) => id !== live.meta.target && inputs[id] && inputs[id].phrase)
+        .map((id) => ({ author: names[id] || "?", phrase: inputs[id].phrase }));
+      return el("div", {}, [
+        el("h3", { text: `🔥 Le grill de ${live.meta.targetName}` }),
+        el("p.screen__subtitle", { text: `${live.meta.targetName} répond à voix haute à chaque piège : il/elle boit si c'est déjà arrivé !`, style: "margin:8px 0 12px" }),
+        el("div.stack", {}, phrases.length
+          ? phrases.map((p) => el("div.uc-role-row", {}, [
+              el("span", { text: "Je n'ai jamais… " + p.phrase }),
+              el("span", { text: "😈 " + p.author, style: "opacity:.6" }),
+            ]))
+          : [el("p.screen__subtitle", { text: "Personne n'a écrit de piège 😅" })]),
+      ]);
+    }
   }
 
   async function reload() {
