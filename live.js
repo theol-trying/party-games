@@ -11,6 +11,7 @@
      { t:"state", data }                               (hôte : update diffusé en cours de manche,
                                                         mémorisé pour resynchroniser les reconnectés)
      { t:"goto", game }                                (hôte : toute la soirée change de jeu)
+     { t:"kick", id }                                  (hôte : éjecte un joueur du salon)
      { t:"reveal" }                                    (hôte uniquement)
      { t:"leave" }
    Serveur → client :
@@ -20,6 +21,7 @@
      { t:"timer", n, endsAt, now }                    (horloge serveur pour compenser l'offset)
      { t:"state", n, data }
      { t:"revealed", n, roles, inputs, order, names, meta }
+     { t:"kicked" }                                   (à la cible d'un kick, avant fermeture)
      { t:"error", error }
 
    L'état vit en mémoire (une seule instance Render) ; les scores durables
@@ -169,6 +171,16 @@ function handleSocket(ws) {
       const game = String(msg.game || "");
       if (!GAME_RE.test(game)) return;
       broadcast(r, JSON.stringify({ t: "goto", game }));
+    } else if (msg.t === "kick") {
+      // L'hôte éjecte un joueur (fantôme, doublon…) : notifié puis déconnecté.
+      if (myId !== hostId(r)) return;
+      const target = String(msg.id || "");
+      if (target === myId) return;
+      const p = r.players.get(target);
+      if (!p) return;
+      p.ws.send(JSON.stringify({ t: "kicked" }));
+      p.ws.close();
+      removePlayer(key, target, null);
     } else if (msg.t === "reveal") {
       if (myId !== hostId(r) || !r.round) return;
       r.round.revealed = true;

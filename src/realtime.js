@@ -200,13 +200,17 @@ export function liveSession(stage, {
   function lobbyScreen() {
     if (stopped) return;
     view = "lobby";
+    const isHost = host === me;
     const list = players.length
       ? el("div.stack", {}, players.map((p) => el("div.sb-row", {}, [
           el("span", { text: p.name + (p.id === me ? " (toi)" : "") }),
-          el("span", { text: p.id === host ? "🎬 hôte" : "" }),
+          p.id === host
+            ? el("span", { text: "🎬 hôte" })
+            : isHost
+              ? el("button.chip", { text: "✕", "aria-label": `Retirer ${p.name} du salon`, onClick: () => net && net.kick(p.id) })
+              : el("span", { text: "" }),
         ])))
       : el("p.screen__subtitle", { text: "En attente de joueurs…" });
-    const isHost = host === me;
     const extra = isHost && lobbyExtra ? lobbyExtra(players) : null;
     const action = isHost
       ? el("button.btn.btn--full", { text: `${startLabel || "Distribuer les rôles"} (${players.length})`, disabled: players.length < minPlayers, onClick: distribute })
@@ -337,6 +341,17 @@ export function liveSession(stage, {
     announce("Changement de jeu !");
     location.hash = "#/jeu/" + game;
   }
+  // L'hôte nous a retirés du salon : arrêt propre + écran d'information.
+  function onKicked() {
+    if (stopped) return;
+    stop();
+    announce("Tu as été retiré du salon");
+    showPhase(stage, el("div.card.center", {}, [
+      el("h3", { text: "🚪 Retiré du salon" }),
+      el("p.screen__subtitle", { text: "L'hôte t'a retiré de la partie.", style: "margin:8px 0 14px" }),
+      el("button.btn.btn--full", { text: "OK", onClick: () => { onExit && onExit(); } }),
+    ]));
+  }
 
   /* ============================ TRANSPORTS ============================= */
 
@@ -421,6 +436,7 @@ export function liveSession(stage, {
         }
         else if (m.t === "state") { if (round && m.n === round.n) emit("state", m.data ?? null); }
         else if (m.t === "goto") onGoto(m.game);
+        else if (m.t === "kicked") onKicked();
         else if (m.t === "revealed") onRevealed(m.n, m.roles || {}, m.names || {}, m.meta ?? null, m.inputs, m.order);
       };
       sock.onclose = () => {
@@ -445,6 +461,7 @@ export function liveSession(stage, {
       timer(seconds) { sendJson({ t: "timer", seconds }); },
       state(data) { sendJson({ t: "state", data }); },
       goto(game) { sendJson({ t: "goto", game }); },
+      kick(id) { sendJson({ t: "kick", id }); },
       reveal() { sendJson({ t: "reveal" }); },
       leave() { sendJson({ t: "leave" }); },
       destroy() {
@@ -466,11 +483,19 @@ export function liveSession(stage, {
       if (destroyed || stopped) return;
       const now = Date.now();
       const l = (await getData(LOBBY, {})) || {};
-      for (const k of Object.keys(l)) if (now - ((l[k] && l[k].ts) || 0) > STALE_MS) delete l[k];
+      // Éjecté par l'hôte ? On s'arrête AVANT de se réinscrire.
+      const kick = l.__kick || {};
+      if (kick[me] && now - kick[me] < 60000) return onKicked();
+      for (const k of Object.keys(kick)) if (now - kick[k] > 60000) delete kick[k]; // amnistie
+      // Purge des joueurs muets (les clés techniques __ sont préservées).
+      for (const k of Object.keys(l)) {
+        if (k.startsWith("__")) continue;
+        if (now - ((l[k] && l[k].ts) || 0) > STALE_MS) delete l[k];
+      }
       l[me] = { name: myName, ts: now };
       await setData(LOBBY, l);
-      const list = Object.keys(l).sort().map((id) => ({ id, name: l[id].name }));
-      onLobby(list, Object.keys(l).sort()[0] || null);
+      const ids = Object.keys(l).filter((k) => !k.startsWith("__")).sort();
+      onLobby(ids.map((id) => ({ id, name: l[id].name })), ids[0] || null);
     }
 
     let seenOrder = 0;
@@ -557,6 +582,14 @@ export function liveSession(stage, {
         live.gotoTs = Date.now();
         await setData(LIVE, live);
         poll();
+      },
+      async kick(id) {
+        const l = (await getData(LOBBY, {})) || {};
+        delete l[id];
+        l.__kick = l.__kick || {};
+        l.__kick[id] = Date.now();
+        await setData(LOBBY, l);
+        beat();
       },
       async reveal() {
         const live = (await getData(LIVE, null)) || {};
