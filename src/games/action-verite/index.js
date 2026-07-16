@@ -3,6 +3,7 @@ import { createDeck } from "../../deck.js";
 import { levelSelector, LEVELS } from "../../levels.js";
 import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
 import { liveSession, peekAutoLive } from "../../realtime.js";
+import { pickGage } from "../../gages.js";
 import { VERITES, ACTIONS } from "./data.js";
 
 const LEVEL_LABEL = { soft: "Soft", soiree: "Soirée", x18: "18+" };
@@ -82,18 +83,37 @@ export function render(container, { game }) {
         const head = el("h3", { text: `🎯 Au tour de ${meta.targetName}${isTarget ? " (toi !)" : ""}` });
         const zone = el("div", { style: "margin-top:14px" });
 
-        function showCard(choice) {
+        function showCard(data) {
+          const choice = data.choice;
           const kind = choice === "verite" ? "🗣️ Vérité" : "🔥 Action";
           const card = choice === "verite" ? meta.v : meta.a;
-          zone.replaceChildren(
+          const bits = [
             el("div.av-tag", { text: kind }),
-            el("div.big-prompt.av-prompt", { text: card }),
-            el("p.screen__subtitle", {
+            el("div.big-prompt.av-prompt", { text: card, style: data.refused ? "text-decoration:line-through;opacity:.5" : "" }),
+          ];
+          if (data.refused) {
+            bits.push(el("p", { text: `🙅 ${meta.targetName} a refusé ! Gage à la place :`, style: "font-weight:700;margin-top:10px" }));
+            bits.push(el("div.big-prompt.av-prompt", { text: data.gage || "…" }));
+          } else {
+            bits.push(el("p.screen__subtitle", {
               text: isTarget ? "À toi de jouer ! 🎬" : `${meta.targetName} doit s'exécuter… soyez témoins !`,
               style: "margin-top:10px",
-            }),
-            api.isHost() ? el("p.screen__subtitle", { text: "« 🎯 Joueur suivant » pour continuer.", style: "margin-top:6px;opacity:.75" }) : null
-          );
+            }));
+            if (isTarget) {
+              // Refuser coûte un gage tiré au sort (au niveau de la manche).
+              bits.push(el("button.chip", {
+                text: "🙅 Je refuse → gage",
+                style: "margin-top:10px",
+                onClick: () => {
+                  const g = pickGage(meta.level);
+                  api.submit({ choice, refused: true, gage: g });
+                  showCard({ choice, refused: true, gage: g });
+                },
+              }));
+            }
+          }
+          if (api.isHost()) bits.push(el("p.screen__subtitle", { text: "« 🎯 Joueur suivant » pour continuer.", style: "margin-top:8px;opacity:.75" }));
+          zone.replaceChildren(...bits);
         }
 
         if (isTarget) {
@@ -104,7 +124,7 @@ export function render(container, { game }) {
             if (chosen) return;
             chosen = true;
             api.submit({ choice: c });
-            showCard(c);
+            showCard({ choice: c });
           };
           bV.addEventListener("click", () => choose("verite"));
           bA.addEventListener("click", () => choose("action"));
@@ -116,10 +136,10 @@ export function render(container, { game }) {
           zone.replaceChildren(el("p.screen__subtitle", { text: `${meta.targetName} choisit… 🥁` }));
         }
 
-        // Tout le monde voit la carte dès que le joueur désigné a choisi.
+        // Tout le monde voit la carte (et un éventuel refus) dès que le désigné agit.
         api.on("progress", (done, total, inputs) => {
-          const ch = inputs && inputs[meta.target] && inputs[meta.target].choice;
-          if (ch) showCard(ch);
+          const d = inputs && inputs[meta.target];
+          if (d && d.choice) showCard(d);
         });
 
         return [head, zone];
@@ -176,6 +196,18 @@ export function render(container, { game }) {
   function mainScreen() {
     const promptBox = el("div.big-prompt.av-prompt", { text: "Prêt·e ? Choisis Action ou Vérité." });
     const tag = el("div.av-tag");
+    // Refuser sa carte coûte un gage tiré au sort (même niveau).
+    const refuseBtn = el("button.chip", {
+      text: "🙅 Je refuse → gage",
+      style: "display:none",
+      onClick: () => {
+        const g = pickGage(level);
+        tag.textContent = "⚡ Gage";
+        promptBox.textContent = g;
+        announce("Gage : " + g);
+        refuseBtn.style.display = "none";
+      },
+    });
 
     function draw(kind) {
       const card = decks[kind][level].next();
@@ -186,6 +218,7 @@ export function render(container, { game }) {
       promptBox.classList.add("av-flash");
       tag.textContent = kind === "verite" ? "🗣️ Vérité" : "🔥 Action";
       tag.dataset.kind = kind;
+      refuseBtn.style.display = card ? "" : "none";
     }
 
     const levelUI = levelSelector({ initial: level, onChange: (v) => (level = v) });
@@ -200,6 +233,7 @@ export function render(container, { game }) {
           el("button.btn.av-btn-action", { text: "Action", onClick: () => draw("action") }),
         ]),
         el("div.row", { style: "justify-content:center;margin-top:14px" }, [
+          refuseBtn,
           el("button.chip", { text: "✏️ Mes cartes", onClick: openEd }),
         ]),
       ])

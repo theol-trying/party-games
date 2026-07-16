@@ -352,16 +352,21 @@ export function render(container, { game }) {
       },
     });
 
+    const BUZZ_PTS = [10, 7, 5, 3]; // points selon le rang de buzz du gagnant
+
     function liveRound({ api, meta }) {
       let order = [];
       let rejected = [];
       let decided = false;
+      let doubleRound = false; // ⭐ manche « artiste + titre » : points doublés
       let audioEl = null;
       let buzzBtn = null;
       const nameOf = (id) => (api.players().find((p) => p.id === id) || {}).name || "?";
 
       const info = el("p.bt-buzzinfo.center", {
-        text: api.isHost() ? "🎧 La musique joue sur TON téléphone — les autres buzzent !" : "Écoute… et BUZZ !",
+        text: api.isHost()
+          ? "🎧 La musique joue sur TON téléphone — les autres buzzent !"
+          : "Écoute… et BUZZ ! (1er = 10 pts, puis 7, 5, 3)",
         style: "font-weight:700;margin:12px 0",
       });
       const orderBox = el("div.stack");
@@ -378,14 +383,24 @@ export function render(container, { game }) {
           ])
         ));
       }
+      const winPts = (id) => {
+        const rank = Math.max(0, order.indexOf(id));
+        return BUZZ_PTS[Math.min(rank, BUZZ_PTS.length - 1)] * (doubleRound ? 2 : 1);
+      };
       function refreshJudge() {
         if (!api.isHost() || decided) return judgeBox.replaceChildren();
         const kids = [];
+        // ⭐ Manche spéciale : il faut donner l'artiste ET le titre, points doublés.
+        const dbl = el("button.chip" + (doubleRound ? ".is-active" : ""), {
+          text: doubleRound ? "⭐ Manche DOUBLE (artiste + titre)" : "⭐ Passer en manche double",
+          onClick: () => { doubleRound = !doubleRound; refreshJudge(); },
+        });
+        kids.push(dbl);
         const id = firstPending();
         if (id) {
-          kids.push(el("p", { text: `🎤 ${nameOf(id)} répond à voix haute :`, style: "font-weight:700" }));
+          kids.push(el("p", { text: `🎤 ${nameOf(id)} répond à voix haute${doubleRound ? " (artiste + titre !)" : ""} :`, style: "font-weight:700;margin-top:8px" }));
           kids.push(el("div.row", { style: "justify-content:center;margin-top:8px" }, [
-            el("button.btn", { text: "✅ Correct (+10)", onClick: () => hostAward(id) }),
+            el("button.btn", { text: `✅ Correct (+${winPts(id)})`, onClick: () => hostAward(id) }),
             el("button.btn.btn--ghost", { text: "❌ Faux", onClick: () => hostReject(id) }),
           ]));
         }
@@ -398,10 +413,11 @@ export function render(container, { game }) {
         return t;
       };
       function hostAward(id) {
+        const pts = winPts(id);
         const totals = baseTotals();
-        totals[id] = (totals[id] || 0) + 10;
+        totals[id] = (totals[id] || 0) + pts;
         Object.assign(scores, totals);
-        api.sendState({ phase: "won", id, pts: 10, answer: { title: roundTrack.title, artist: roundTrack.artist }, totals });
+        api.sendState({ phase: "won", id, pts, double: doubleRound, answer: { title: roundTrack.title, artist: roundTrack.artist }, totals });
       }
       function hostReject(id) {
         rejected = [...rejected, id];
@@ -421,7 +437,7 @@ export function render(container, { game }) {
             el("div.bt-answer__title", { text: s.answer ? s.answer.title : "?" }),
             el("div.bt-answer__artist", { text: (s.answer && s.answer.artist) || "" }),
           ]),
-          el("p", { text: s.phase === "won" ? `🏆 ${nameOf(s.id)} +${s.pts} !` : "🤷 Personne n'a trouvé.", style: "font-weight:800;margin:10px 0" }),
+          el("p", { text: s.phase === "won" ? `🏆 ${nameOf(s.id)} +${s.pts}${s.double ? " ⭐ (manche double)" : ""} !` : "🤷 Personne n'a trouvé.", style: "font-weight:800;margin:10px 0" }),
           el("div.stack", {}, ids.map((id, i) =>
             el("div.uc-role-row", {}, [
               el("span", { text: `${i + 1}. ${nameOf(id)}${id === api.me ? " (toi)" : ""}` }),
