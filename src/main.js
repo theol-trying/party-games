@@ -8,6 +8,7 @@ import { CATEGORIES, getGame, gamesByCategory } from "./registry.js";
 import { el, ensureGameStyle, announce } from "./ui.js";
 import { currentRoom, newRoom, setRoom, normalizeCode } from "./room.js";
 import { qrCanvas } from "./qr.js";
+import { resumeInfo, requestAutoLive } from "./realtime.js";
 
 const app = document.getElementById("app");
 
@@ -135,6 +136,24 @@ function renderHome() {
   }
 
   frag.prepend(roomBanner());
+  // Salon multi encore actif cette session ? Retour en un tap (refresh, bouton
+  // « retour »… ne coûtent plus une re-saisie complète).
+  const resume = resumeInfo();
+  const resumeGame = resume && getGame(resume.gameId);
+  if (resumeGame) {
+    frag.prepend(
+      el("section.card", { style: "display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;border-color:var(--accent)" }, [
+        el("div", {}, [
+          el("div", { text: "🎉 Partie en cours", style: "font-weight:800" }),
+          el("div.screen__subtitle", { text: `${resumeGame.icon || "🎮"} ${resumeGame.title} · soirée ${currentRoom()}` }),
+        ]),
+        el("button.btn", {
+          text: "Reprendre →",
+          onClick: () => { requestAutoLive(); location.hash = "#/jeu/" + resumeGame.id; },
+        }),
+      ])
+    );
+  }
   mount(frag);
 }
 
@@ -218,3 +237,7 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
   });
 }
+
+// ☕ Préchauffage : réveille le serveur (Render à froid ≈ 30 s) pendant que
+// l'hôte choisit son jeu — la connexion au salon sera déjà chaude.
+fetch("/api/health").catch(() => {});

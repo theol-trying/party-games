@@ -52,6 +52,14 @@ self.addEventListener("fetch", (e) => {
         caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
         return res;
       })
-      .catch(() => caches.match(req).then((r) => r || caches.match("index.html")))
+      .catch(() =>
+        caches.match(req).then((r) => {
+          if (r) return r;
+          // index.html en secours UNIQUEMENT pour une navigation : le servir à
+          // la place d'un module JS raté casserait l'écran (HTML importé comme JS).
+          if (req.mode === "navigate") return caches.match("index.html");
+          return new Response("hors-ligne", { status: 503, statusText: "Service Unavailable" });
+        })
+      )
   );
 });

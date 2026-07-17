@@ -12,6 +12,7 @@
                                                         mémorisé pour resynchroniser les reconnectés)
      { t:"goto", game }                                (hôte : toute la soirée change de jeu)
      { t:"kick", id }                                  (hôte : éjecte un joueur du salon)
+     { t:"host", id }                                  (hôte : passe la main à un autre joueur)
      { t:"reveal" }                                    (hôte uniquement)
      { t:"leave" }
    Serveur → client :
@@ -35,21 +36,26 @@ const ROOM_RE = /^[A-Z0-9]{1,8}$/;
 const GAME_RE = /^[a-z0-9-]{1,32}$/;
 const ID_RE = /^[a-zA-Z0-9]{1,20}$/;
 
-const rooms = new Map(); // "ROOM|game" -> { players: Map<id,{name,ws}>, round }
+const rooms = new Map(); // "ROOM|game" -> { players: Map<id,{name,ws}>, hostId, round }
 
 function roomKey(room, game) {
   return room + "|" + game;
 }
 
-function hostId(r) {
-  return [...r.players.keys()].sort()[0] || null;
+/* Hôte = premier arrivé dans le salon (pas le plus petit id, forgeable) ;
+   s'il part, la main passe au joueur présent le plus ancien (ordre d'insertion
+   de la Map). Transfert volontaire possible via le message "host". */
+function ensureHost(r) {
+  if (!r.hostId || !r.players.has(r.hostId))
+    r.hostId = r.players.keys().next().value || null;
+  return r.hostId;
 }
 
 function lobbyMessage(r) {
   return JSON.stringify({
     t: "lobby",
     players: [...r.players.entries()].map(([id, p]) => ({ id, name: p.name })),
-    host: hostId(r),
+    host: ensureHost(r),
   });
 }
 
@@ -72,9 +78,11 @@ function sendRoundTo(r, id) {
     p.ws.send(JSON.stringify({ t: "progress", n, done: order, total: r.players.size, ...(open ? { inputs } : {}) }));
   if (timerEndsAt && timerEndsAt > Date.now())
     p.ws.send(JSON.stringify({ t: "timer", n, endsAt: timerEndsAt, now: Date.now() }));
-  if (lastState !== undefined && lastState !== null)
-    p.ws.send(JSON.stringify({ t: "state", n, data: lastState })); // reconnexion en pleine manche
   if (revealed) p.ws.send(JSON.stringify({ t: "revealed", n, roles, inputs, order, names, meta }));
+  // Le state part APRÈS revealed : l'écran de révélation du retardataire est
+  // ainsi déjà abonné quand l'état (verdict, contestation…) lui parvient.
+  if (lastState !== undefined && lastState !== null)
+    p.ws.send(JSON.stringify({ t: "state", n, data: lastState }));
 }
 
 function removePlayer(key, id, ws) {
@@ -113,13 +121,14 @@ function handleSocket(ws) {
       let r = rooms.get(k);
       if (!r) {
         if (rooms.size >= MAX_ROOMS) return ws.close();
-        r = { players: new Map(), round: null };
+        r = { players: new Map(), hostId: null, round: null };
         rooms.set(k, r);
       }
       if (!r.players.has(id) && r.players.size >= MAX_PLAYERS) return ws.close();
       const old = r.players.get(id);
       if (old && old.ws !== ws) old.ws.close(); // reconnexion : remplace l'ancien socket
       r.players.set(id, { name, ws });
+      ensureHost(r); // premier arrivé = hôte
       key = k;
       myId = id;
       broadcast(r, lobbyMessage(r));
@@ -132,7 +141,7 @@ function handleSocket(ws) {
     if (!r) return;
 
     if (msg.t === "start") {
-      if (myId !== hostId(r)) return;
+      if (myId !== ensureHost(r)) return;
       const roles = msg.roles && typeof msg.roles === "object" ? msg.roles : {};
       r.round = {
         n: (r.round ? r.round.n : 0) + 1,
@@ -157,23 +166,23 @@ function handleSocket(ws) {
         ...(r.round.open ? { inputs: r.round.inputs } : {}),
       }));
     } else if (msg.t === "timer") {
-      if (myId !== hostId(r) || !r.round) return;
+      if (myId !== ensureHost(r) || !r.round) return;
       const seconds = Math.max(1, Math.min(600, Number(msg.seconds) || 0));
       r.round.timerEndsAt = Date.now() + seconds * 1000;
       broadcast(r, JSON.stringify({ t: "timer", n: r.round.n, endsAt: r.round.timerEndsAt, now: Date.now() }));
     } else if (msg.t === "state") {
-      if (myId !== hostId(r) || !r.round) return;
+      if (myId !== ensureHost(r) || !r.round) return;
       r.round.lastState = msg.data ?? null; // mémorisé pour les reconnexions
       broadcast(r, JSON.stringify({ t: "state", n: r.round.n, data: msg.data ?? null }));
     } else if (msg.t === "goto") {
       // L'hôte emmène toute la soirée vers un autre jeu (pas besoin de manche en cours).
-      if (myId !== hostId(r)) return;
+      if (myId !== ensureHost(r)) return;
       const game = String(msg.game || "");
       if (!GAME_RE.test(game)) return;
       broadcast(r, JSON.stringify({ t: "goto", game }));
     } else if (msg.t === "kick") {
       // L'hôte éjecte un joueur (fantôme, doublon…) : notifié puis déconnecté.
-      if (myId !== hostId(r)) return;
+      if (myId !== ensureHost(r)) return;
       const target = String(msg.id || "");
       if (target === myId) return;
       const p = r.players.get(target);
@@ -181,8 +190,15 @@ function handleSocket(ws) {
       p.ws.send(JSON.stringify({ t: "kicked" }));
       p.ws.close();
       removePlayer(key, target, null);
+    } else if (msg.t === "host") {
+      // L'hôte passe volontairement la main à un autre joueur du salon.
+      if (myId !== ensureHost(r)) return;
+      const target = String(msg.id || "");
+      if (target === myId || !r.players.has(target)) return;
+      r.hostId = target;
+      broadcast(r, lobbyMessage(r));
     } else if (msg.t === "reveal") {
-      if (myId !== hostId(r) || !r.round) return;
+      if (myId !== ensureHost(r) || !r.round) return;
       r.round.revealed = true;
       const { n, roles, inputs, order, names, meta } = r.round;
       broadcast(r, JSON.stringify({ t: "revealed", n, roles, inputs, order, names, meta }));

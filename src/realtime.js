@@ -39,6 +39,7 @@ const DEV_KEY = "soiree.device";
 const NAME_KEY = "soiree.name";
 const AUTO_KEY = "soiree.autolive"; // « suivre l'hôte » : le prochain jeu ouvre direct son salon
 const JOINED_KEY = "soiree.joined"; // déjà connecté cette session : plus de re-saisie du prénom
+const LASTGAME_KEY = "soiree.lastgame"; // dernier salon rejoint (bannière « Reprendre » de l'accueil)
 // Repli polling (identique à l'ancienne version, volontairement économe).
 const HEARTBEAT_MS = 8000;
 const POLL_MS = 4000;
@@ -70,10 +71,23 @@ function consumeAutoLive() {
   try { sessionStorage.removeItem(AUTO_KEY); } catch {}
   return v;
 }
-function requestAutoLive() {
+export function requestAutoLive() {
   try { sessionStorage.setItem(AUTO_KEY, "1"); } catch {}
 }
 const hasJoined = () => { try { return sessionStorage.getItem(JOINED_KEY) === "1"; } catch { return false; } };
+
+/** Salon encore actif cette session ? -> { gameId } pour la bannière
+    « Reprendre la partie » de l'accueil (null sinon). */
+export function resumeInfo() {
+  try {
+    if (sessionStorage.getItem(JOINED_KEY) !== "1") return null;
+    const gameId = sessionStorage.getItem(LASTGAME_KEY);
+    return gameId ? { gameId } : null;
+  } catch { return null; }
+}
+function forgetSession() {
+  try { sessionStorage.removeItem(JOINED_KEY); sessionStorage.removeItem(LASTGAME_KEY); } catch {}
+}
 
 /** Compte à rebours synchronisé : endsAtClient vient de api.on("timer", …).
     onTick(secondesRestantes) à chaque seconde, onEnd() une seule fois à zéro.
@@ -117,6 +131,7 @@ export function liveSession(stage, {
   let listeners = { progress: [], state: [], timer: [] }; // abonnements de la manche en cours
 
   function emit(ev, ...args) {
+    if (ev === "state") { lastStateData = args[0]; hasLastState = true; } // mémorisé pour les abonnés tardifs
     for (const cb of listeners[ev] || []) {
       try { cb(...args); } catch (e) { console.error(e); }
     }
@@ -132,13 +147,35 @@ export function liveSession(stage, {
     sendState: (d) => net && net.state(d), // hôte : update diffusé en cours de manche
     reveal: () => net && net.reveal(),
     newRound: () => distribute(),
-    on: (ev, cb) => { (listeners[ev] || (listeners[ev] = [])).push(cb); }, // progress | state | timer
+    on: (ev, cb) => {
+      (listeners[ev] || (listeners[ev] = [])).push(cb); // progress | state | timer
+      // Un écran (re)rendu APRÈS le dernier state de la manche le rejoue aussitôt :
+      // retardataire sur un reveal contesté, retour via « Revenir à la manche »…
+      if (ev === "state" && hasLastState) {
+        try { cb(lastStateData); } catch (e) { console.error(e); }
+      }
+    },
   };
 
   // ⚠️ TOUTE variable `let/const` de session doit être déclarée ICI, avant le
   // `return stop` — plus bas, son initialisation ne s'exécuterait jamais (TDZ).
   let upgradeTimer = null; // sonde de retour au temps réel
   let lastCount = 0; // taille du salon au dernier rendu (son « pop » à l'arrivée)
+  let lastStateData = null; // dernier state reçu (rejoué aux abonnés tardifs)
+  let hasLastState = false;
+  let lastRevealed = null; // dernier reveal reçu (bouton « Revenir » depuis le salon)
+  let wakeLock = null; // anti-mise en veille pendant le salon/les manches
+
+  // Au retour au premier plan (téléphone déverrouillé) : reconnexion immédiate
+  // au lieu d'attendre les timers de retry, et ré-acquisition du wake lock
+  // (libéré automatiquement par le navigateur quand la page est masquée).
+  const onVisibility = () => {
+    if (stopped || document.visibilityState !== "visible") return;
+    acquireWakeLock();
+    if (net && net.nudge) net.nudge();
+    if (net && net.mode === "poll") tryUpgrade();
+  };
+  document.addEventListener("visibilitychange", onVisibility);
 
   // Salon persistant : déjà connecté cette session (ou « suivre l'hôte ») → entrée directe.
   if ((consumeAutoLive() || hasJoined()) && savedName()) {
@@ -151,9 +188,23 @@ export function liveSession(stage, {
 
   function stop() {
     stopped = true;
+    document.removeEventListener("visibilitychange", onVisibility);
+    if (wakeLock) { try { wakeLock.release(); } catch {} wakeLock = null; }
     if (upgradeTimer) clearTimeout(upgradeTimer);
     if (net) net.destroy();
     net = null;
+  }
+
+  // Wake lock d'écran (API native, silencieux si non supporté) : le téléphone
+  // posé sur la table — surtout celui de l'hôte — ne se verrouille plus en pleine manche.
+  async function acquireWakeLock() {
+    if (stopped || wakeLock || !("wakeLock" in navigator)) return;
+    try {
+      const wl = await navigator.wakeLock.request("screen");
+      if (stopped) { try { wl.release(); } catch {} return; }
+      wakeLock = wl;
+      wl.addEventListener("release", () => { if (wakeLock === wl) wakeLock = null; });
+    } catch { wakeLock = null; }
   }
 
   /* =============================== ÉCRANS =============================== */
@@ -207,7 +258,15 @@ export function liveSession(stage, {
           p.id === host
             ? el("span", { text: "🎬 hôte" })
             : isHost
-              ? el("button.chip", { text: "✕", "aria-label": `Retirer ${p.name} du salon`, onClick: () => net && net.kick(p.id) })
+              ? el("div.row", { style: "gap:6px" }, [
+                  el("button.chip", {
+                    text: "🎬", title: "Passer la main", "aria-label": `Donner le rôle d'hôte à ${p.name}`,
+                    onClick: () => {
+                      if (window.confirm(`Donner le rôle d'hôte à ${p.name} ?`)) net && net.host(p.id);
+                    },
+                  }),
+                  el("button.chip", { text: "✕", "aria-label": `Retirer ${p.name} du salon`, onClick: () => net && net.kick(p.id) }),
+                ])
               : el("span", { text: "" }),
         ])))
       : el("p.screen__subtitle", { text: "En attente de joueurs…" });
@@ -215,6 +274,15 @@ export function liveSession(stage, {
     const action = isHost
       ? el("button.btn.btn--full", { text: `${startLabel || "Distribuer les rôles"} (${players.length})`, disabled: players.length < minPlayers, onClick: distribute })
       : el("p.screen__subtitle", { text: "L'hôte lancera la partie." });
+    // Une manche est en cours ? Chemin de retour (sinon un joueur revenu au
+    // salon restait coincé jusqu'à la manche suivante).
+    const backToRound = round && shownRound === round.n
+      ? el("button.btn.btn--full.btn--ghost", {
+          text: shownReveal ? "▶ Revoir la révélation" : "▶ Revenir à la manche en cours",
+          style: "margin-top:10px",
+          onClick: () => { if (shownReveal && lastRevealed) revealScreen(lastRevealed); else roleScreen(); },
+        })
+      : null;
     // QR d'invitation : scanner = rejoindre la soirée (généré en local, zéro réseau).
     let qr = null;
     try {
@@ -229,7 +297,7 @@ export function liveSession(stage, {
       el("button.chip", { text: "🔗 Partager le lien", onClick: share, style: "margin-bottom:10px" }),
       list,
       extra,
-      el("div", { style: "margin-top:14px" }, [action]),
+      el("div", { style: "margin-top:14px" }, [action, backToRound]),
       el("div.row", { style: "justify-content:center;margin-top:12px" }, [
         isHost ? el("button.chip", { text: "🎮 Changer de jeu", onClick: switchScreen }) : null,
         el("button.chip", { text: "👤 Prénom / code", onClick: nameScreen }),
@@ -303,6 +371,7 @@ export function liveSession(stage, {
 
   function leave() {
     if (net) net.leave();
+    forgetSession(); // départ volontaire : plus de bannière « Reprendre » ni d'entrée directe
     stop();
     onExit && onExit();
   }
@@ -322,6 +391,9 @@ export function liveSession(stage, {
       shownRound = n;
       shownReveal = false;
       listeners = { progress: [], state: [], timer: [] }; // nouvelle manche : abonnements frais
+      lastStateData = null;
+      hasLastState = false;
+      lastRevealed = null;
       roundCue();
       roleScreen();
     }
@@ -330,8 +402,9 @@ export function liveSession(stage, {
     if (shownReveal && n === shownRound) return;
     shownReveal = true;
     shownRound = n;
+    lastRevealed = { roles, names, meta, inputs: inputs || {}, order: order || [] };
     jingle();
-    revealScreen({ roles, names, meta, inputs: inputs || {}, order: order || [] });
+    revealScreen(lastRevealed);
   }
   // L'hôte a choisi un autre jeu : on suit (le jeu cible ouvrira direct son salon).
   function onGoto(game) {
@@ -344,6 +417,7 @@ export function liveSession(stage, {
   // L'hôte nous a retirés du salon : arrêt propre + écran d'information.
   function onKicked() {
     if (stopped) return;
+    forgetSession();
     stop();
     announce("Tu as été retiré du salon");
     showPhase(stage, el("div.card.center", {}, [
@@ -357,15 +431,19 @@ export function liveSession(stage, {
 
   function connect() {
     // WebSocket d'abord ; en cas d'échec → repli polling + retour auto au temps réel.
-    try { sessionStorage.setItem(JOINED_KEY, "1"); } catch {} // salon persistant inter-jeux
+    try {
+      sessionStorage.setItem(JOINED_KEY, "1"); // salon persistant inter-jeux
+      sessionStorage.setItem(LASTGAME_KEY, gameId); // bannière « Reprendre » de l'accueil
+    } catch {}
     status = "🔌 connexion au serveur…";
+    acquireWakeLock();
     net = wsTransport({ onFail: fallbackToPoll });
     lobbyScreen();
   }
 
   function fallbackToPoll() {
     if (stopped) return;
-    status = "🐢 mode compatible — retour au temps réel dès que possible…";
+    status = "☕ serveur en train de se réveiller ou réseau lent — la partie continue en mode compatible, retour au temps réel dès que possible…";
     net = pollTransport();
     if (view === "lobby") lobbyScreen();
     scheduleUpgrade();
@@ -462,8 +540,19 @@ export function liveSession(stage, {
       state(data) { sendJson({ t: "state", data }); },
       goto(game) { sendJson({ t: "goto", game }); },
       kick(id) { sendJson({ t: "kick", id }); },
+      host(id) { sendJson({ t: "host", id }); },
       reveal() { sendJson({ t: "reveal" }); },
       leave() { sendJson({ t: "leave" }); },
+      // Retour au premier plan : si le socket est fermé, on se reconnecte tout
+      // de suite au lieu d'attendre le timer de retry (reprise < 500 ms).
+      nudge() {
+        if (destroyed) return;
+        if (sock && sock.readyState <= 1) return; // déjà ouvert ou en cours de connexion
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        retries = Math.min(retries, WS_MAX_RETRIES - 1);
+        status = "⚡ reconnexion…";
+        open();
+      },
       destroy() {
         destroyed = true;
         if (reconnectTimer) clearTimeout(reconnectTimer);
@@ -492,10 +581,14 @@ export function liveSession(stage, {
         if (k.startsWith("__")) continue;
         if (now - ((l[k] && l[k].ts) || 0) > STALE_MS) delete l[k];
       }
-      l[me] = { name: myName, ts: now };
+      l[me] = { name: myName, ts: now, since: (l[me] && l[me].since) || now };
       await setData(LOBBY, l);
-      const ids = Object.keys(l).filter((k) => !k.startsWith("__")).sort();
-      onLobby(ids.map((id) => ({ id, name: l[id].name })), ids[0] || null);
+      // Hôte = transfert volontaire (__host) s'il est encore là, sinon le plus
+      // ancien joueur présent (parité avec le serveur WS : premier arrivé).
+      const ids = Object.keys(l).filter((k) => !k.startsWith("__"));
+      ids.sort((a, b) => (((l[a] && l[a].since) || 0) - ((l[b] && l[b].since) || 0)) || (a < b ? -1 : 1));
+      const hostPick = l.__host && ids.includes(l.__host) ? l.__host : ids[0] || null;
+      onLobby(ids.map((id) => ({ id, name: l[id].name })), hostPick);
     }
 
     let seenOrder = 0;
@@ -590,6 +683,19 @@ export function liveSession(stage, {
         l.__kick[id] = Date.now();
         await setData(LOBBY, l);
         beat();
+      },
+      async host(id) {
+        const l = (await getData(LOBBY, {})) || {};
+        l.__host = id; // transfert volontaire, lu par tous les beats
+        await setData(LOBBY, l);
+        beat();
+      },
+      // Retour au premier plan : resynchronisation immédiate (les intervalles
+      // ont pu être gelés par le navigateur pendant la mise en veille).
+      nudge() {
+        if (destroyed || stopped) return;
+        beat();
+        poll();
       },
       async reveal() {
         const live = (await getData(LIVE, null)) || {};
