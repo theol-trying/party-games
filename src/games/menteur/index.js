@@ -1,5 +1,6 @@
 import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { createDeck } from "../../deck.js";
+import { makeSeen } from "../../seen.js";
 import { playersCard } from "../../players.js";
 import { openEditor } from "../../content.js";
 import { passThePhone, contentSource } from "../../game-kit.js";
@@ -15,7 +16,8 @@ const SCHEMA = {
 
 export function render(container, { game }) {
   const src = contentSource("menteur", { builtIn: MISSIONS });
-  let deck = createDeck(missions());
+  const seen = makeSeen("menteur"); // anti-répétition entre soirées
+  let deck = createDeck(missions(), { seen });
   let liveStop = null;
   let menteurFxRound = -1; // manche dont les confettis du verdict ont déjà été joués
   container.append(screenHead(game.title, "Une mission secrète à glisser dans la conversation"));
@@ -178,7 +180,7 @@ export function render(container, { game }) {
 
   async function reload() {
     await src.reload();
-    deck = createDeck(missions());
+    deck = createDeck(missions(), { seen });
   }
   function missions() { return src.cards(); }
   function builtInList() { return MISSIONS.map((t) => ({ key: t, label: t })); }
@@ -189,7 +191,7 @@ export function render(container, { game }) {
     );
   }
   function openEd() {
-    openEditor(stage, { gameId: "menteur", schema: SCHEMA, builtInList: builtInList(), onDone: async () => { await reload(); introScreen(); } });
+    openEditor(stage, { gameId: "menteur", schema: SCHEMA, builtInList: builtInList(), onDone: async () => { await reload(); introScreen(); }, onReshuffle: () => seen.clear() });
   }
 
   function distribute(players) {

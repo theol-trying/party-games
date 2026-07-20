@@ -1,5 +1,6 @@
 import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { createDeck } from "../../deck.js";
+import { makeSeen } from "../../seen.js";
 import { levelSelector } from "../../levels.js";
 import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
 import { liveSession, peekAutoLive } from "../../realtime.js";
@@ -19,7 +20,8 @@ export function render(container, { game }) {
   let level = "soft";
   let custom = [];
   let config = { onlyCustom: false, disabled: {} };
-  let deck = createDeck(pool(level));
+  const seen = makeSeen("jamais-jamais"); // anti-répétition entre soirées
+  let deck = createDeck(pool(level), { seen });
 
   container.append(screenHead(game.title, "Bois si tu l'as déjà fait"));
   const stage = el("div");
@@ -48,7 +50,7 @@ export function render(container, { game }) {
   function startLive() {
     if (liveStop) liveStop();
     const liveDecks = {}; // un deck par niveau, construit à la demande
-    const deckFor = (lv) => (liveDecks[lv] ||= createDeck(pool(lv)));
+    const deckFor = (lv) => (liveDecks[lv] ||= createDeck(pool(lv), { seen }));
     let liveMode = "classic"; // classique : phrase de la banque · grill : la table piège une cible
     let grillTurn = -1; // rotation équitable de la cible du grill
 
@@ -200,7 +202,7 @@ export function render(container, { game }) {
 
   async function reload() {
     [custom, config] = await Promise.all([loadContent("jamais-jamais"), loadConfig("jamais-jamais")]);
-    deck = createDeck(pool(level));
+    deck = createDeck(pool(level), { seen });
   }
   function pool(lv) {
     return activeCards({
@@ -240,7 +242,7 @@ export function render(container, { game }) {
       initial: level,
       onChange: (v) => {
         level = v;
-        deck = createDeck(pool(level));
+        deck = createDeck(pool(level), { seen });
         promptBox.textContent = "Appuie sur « Suivant ». Bois si tu l'as déjà fait !";
         counter.textContent = "";
       },
@@ -263,6 +265,7 @@ export function render(container, { game }) {
       schema: SCHEMA,
       builtInList: builtInList(),
       onDone: async () => { await reload(); mainScreen(); },
+      onReshuffle: () => seen.clear(),
     });
   }
 }

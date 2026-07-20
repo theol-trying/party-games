@@ -1,6 +1,7 @@
 import { el, screenHead, announce, showPhase, shuffle } from "../../ui.js";
 import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
+import { makeSeen } from "../../seen.js";
 import { createScores, scoreboard } from "../../scoring.js";
 import { pickGage } from "../../gages.js";
 import { levelSelector } from "../../levels.js";
@@ -10,7 +11,7 @@ import { contentSource } from "../../game-kit.js";
 import { liveSession, syncCountdown, peekAutoLive } from "../../realtime.js";
 import { tick, vibrate } from "../../sound.js";
 import { confettiBurst, celebrate, stampGage } from "../../fx.js";
-import { QUESTIONS } from "./data.js";
+import { QUESTIONS, CATEGORIES } from "./data.js";
 
 // Points d'une bonne réponse : base + bonus de rapidité selon le rang d'arrivée.
 const SPEED_BONUS = [50, 30, 20, 10];
@@ -42,6 +43,8 @@ export function render(container, { game }) {
   const src = contentSource("quiz-gages", { builtIn: QUESTIONS, keyOf: (q) => q.q, toValue: toQuestion });
   let liveStop = null;
   let quizFxRound = -1; // manche dont les FX du reveal ont déjà été joués (anti-refire)
+  const seen = makeSeen("quiz-gages"); // anti-répétition entre soirées
+  const qKey = (q) => q.q; // identité d'une question
   if (peekAutoLive()) startLive(); else modeSelect(); // « suivre l'hôte » : salon direct
   src.reload();
 
@@ -50,6 +53,34 @@ export function render(container, { game }) {
 
   function questions() { return src.cards(); }
   function builtInList() { return QUESTIONS.map((q) => ({ key: q.q, label: `${q.q} → ${q.choices[q.correct]}` })); }
+
+  /* Sélecteur de catégories (multi-sélection). `selected` : Set d'ids muté en
+     place ; onChange() rappelé après chaque changement (au moins 1 catégorie
+     reste toujours active). Les cartes perso (sans cat) sont toujours incluses. */
+  function categorySelector(selected, onChange) {
+    const chips = {};
+    const summary = el("summary");
+    const row = el("div.row", { style: "flex-wrap:wrap;justify-content:center;gap:6px;margin-top:8px" });
+    function refreshSummary() { summary.textContent = `🗂️ Catégories (${selected.size}/${CATEGORIES.length})`; }
+    function paint() { for (const c of CATEGORIES) chips[c.id].classList.toggle("is-active", selected.has(c.id)); refreshSummary(); }
+    CATEGORIES.forEach((c) => {
+      const chip = el("button.chip", { text: c.label });
+      chip.addEventListener("click", () => {
+        if (selected.has(c.id)) { if (selected.size <= 1) return; selected.delete(c.id); } // garder ≥1
+        else selected.add(c.id);
+        paint();
+        onChange();
+      });
+      chips[c.id] = chip;
+      row.appendChild(chip);
+    });
+    const quick = el("div.row", { style: "justify-content:center;gap:8px;margin-top:8px" }, [
+      el("button.chip", { text: "Tout", onClick: () => { CATEGORIES.forEach((c) => selected.add(c.id)); paint(); onChange(); } }),
+      el("button.chip", { text: "Rien sauf 1", onClick: () => { selected.clear(); selected.add(CATEGORIES[0].id); paint(); onChange(); } }),
+    ]);
+    paint();
+    return el("details.ed-bulk", { style: "margin-top:10px" }, [summary, row, quick]);
+  }
 
   // Choix du mode : sur ce téléphone (passe-le) ou chacun sur le sien.
   function modeSelect() {
@@ -74,7 +105,7 @@ export function render(container, { game }) {
     );
   }
   function openEd() {
-    openEditor(stage, { gameId: "quiz-gages", schema: SCHEMA, builtInList: builtInList(), onDone: async () => { await src.reload(); modeSelect(); } });
+    openEditor(stage, { gameId: "quiz-gages", schema: SCHEMA, builtInList: builtInList(), onDone: async () => { await src.reload(); modeSelect(); }, onReshuffle: () => seen.clear() });
   }
 
   // Choix : chacun pour soi ou en équipes.
@@ -110,9 +141,13 @@ export function render(container, { game }) {
       return;
     }
     if (liveStop) liveStop();
-    const deck = createDeck(questions());
+    const deck = createDeck(questions(), { seen, keyOf: qKey });
     const scores = {}; // deviceId -> total cumulé (converge sur tous les clients)
     let level = "soft"; // niveau des gages, réglé par l'hôte
+    // Catégories filtrées par l'hôte (deck côté hôte : c'est lui qui tire les questions).
+    const cats = new Set(CATEGORIES.map((c) => c.id));
+    const catFilter = (c) => !c.cat || cats.has(c.cat);
+    deck.setFilter(catFilter);
 
     liveStop = liveSession(stage, {
       gameId: "quiz-gages",
@@ -127,6 +162,7 @@ export function render(container, { game }) {
         return el("div", { style: "margin:10px 0" }, [
           el("p.screen__subtitle", { text: "Niveau des gages", style: "margin-bottom:8px" }),
           ui.node,
+          categorySelector(cats, () => deck.setFilter(catFilter)),
         ]);
       },
       assign: (ps) => {
@@ -222,7 +258,8 @@ export function render(container, { game }) {
 
     const me = api.me;
     const myChoice = inputs[me] ? inputs[me].choice : null;
-    const myGage = myChoice === correct ? null : pickGage(level);
+    const others = Object.keys(names).filter((id) => id !== me).map((id) => names[id]);
+    const myGage = myChoice === correct ? null : pickGage(level, others);
     const myCallout = myChoice === correct
       ? el("div.qz-feedback", { text: `✅ Bravo ! +${delta[me] || 0} points`, style: "margin:6px 0 14px" })
       : el("div.qz-feedback", { style: "margin:6px 0 14px" }, [`❌ Raté. Ton gage : `, el("strong", { text: myGage })]);
@@ -257,12 +294,18 @@ export function render(container, { game }) {
       ]));
       return;
     }
-    const deck = createDeck(questions()); // intégré + perso, anti-répétition
+    const deck = createDeck(questions(), { seen, keyOf: qKey }); // anti-répétition intra + inter-soirées
     const sc = createScores(scoreKey, players); // scores persistés par soirée (par joueur ou par équipe)
     let count = 0;
     let turn = 0;
     let answered = false;
     let level = "soft"; // niveau des gages
+
+    // Catégories : toutes actives par défaut ; le filtre garde aussi les perso (sans cat).
+    const cats = new Set(CATEGORIES.map((c) => c.id));
+    const catFilter = (c) => !c.cat || cats.has(c.cat);
+    deck.setFilter(catFilter);
+    const catUI = categorySelector(cats, () => deck.setFilter(catFilter));
 
     const levelUI = levelSelector({ initial: level, onChange: (v) => (level = v) });
     const qArea = el("div");
@@ -303,7 +346,7 @@ export function render(container, { game }) {
                 confettiBurst(r.left + r.width / 2, r.top + r.height / 2, 70);
               } else {
                 e.currentTarget.classList.add("is-wrong");
-                const gage = pickGage(level);
+                const gage = pickGage(level, players.filter((p) => p !== player));
                 feedback.replaceChildren(`❌ Raté, ${player} ! `, el("strong", { text: gage }));
                 announce(`Raté pour ${player}. ${gage}`);
                 stampGage(gage);
@@ -330,6 +373,7 @@ export function render(container, { game }) {
       el("div.card", { style: "margin-bottom:14px" }, [
         el("p.screen__subtitle", { text: "Niveau des gages", style: "margin-bottom:8px" }),
         levelUI.node,
+        catUI,
       ]),
       qArea,
       el("div.card", { style: "margin-top:14px" }, [

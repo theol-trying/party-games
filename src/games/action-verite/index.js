@@ -106,7 +106,7 @@ export function render(container, { game }) {
                 text: "🙅 Je refuse → gage",
                 style: "margin-top:10px",
                 onClick: () => {
-                  const g = pickGage(meta.level);
+                  const g = pickGage(meta.level, api.players().filter((p) => p.id !== api.me).map((p) => p.name));
                   api.submit({ choice, refused: true, gage: g });
                   showCard({ choice, refused: true, gage: g });
                   stampGage(g); // le désigné qui refuse : tampon sur SON écran

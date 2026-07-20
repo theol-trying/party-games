@@ -1,6 +1,7 @@
 import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
+import { makeSeen } from "../../seen.js";
 import { createScores, scoreboard } from "../../scoring.js";
 import { openEditor } from "../../content.js";
 import { passThePhone, contentSource } from "../../game-kit.js";
@@ -15,6 +16,7 @@ const SCHEMA = {
 
 export function render(container, { game }) {
   const src = contentSource("plus-susceptible", { builtIn: AFFIRMATIONS });
+  const seen = makeSeen("plus-susceptible"); // anti-répétition entre soirées
   container.append(screenHead(game.title, "Vote anonyme · roi/reine de la soirée"));
   const stage = el("div");
   container.append(stage);
@@ -57,7 +59,7 @@ export function render(container, { game }) {
   function startLive() {
     if (!affirmations().length) return modeSelect();
     if (liveStop) liveStop();
-    const deck = createDeck(affirmations());
+    const deck = createDeck(affirmations(), { seen });
     const crowns = {}; // deviceId -> couronnes cumulées (converge : base + delta déterministe)
 
     liveStop = liveSession(stage, {
@@ -155,6 +157,7 @@ export function render(container, { game }) {
       schema: SCHEMA,
       builtInList: builtInList(),
       onDone: async () => { await src.reload(); introScreen(); },
+      onReshuffle: () => seen.clear(),
     });
   }
 
@@ -166,7 +169,7 @@ export function render(container, { game }) {
       ]));
       return;
     }
-    const deck = createDeck(affirmations()); // intégré + perso, anti-répétition
+    const deck = createDeck(affirmations(), { seen }); // anti-répétition intra + inter-soirées
     const sc = createScores("plus-susceptible", players); // couronnes cumulées, persistées
 
     function nextRound() {

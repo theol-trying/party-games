@@ -38,6 +38,12 @@ function lsSet(key, value) {
   } catch {}
 }
 
+/** Lecture SYNCHRONE du cache local (room-scopée), sans toucher au réseau.
+    Utile quand on a besoin d'une valeur tout de suite (ex. amorçage anti-répétition). */
+export function getLocal(key, fallback = null) {
+  return lsGet(scopedKey(key), fallback);
+}
+
 /** Lit une valeur (API en priorité, sinon localStorage). */
 export async function getData(key, fallback = null) {
   const k = scopedKey(key);

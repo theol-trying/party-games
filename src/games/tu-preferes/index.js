@@ -3,6 +3,7 @@ import { createDeck } from "../../deck.js";
 import { openEditor } from "../../content.js";
 import { contentSource } from "../../game-kit.js";
 import { liveSession, peekAutoLive } from "../../realtime.js";
+import { makeSeen } from "../../seen.js";
 import { DILEMMES } from "./data.js";
 
 const SCHEMA = {
@@ -16,7 +17,9 @@ const SCHEMA = {
 
 export function render(container, { game }) {
   const src = contentSource("tu-preferes", { builtIn: DILEMMES, keyOf: (d) => `${d.a}|${d.b}`, toValue: (e) => ({ a: e.a, b: e.b }) });
-  let deck = createDeck(dilemmes());
+  const seen = makeSeen("tu-preferes"); // anti-répétition entre soirées
+  const dKey = (d) => `${d.a}|${d.b}`;
+  let deck = createDeck(dilemmes(), { seen, keyOf: dKey });
   let counts = { a: 0, b: 0 };
   let revealed = false;
 
@@ -25,12 +28,12 @@ export function render(container, { game }) {
   container.append(stage);
   let liveStop = null;
 
-  src.reload().then(() => (deck = createDeck(dilemmes())));
+  src.reload().then(() => (deck = createDeck(dilemmes(), { seen, keyOf: dKey })));
 
   function dilemmes() { return src.cards(); }
   function builtInList() { return DILEMMES.map((d) => ({ key: `${d.a}|${d.b}`, label: `${d.a} / ${d.b}` })); }
   function openEd() {
-    openEditor(stage, { gameId: "tu-preferes", schema: SCHEMA, builtInList: builtInList(), onDone: async () => { await src.reload(); deck = createDeck(dilemmes()); draw(); } });
+    openEditor(stage, { gameId: "tu-preferes", schema: SCHEMA, builtInList: builtInList(), onDone: async () => { await src.reload(); deck = createDeck(dilemmes(), { seen, keyOf: dKey }); draw(); }, onReshuffle: () => seen.clear() });
   }
 
   function optionBtn(side, label) {
@@ -104,7 +107,7 @@ export function render(container, { game }) {
   function startLive() {
     if (!dilemmes().length) return modeSelect();
     if (liveStop) liveStop();
-    const liveDeck = createDeck(dilemmes());
+    const liveDeck = createDeck(dilemmes(), { seen, keyOf: dKey });
     const predScores = {}; // deviceId -> bonnes prédictions cumulées (base + delta)
     const stats = { rounds: 0, agreeSum: 0, unanimous: 0 }; // stats de soirée (identiques partout)
 

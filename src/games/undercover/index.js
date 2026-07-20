@@ -5,6 +5,7 @@ import { openEditor } from "../../content.js";
 import { passThePhone, contentSource } from "../../game-kit.js";
 import { liveSession, peekAutoLive } from "../../realtime.js";
 import { flipReveal, celebrate } from "../../fx.js";
+import { makeSeen } from "../../seen.js";
 import { PAIRES } from "./data.js";
 
 const SCHEMA = {
@@ -22,7 +23,9 @@ export function render(container, { game }) {
   container.append(stage);
 
   const src = contentSource("undercover", { builtIn: PAIRES, keyOf: (p) => `${p.civils}|${p.imposteur}`, toValue: (e) => ({ civils: e.civils, imposteur: e.imposteur }) });
-  let deck = createDeck(pairs()); // paires intégrées + perso, anti-répétition
+  const seen = makeSeen("undercover"); // anti-répétition entre soirées
+  const pKey = (p) => `${p.civils}|${p.imposteur}`;
+  let deck = createDeck(pairs(), { seen, keyOf: pKey }); // anti-répétition intra + inter-soirées
   let currentPair = null;
   let liveStop = null;
 
@@ -288,7 +291,7 @@ export function render(container, { game }) {
 
   async function reload() {
     await src.reload();
-    deck = createDeck(pairs());
+    deck = createDeck(pairs(), { seen, keyOf: pKey });
   }
   function pairs() { return src.cards(); }
   function builtInList() { return PAIRES.map((p) => ({ key: `${p.civils}|${p.imposteur}`, label: `${p.civils} / ${p.imposteur}` })); }
@@ -299,7 +302,7 @@ export function render(container, { game }) {
     );
   }
   function openEd() {
-    openEditor(stage, { gameId: "undercover", schema: SCHEMA, builtInList: builtInList(), onDone: async () => { await reload(); showSetupIntro(); } });
+    openEditor(stage, { gameId: "undercover", schema: SCHEMA, builtInList: builtInList(), onDone: async () => { await reload(); showSetupIntro(); }, onReshuffle: () => seen.clear() });
   }
 
   /* ---------- Réglage des rôles (imposteurs + Mr White) ---------- */

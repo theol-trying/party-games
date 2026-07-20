@@ -225,14 +225,54 @@ const BASE = [
   { q: "Quel animal est le symbole de la sagesse dans de nombreuses cultures ?", choices: ["Le renard", "La chouette", "Le corbeau", "Le loup"], correct: 1 },
 ];
 
-/* Agregation de toutes les banques + deduplication par enonce (insensible casse/espaces). */
-const ALL_QUIZ = [].concat(BASE, Q_GEO, Q_HISTOIRE, Q_SCIENCES, Q_CULTURE, Q_SPORT, Q_NATURE, Q_GASTRO, Q_CINEMA, Q_SERIES, Q_MUSIQUE, Q_JEUXVIDEO, Q_BDMANGA, Q_TECHWEB, Q_MARQUES, Q_FRANCE, Q_INSTITUTIONS, Q_ECONOMIE, Q_RELIGIONS, Q_SANTE, Q_RECORDS, Q_INVENTIONS, Q_LANGUE, Q_CITATIONS, Q_INSOLITE);
+/* Banques par catégorie : chaque question est taguée avec sa catégorie (cat)
+   pour permettre à l'hôte de filtrer les thèmes. BASE = mélange rédigé main. */
+const BANKS = [
+  { cat: "melange", label: "🎲 Assorti", q: BASE },
+  { cat: "geo", label: "🌍 Géographie", q: Q_GEO },
+  { cat: "histoire", label: "🏛️ Histoire", q: Q_HISTOIRE },
+  { cat: "sciences", label: "🔬 Sciences", q: Q_SCIENCES },
+  { cat: "culture", label: "🎨 Arts & Culture", q: Q_CULTURE },
+  { cat: "sport", label: "⚽ Sport", q: Q_SPORT },
+  { cat: "nature", label: "🦁 Nature & Animaux", q: Q_NATURE },
+  { cat: "gastro", label: "🍽️ Gastronomie", q: Q_GASTRO },
+  { cat: "cinema", label: "🎬 Cinéma", q: Q_CINEMA },
+  { cat: "series", label: "📺 Séries", q: Q_SERIES },
+  { cat: "musique", label: "🎵 Musique", q: Q_MUSIQUE },
+  { cat: "jeuxvideo", label: "🎮 Jeux vidéo", q: Q_JEUXVIDEO },
+  { cat: "bdmanga", label: "💥 BD & Manga", q: Q_BDMANGA },
+  { cat: "techweb", label: "💻 Tech & Web", q: Q_TECHWEB },
+  { cat: "marques", label: "🏷️ Marques", q: Q_MARQUES },
+  { cat: "france", label: "🇫🇷 France", q: Q_FRANCE },
+  { cat: "institutions", label: "⚖️ Institutions", q: Q_INSTITUTIONS },
+  { cat: "economie", label: "💰 Économie", q: Q_ECONOMIE },
+  { cat: "religions", label: "☯️ Religions", q: Q_RELIGIONS },
+  { cat: "sante", label: "🩺 Santé", q: Q_SANTE },
+  { cat: "records", label: "🏆 Records", q: Q_RECORDS },
+  { cat: "inventions", label: "💡 Inventions", q: Q_INVENTIONS },
+  { cat: "langue", label: "🔤 Langue", q: Q_LANGUE },
+  { cat: "citations", label: "💬 Citations", q: Q_CITATIONS },
+  { cat: "insolite", label: "🤯 Insolite", q: Q_INSOLITE },
+];
+
+/* Agrégation + déduplication par énoncé (insensible casse/espaces) ; chaque
+   question conserve sa catégorie (cat). La 1re occurrence gagne (garde sa cat). */
 const _seen = new Set();
-export const QUESTIONS = ALL_QUIZ.filter((x) => {
-  const k = (x.q || "").trim().toLowerCase();
-  if (!x.q || !Array.isArray(x.choices) || x.choices.length !== 4) return false;
-  if (x.correct < 0 || x.correct > 3) return false;
-  if (_seen.has(k)) return false;
-  _seen.add(k);
-  return true;
-});
+export const QUESTIONS = [];
+const _catCount = {};
+for (const b of BANKS) {
+  for (const x of b.q || []) {
+    const k = (x.q || "").trim().toLowerCase();
+    if (!x.q || !Array.isArray(x.choices) || x.choices.length !== 4) continue;
+    if (x.correct < 0 || x.correct > 3) continue;
+    if (_seen.has(k)) continue;
+    _seen.add(k);
+    QUESTIONS.push({ q: x.q, choices: x.choices, correct: x.correct, cat: b.cat });
+    _catCount[b.cat] = (_catCount[b.cat] || 0) + 1;
+  }
+}
+
+/* Catégories réellement disponibles (au moins 1 question), pour le sélecteur hôte. */
+export const CATEGORIES = BANKS
+  .filter((b) => _catCount[b.cat] > 0)
+  .map((b) => ({ id: b.cat, label: b.label, count: _catCount[b.cat] }));

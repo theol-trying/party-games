@@ -6,6 +6,7 @@
    ========================================================================= */
 
 import { pick } from "./ui.js";
+import { resolveNames } from "./names.js";
 
 export const GAGES = [
   // --- soft : bon enfant, tout public ---
@@ -169,11 +170,47 @@ export const GAGES = [
   { text: "Termine à voix haute la phrase « Ce soir, j'aimerais bien… »", niveau: "x18" },
   { text: "Fais deviner ta zone la plus sensible sans la nommer", niveau: "x18" },
   { text: "Raconte ta plus longue nuit blanche… pour de bonnes raisons", niveau: "x18" },
+
+  // --- soft : nominatifs ({joueur} = un autre joueur du salon, résolu au tirage) ---
+  { text: "Trinque avec {joueur} et videz vos verres ensemble 🍻", niveau: "soft" },
+  { text: "Distribue 3 gorgées à répartir entre {joueur} et {joueur2}", niveau: "soft" },
+  { text: "Fais un compliment sincère à {joueur}", niveau: "soft" },
+  { text: "Imite {joueur} jusqu'à ton prochain tour", niveau: "soft" },
+  { text: "Échange de place avec {joueur}", niveau: "soft" },
+  { text: "Bois chaque fois que {joueur} boit, jusqu'à la fin de la manche", niveau: "soft" },
+  { text: "Raconte ton meilleur souvenir avec {joueur}", niveau: "soft" },
+  { text: "Toi et {joueur} : cul sec en même temps (d'eau, ça compte aussi)", niveau: "soft" },
+  { text: "Invente un surnom à {joueur}, valable pour toute la soirée", niveau: "soft" },
+  { text: "Laisse {joueur} choisir : tu bois, ou tu relèves son prochain défi", niveau: "soft" },
+  { text: "Fais un high-five spectaculaire avec {joueur}, bruitage inclus", niveau: "soft" },
+  { text: "Dis à {joueur} une qualité que tu lui envies", niveau: "soft" },
+
+  // --- soirée : nominatifs ---
+  { text: "{joueur} et {joueur2} : duel de regard, le premier qui rit boit", niveau: "soiree" },
+  { text: "Assieds-toi sur les genoux de {joueur} jusqu'à ton prochain tour", niveau: "soiree" },
+  { text: "Slow de 20 secondes avec {joueur}", niveau: "soiree" },
+  { text: "Fais une déclaration théâtrale enflammée à {joueur}", niveau: "soiree" },
+  { text: "Bois avec {joueur} : celui qui finit en dernier redistribue 2 gorgées", niveau: "soiree" },
+  { text: "Susurre le prénom de {joueur} de la façon la plus sensuelle possible", niveau: "soiree" },
+  { text: "Laisse {joueur} écrire un message (que tu valides) à qui il veut", niveau: "soiree" },
+  { text: "Danse collé-serré 15 secondes avec {joueur}", niveau: "soiree" },
+  { text: "Confie à {joueur} ton pire souvenir de soirée", niveau: "soiree" },
+  { text: "Regarde {joueur} dans les yeux et dis « je sais tout » sans rire", niveau: "soiree" },
+
+  // --- 18+ : nominatifs (volontaires uniquement) ---
+  { text: "Fais un bisou sur la joue de {joueur}… ou ailleurs si vous êtes d'accord", niveau: "x18" },
+  { text: "Échange un vêtement avec {joueur}", niveau: "x18" },
+  { text: "Body shot sur {joueur} si vous êtes tous les deux partants", niveau: "x18" },
+  { text: "Trace un mot du doigt dans le dos de {joueur}, il doit deviner", niveau: "x18" },
+  { text: "Susurre à l'oreille de {joueur} ta pensée la plus inavouable", niveau: "x18" },
+  { text: "Mordille l'oreille de {joueur} 5 secondes (si consentant·e)", niveau: "x18" },
 ];
 
-/** Pioche un texte de gage du niveau demandé ; repli soft si le niveau est vide. */
-export function pickGage(level = "soft") {
+/** Pioche un texte de gage du niveau demandé ; repli soft si le niveau est vide.
+    `names` (prénoms du salon) résout les gages nominatifs {joueur} ; sans noms,
+    ils retombent sur des tournures génériques (« la personne à ta gauche »…). */
+export function pickGage(level = "soft", names = null) {
   let pool = GAGES.filter((g) => g.niveau === level);
   if (!pool.length) pool = GAGES.filter((g) => g.niveau === "soft");
-  return pick(pool).text;
+  return resolveNames(pick(pool).text, names || []);
 }

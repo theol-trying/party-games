@@ -65,7 +65,7 @@ function sanitizeEntry(raw, schema) {
   return e;
 }
 
-export function openEditor(container, { gameId, schema, builtInList = [], onDone }) {
+export function openEditor(container, { gameId, schema, builtInList = [], onDone, onReshuffle }) {
   let entries = [];
   let config = { onlyCustom: false, disabled: {} };
   let editingId = null;
@@ -224,6 +224,21 @@ export function openEditor(container, { gameId, schema, builtInList = [], onDone
     ioMsg,
   ]);
 
+  // « Tout remélanger » : oublie les cartes déjà vues (anti-répétition entre soirées).
+  let reshuffleBlock = null;
+  if (onReshuffle) {
+    const msg = el("span.screen__subtitle", { style: "margin-left:10px" });
+    const btn = el("button.btn.btn--ghost", {
+      text: "🔄 Tout remélanger",
+      onClick: () => { onReshuffle(); msg.textContent = "Historique oublié — tout le contenu redevient neuf ✨"; },
+    });
+    reshuffleBlock = el("div.card", { style: "margin-top:14px" }, [
+      el("h3", { text: "Anti-répétition", style: "margin-bottom:6px" }),
+      el("p.screen__subtitle", { text: "Les cartes déjà tirées lors des soirées précédentes reviennent en dernier. Tu peux repartir de zéro :", style: "margin-bottom:10px" }),
+      el("div.row", { style: "align-items:center" }, [btn, msg]),
+    ]);
+  }
+
   container.replaceChildren(
     el("div", {}, [
       el("div.row.ed-head", { style: "align-items:center;justify-content:space-between;margin-bottom:12px" }, [
@@ -235,6 +250,7 @@ export function openEditor(container, { gameId, schema, builtInList = [], onDone
       el("div.card", { style: "margin-top:14px" }, [el("h3", { text: "Ajouter / modifier" }), ...formRows, addBtn, bulkBlock, ioBlock]),
       el("div.card", { style: "margin-top:14px" }, [el("h3", { text: "Mes cartes", style: "margin-bottom:10px" }), listWrap]),
       el("div.card", { style: "margin-top:14px", hidden: !builtInList.length }, [el("h3", { text: "Cartes intégrées", style: "margin-bottom:10px" }), builtinWrap]),
+      reshuffleBlock,
     ])
   );
 
