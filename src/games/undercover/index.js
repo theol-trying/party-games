@@ -4,6 +4,7 @@ import { createDeck } from "../../deck.js";
 import { openEditor } from "../../content.js";
 import { passThePhone, contentSource } from "../../game-kit.js";
 import { liveSession, peekAutoLive } from "../../realtime.js";
+import { flipReveal, celebrate } from "../../fx.js";
 import { PAIRES } from "./data.js";
 
 const SCHEMA = {
@@ -45,6 +46,10 @@ export function render(container, { game }) {
     let liveImp = 1, liveWhite = 0; // réglages de l'hôte
     // Autorité de l'hôte pour la partie en cours (dépouillement, éliminations).
     let hostGame = null; // { roles:{id:{role,word}}, pair, alive:[ids], k }
+    // Gardes FX au scope de la session (survivent aux re-renders « Revenir à la
+    // manche » / au replay du state — sinon les confettis/le flip repartent).
+    let ucFlipKey = null; // élimination dont le flip a déjà été animé
+    let ucOverRound = -1; // manche (n) dont les confettis de fin ont déjà été joués
     liveStop = liveSession(stage, {
       gameId: "undercover",
       title: "Undercover — multi",
@@ -94,7 +99,7 @@ export function render(container, { game }) {
         hostGame = { roles, pair, alive: ps.map((p) => p.id), k: 0 };
         return { roles, meta: { count: n }, open: true }; // open : votes visibles pour le dépouillement
       },
-      renderMine: (mine, { api }) => liveGame(mine, api),
+      renderMine: (mine, { api, n }) => liveGame(mine, api, n),
       renderReveal: (live) =>
         el("div", {}, [
           el("h3", { text: "Rôles", style: "margin-bottom:10px" }),
@@ -143,7 +148,7 @@ export function render(container, { game }) {
     }
 
     /* ----- Écran de partie (état piloté par les messages state/progress) ----- */
-    function liveGame(mine, api) {
+    function liveGame(mine, api, n) {
       let cur = null; // dernier état reçu
       let inputsCache = {}; // votes + indices visibles (mode open)
       let myVoteK = 0; // manche de vote où j'ai déjà voté
@@ -227,7 +232,19 @@ export function render(container, { game }) {
           }
         } else if (cur.phase === "result") {
           bits.push(el("h3", { text: `❌ ${nameOf(cur.out)} est éliminé !` }));
-          bits.push(el("p", { text: `C'était : ${ROLE_TAG[cur.outRole] || cur.outRole}`, style: "font-weight:700;margin:8px 0" }));
+          // Sa carte se retourne pour révéler son rôle (rouge imposteur, doré Mr White).
+          const variant = cur.outRole === "imposteur" ? "danger" : cur.outRole === "blanc" ? "gold" : "";
+          const flipK = `${n}|${cur.k}|${cur.out}`;
+          const animate = flipK !== ucFlipKey; // pas de re-flip au re-render / replay
+          if (animate) ucFlipKey = flipK;
+          bits.push(animate
+            ? flipReveal(ROLE_TAG[cur.outRole] || cur.outRole, { variant })
+            : el("div.fx-flip", { style: "height:132px" }, [
+                el("div.fx-flip__inner.is-flipped", {}, [
+                  el("div.fx-flip__face.fx-flip__front", {}, [el("span.fx-flip__q", { text: "🕵️" })]),
+                  el("div.fx-flip__face.fx-flip__back" + (variant ? ".is-" + variant : ""), {}, [el("span", { text: ROLE_TAG[cur.outRole] || cur.outRole })]),
+                ]),
+              ]));
           if (cur.out === api.me) bits.push(el("p", { text: "☠️ Tu deviens spectateur.", style: "color:var(--text-dim)" }));
           bits.push(tallyRows(cur.tally));
           if (api.isHost()) bits.push(el("button.btn.btn--full", { text: "🗳️ Vote suivant", style: "margin-top:12px", onClick: () => hostVote(api) }));
@@ -243,6 +260,7 @@ export function render(container, { game }) {
           const label = cur.winner === "civils" ? "😇 Les civils gagnent !" : cur.winner === "white" ? "🎭 Mr White gagne !" : "🕵️ Les imposteurs gagnent !";
           if (cur.out) bits.push(el("p", { text: `${nameOf(cur.out)} éliminé — c'était ${ROLE_TAG[cur.outRole] || cur.outRole}.`, style: "margin-bottom:8px" }));
           bits.push(el("h2", { text: label }));
+          if (n != null && n !== ucOverRound) { ucOverRound = n; celebrate(); }
           bits.push(el("p.screen__subtitle", { text: "L'hôte peut révéler tous les rôles.", style: "margin-top:8px" }));
         }
         phaseArea.replaceChildren(...bits.filter(Boolean));

@@ -9,6 +9,7 @@ import { openEditor } from "../../content.js";
 import { contentSource } from "../../game-kit.js";
 import { liveSession, syncCountdown, peekAutoLive } from "../../realtime.js";
 import { tick, vibrate } from "../../sound.js";
+import { confettiBurst, celebrate, stampGage } from "../../fx.js";
 import { QUESTIONS } from "./data.js";
 
 // Points d'une bonne réponse : base + bonus de rapidité selon le rang d'arrivée.
@@ -40,6 +41,7 @@ export function render(container, { game }) {
 
   const src = contentSource("quiz-gages", { builtIn: QUESTIONS, keyOf: (q) => q.q, toValue: toQuestion });
   let liveStop = null;
+  let quizFxRound = -1; // manche dont les FX du reveal ont déjà été joués (anti-refire)
   if (peekAutoLive()) startLive(); else modeSelect(); // « suivre l'hôte » : salon direct
   src.reload();
 
@@ -136,7 +138,7 @@ export function render(container, { game }) {
         return { roles, meta: { q: item.q, choices: item.choices, correct: item.correct, level, base } };
       },
       renderMine: (mine, ctx) => liveRound(ctx),
-      renderReveal: (live, ctx) => liveReveal(live, scores, ctx),
+      renderReveal: (live, ctx) => liveReveal(live, scores, ctx), // ctx porte n (manche)
     });
   }
 
@@ -198,7 +200,7 @@ export function render(container, { game }) {
   }
 
   // Résultats de la manche + classement (calcul déterministe partagé).
-  function liveReveal(live, scores, { api }) {
+  function liveReveal(live, scores, { api, n }) {
     const { choices, correct, base = {}, level = "soft" } = live.meta || {};
     const inputs = live.inputs || {};
     const order = live.order || [];
@@ -220,9 +222,18 @@ export function render(container, { game }) {
 
     const me = api.me;
     const myChoice = inputs[me] ? inputs[me].choice : null;
+    const myGage = myChoice === correct ? null : pickGage(level);
     const myCallout = myChoice === correct
       ? el("div.qz-feedback", { text: `✅ Bravo ! +${delta[me] || 0} points`, style: "margin:6px 0 14px" })
-      : el("div.qz-feedback", { style: "margin:6px 0 14px" }, [`❌ Raté. Ton gage : `, el("strong", { text: pickGage(level) })]);
+      : el("div.qz-feedback", { style: "margin:6px 0 14px" }, [`❌ Raté. Ton gage : `, el("strong", { text: myGage })]);
+
+    // FX personnels : une seule fois par manche (n identifie la manche → pas de
+    // re-tir à « Revoir la révélation » ni au replay du state, ni de collision de clé).
+    if (n != null && n !== quizFxRound) {
+      quizFxRound = n;
+      if (myChoice === correct) celebrate();
+      else if (myChoice != null) stampGage(myGage);
+    }
 
     return el("div", {}, [
       el("h3", { text: "Résultats", style: "margin-bottom:6px" }),
@@ -288,11 +299,14 @@ export function render(container, { game }) {
                 sc.add(player);
                 feedback.textContent = `✅ Bien joué, ${player} ! +1`;
                 announce(`Bonne réponse pour ${player}`);
+                const r = e.currentTarget.getBoundingClientRect();
+                confettiBurst(r.left + r.width / 2, r.top + r.height / 2, 70);
               } else {
                 e.currentTarget.classList.add("is-wrong");
                 const gage = pickGage(level);
                 feedback.replaceChildren(`❌ Raté, ${player} ! `, el("strong", { text: gage }));
                 announce(`Raté pour ${player}. ${gage}`);
+                stampGage(gage);
               }
               scoreWrap.replaceChildren(scoreboard(sc.scores));
               nextBtn.style.display = "";

@@ -4,6 +4,7 @@ import { levelSelector, LEVELS } from "../../levels.js";
 import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
 import { liveSession, peekAutoLive } from "../../realtime.js";
 import { pickGage } from "../../gages.js";
+import { stampGage } from "../../fx.js";
 import { VERITES, ACTIONS } from "./data.js";
 
 const LEVEL_LABEL = { soft: "Soft", soiree: "Soirée", x18: "18+" };
@@ -108,6 +109,7 @@ export function render(container, { game }) {
                   const g = pickGage(meta.level);
                   api.submit({ choice, refused: true, gage: g });
                   showCard({ choice, refused: true, gage: g });
+                  stampGage(g); // le désigné qui refuse : tampon sur SON écran
                 },
               }));
             }
@@ -206,6 +208,7 @@ export function render(container, { game }) {
         promptBox.textContent = g;
         announce("Gage : " + g);
         refuseBtn.style.display = "none";
+        stampGage(g);
       },
     });
 

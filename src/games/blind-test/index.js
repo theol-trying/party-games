@@ -7,6 +7,7 @@ import { teamBuilder } from "../../teams.js";
 import { openEditor } from "../../content.js";
 import { contentSource } from "../../game-kit.js";
 import { liveSession } from "../../realtime.js";
+import { celebrate } from "../../fx.js";
 import { TRACKS } from "./data.js";
 
 const BT_SCHEMA = {
@@ -257,7 +258,7 @@ export function render(container, { game }) {
       const answer = el("div.bt-answer", { style: "display:none" });
 
       function resolve(correct) {
-        if (correct && buzzedBy) sc.add(buzzedBy);
+        if (correct && buzzedBy) { sc.add(buzzedBy); celebrate(); }
         revealAnswer();
       }
       function revealAnswer() {
@@ -316,6 +317,7 @@ export function render(container, { game }) {
     const scores = {}; // deviceId -> total (autorité hôte, diffusé via state)
     let roundTrack = null; // secret DJ
     let lastTotals = null; // pour l'écran final
+    let btFxRound = -1; // manche dont les confettis du gagnant ont déjà été joués
 
     liveStop = liveSession(stage, {
       gameId: "blind-test",
@@ -335,7 +337,7 @@ export function render(container, { game }) {
         ps.forEach((p) => (roles[p.id] = true));
         return { roles, meta: { base } };
       },
-      renderMine: (mine, ctx) => liveRound(ctx),
+      renderMine: (mine, ctx) => liveRound(ctx), // ctx porte n (manche)
       renderReveal: (live, { api }) => {
         const names = live.names || {};
         const totals = lastTotals || (live.meta && live.meta.base) || {};
@@ -354,7 +356,7 @@ export function render(container, { game }) {
 
     const BUZZ_PTS = [10, 7, 5, 3]; // points selon le rang de buzz du gagnant
 
-    function liveRound({ api, meta }) {
+    function liveRound({ api, meta, n }) {
       let order = [];
       let rejected = [];
       let decided = false;
@@ -429,6 +431,9 @@ export function render(container, { game }) {
         api.sendState({ phase: "flop", answer: { title: roundTrack.title, artist: roundTrack.artist }, totals });
       }
       function showResult(s) {
+        // Confettis du gagnant : une seule fois par manche (n survit au re-render
+        // « Revenir à la manche » et au replay du state ; garde au scope startLive).
+        if (s.phase === "won" && n != null && n !== btFxRound) { btFxRound = n; celebrate(); }
         decided = true;
         lastTotals = s.totals || lastTotals;
         const ids = Object.keys(s.totals || {}).sort((a, b) => (s.totals[b] || 0) - (s.totals[a] || 0));
@@ -479,9 +484,8 @@ export function render(container, { game }) {
         currentAudio = audioEl && audioEl.pause ? audioEl : null;
         bits.push(el("p.screen__subtitle", { text: "🎧 Tu es le DJ" }), audioEl);
       } else {
-        buzzBtn = el("button.bt-buzzer", {
+        buzzBtn = el("button.bt-buzzer.bt-buzzer--big", {
           text: "🔔 BUZZ !",
-          style: "width:100%;font-size:1.5rem;padding:24px",
           onClick: () => {
             buzzBtn.disabled = true;
             buzz();

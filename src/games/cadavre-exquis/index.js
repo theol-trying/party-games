@@ -2,6 +2,7 @@ import { el, screenHead, announce, showPhase, shuffle, pick } from "../../ui.js"
 import { openEditor } from "../../content.js";
 import { contentSource } from "../../game-kit.js";
 import { liveSession, peekAutoLive } from "../../realtime.js";
+import { celebrate } from "../../fx.js";
 import { AMORCES, OUVERTURES, CLOTURES, THEMES } from "./data.js";
 
 const SCHEMA = {
@@ -15,6 +16,7 @@ export function render(container, { game }) {
   let seePrevious = false; // mode : voir la ligne précédente ou non
   let theme = "libre"; // thème d'histoire (solo)
   let liveStop = null;
+  let podiumFxRound = -1; // manche dont les confettis du podium ont déjà été joués
   const src = contentSource("cadavre-exquis", { builtIn: AMORCES });
 
   container.append(screenHead(game.title, "Chacun écrit sans voir la suite"));
@@ -227,7 +229,7 @@ export function render(container, { game }) {
       ];
     }
 
-    function livePodium(live, { api }) {
+    function livePodium(live, { api, n }) {
       const names = live.names || {};
       const inputs = live.inputs || {};
       const meta = live.meta || {};
@@ -241,6 +243,9 @@ export function render(container, { game }) {
       });
       const max = Math.max(0, ...Object.values(tally));
       const winners = ids.filter((id) => max > 0 && tally[id] === max);
+      // Confettis à la révélation du podium : une seule fois par manche (n) → pas de
+      // re-tir à « Revoir », pas de suppression si deux manches ont le même décompte.
+      if (winners.length && n != null && n !== podiumFxRound) { podiumFxRound = n; celebrate(); }
       return el("div", {}, [
         el("h3.center", { text: "🏆 Podium" }),
         winners.length

@@ -334,3 +334,64 @@ select:focus-visible {
 .ed-bulk summary { cursor: pointer; color: var(--text-dim); font-size: 14px; margin-bottom: 8px; }
 .ed-list { max-height: 340px; overflow-y: auto; }
 .ed-row.is-off { opacity: 0.45; }
+
+/* ===================== FX — effets de fête (fx.js) ===================== */
+/* Tampon « GAGE » plein écran */
+.fx-stamp {
+  position: fixed; inset: 0; z-index: 9999; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 20px; padding: 24px; text-align: center;
+  background: radial-gradient(circle at center, rgba(120,0,20,0.72), rgba(10,0,4,0.92));
+  backdrop-filter: blur(3px); animation: fxFade 0.18s ease;
+}
+.fx-stamp__mark {
+  font-size: clamp(56px, 22vw, 150px); font-weight: 900; letter-spacing: 4px;
+  color: #ff2d55; text-transform: uppercase;
+  border: 6px solid #ff2d55; border-radius: 16px; padding: 4px 26px;
+  text-shadow: 0 4px 24px rgba(255,45,85,0.6); box-shadow: 0 0 40px rgba(255,45,85,0.4);
+  transform: rotate(-8deg); animation: fxStamp 0.5s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+.fx-stamp__card {
+  max-width: 480px; font-size: clamp(18px, 5vw, 26px); font-weight: 700; color: #fff;
+  line-height: 1.4; animation: fxFade 0.4s ease 0.25s both;
+}
+.fx-stamp__hint { color: rgba(255,255,255,0.6); font-size: 14px; animation: fxFade 0.4s ease 0.5s both; }
+.fx-stamp--calm { animation: none; backdrop-filter: none; }
+.fx-stamp--calm .fx-stamp__mark, .fx-stamp--calm .fx-stamp__card, .fx-stamp--calm .fx-stamp__hint { animation: none; }
+@keyframes fxStamp {
+  0% { transform: rotate(-8deg) scale(3); opacity: 0; }
+  60% { opacity: 1; }
+  100% { transform: rotate(-8deg) scale(1); opacity: 1; }
+}
+@keyframes fxFade { from { opacity: 0; } to { opacity: 1; } }
+.fx-shake { animation: fxShake 0.36s ease; }
+@keyframes fxShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); } 40% { transform: translateX(7px); }
+  60% { transform: translateX(-5px); } 80% { transform: translateX(4px); }
+}
+
+/* Carte 3D qui se retourne (flipReveal) */
+.fx-flip { perspective: 900px; margin: 14px auto; max-width: 340px; }
+.fx-flip__inner {
+  position: relative; width: 100%; height: 100%;
+  transform-style: preserve-3d; transition: transform 0.7s cubic-bezier(0.4, 0.15, 0.2, 1);
+}
+.fx-flip__inner.is-flipped { transform: rotateY(180deg); }
+.fx-flip__face {
+  position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; padding: 16px; border-radius: 16px; border: 2px solid var(--border);
+  text-align: center;
+}
+.fx-flip__front {
+  background: linear-gradient(135deg, var(--bg-card), var(--bg-soft));
+  background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.03) 0 12px, transparent 12px 24px);
+}
+.fx-flip__q { font-size: 46px; }
+.fx-flip__back {
+  transform: rotateY(180deg); background: var(--bg-soft);
+  font-size: clamp(18px, 5vw, 24px); font-weight: 800;
+}
+.fx-flip__back.is-danger { border-color: #ff4d6d; background: rgba(255,77,109,0.14); color: #ff8095; animation: fxShake 0.4s ease 0.6s; }
+.fx-flip__back.is-gold { border-color: #ffd43b; background: rgba(255,212,59,0.14); color: #ffe066; box-shadow: 0 0 28px rgba(255,212,59,0.35); }

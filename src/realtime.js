@@ -347,7 +347,9 @@ export function liveSession(stage, {
     if (host === me) actions.push(el("button.btn.btn--full", { text: newRoundLabel, onClick: distribute }));
     actions.push(el("button.btn.btn--ghost.btn--full", { text: "Retour au salon", style: "margin-top:10px", onClick: lobbyScreen }));
     showPhase(stage, el("div.card.center", {}, [
-      renderReveal(revealed, { api }),
+      // n : identité de manche stable → les jeux keyent leurs FX dessus (une seule
+      // salve par manche, pas de re-tir à « Revoir la révélation »).
+      renderReveal(revealed, { api, n: revealed && revealed.n }),
       el("div", { style: "margin-top:16px" }, actions),
       statusLine(),
     ]));
@@ -402,7 +404,7 @@ export function liveSession(stage, {
     if (shownReveal && n === shownRound) return;
     shownReveal = true;
     shownRound = n;
-    lastRevealed = { roles, names, meta, inputs: inputs || {}, order: order || [] };
+    lastRevealed = { n, roles, names, meta, inputs: inputs || {}, order: order || [] };
     jingle();
     revealScreen(lastRevealed);
   }

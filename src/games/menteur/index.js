@@ -4,6 +4,7 @@ import { playersCard } from "../../players.js";
 import { openEditor } from "../../content.js";
 import { passThePhone, contentSource } from "../../game-kit.js";
 import { liveSession, peekAutoLive } from "../../realtime.js";
+import { celebrate } from "../../fx.js";
 import { MISSIONS } from "./data.js";
 
 const SCHEMA = {
@@ -16,6 +17,7 @@ export function render(container, { game }) {
   const src = contentSource("menteur", { builtIn: MISSIONS });
   let deck = createDeck(missions());
   let liveStop = null;
+  let menteurFxRound = -1; // manche dont les confettis du verdict ont déjà été joués
   container.append(screenHead(game.title, "Une mission secrète à glisser dans la conversation"));
   const stage = el("div");
   container.append(stage);
@@ -105,7 +107,7 @@ export function render(container, { game }) {
           status,
         ];
       },
-      renderReveal: (live, { api }) => {
+      renderReveal: (live, { api, n }) => {
         const names = live.names || {};
         const inputs = live.inputs || {};
         const ids = Object.keys(names);
@@ -160,7 +162,13 @@ export function render(container, { game }) {
         }
 
         api.on("state", (s) => {
-          if (s && s.menteurVerdict) { verdict = s.menteurVerdict; render(); }
+          if (s && s.menteurVerdict) {
+            verdict = s.menteurVerdict;
+            // Payoff une seule fois par manche (n survit aux re-renders et au replay
+            // du state via « Revoir la révélation » ; garde au scope render()).
+            if (n != null && n !== menteurFxRound) { menteurFxRound = n; celebrate(); }
+            render();
+          }
         });
         render();
         return wrap;
