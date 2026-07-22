@@ -56,6 +56,15 @@ export function render(container, { game }) {
           if (m == null) { deck.reset(); m = deck.next(); }
           roles[p.id] = { mission: m };
         });
+        // 🕵️ La Taupe : à 3+ joueurs, un joueur tiré au sort connaît la mission
+        // d'un autre et gagne 3 gorgées à distribuer s'il le fait griller.
+        if (ps.length >= 3) {
+          const ti = Math.floor(Math.random() * ps.length);
+          let gi = Math.floor(Math.random() * ps.length);
+          if (gi === ti) gi = (gi + 1) % ps.length;
+          const taupe = ps[ti], cible = ps[gi];
+          roles[taupe.id].espionne = { id: cible.id, name: cible.name, mission: roles[cible.id].mission };
+        }
         return { roles };
       },
       renderMine: (mine, { api }) => {
@@ -103,6 +112,14 @@ export function render(container, { game }) {
           el("p.screen__subtitle", { text: "Accomplis-la sans te faire griller." }),
           bonusBtn,
           bonusBox,
+          mine.espionne
+            ? el("div.card", { style: "margin-top:14px;border-color:var(--accent)" }, [
+                el("p", { text: "🕵️ Tu es la Taupe !", style: "font-weight:800" }),
+                el("p.screen__subtitle", { text: `Mission secrète de ${mine.espionne.name} :` }),
+                el("div.mt-mission", { text: mine.espionne.mission }),
+                el("p.screen__subtitle", { text: `Fais-le griller (accuse-le, et qu'il soit le plus accusé) → 3 gorgées à distribuer. Sans te faire repérer !` }),
+              ])
+            : null,
           el("h3", { text: "🕵️ Qui accuses-tu ?", style: "margin-top:18px" }),
           el("p.screen__subtitle", { text: "Vote secret : qui s'est fait griller selon toi ? ⚠️ Accuser à tort se paie…" }),
           el("div.stack", {}, btns),
@@ -119,6 +136,9 @@ export function render(container, { game }) {
         const max = Math.max(0, ...Object.values(tally));
         const grilled = ids.filter((id) => max > 0 && tally[id] === max);
         const accusers = ids.filter((id) => inputs[id] && grilled.includes(inputs[id].vote));
+        // 🕵️ La Taupe : réussie si elle a accusé sa cible ET que la cible est grillée.
+        const taupeId = ids.find((id) => live.roles[id] && live.roles[id].espionne);
+        const taupeTarget = taupeId ? live.roles[taupeId].espionne : null;
         let verdict = null; // 'grille' | 'infonde' — décidé par l'hôte après débat
         const wrap = el("div");
 
@@ -157,6 +177,21 @@ export function render(container, { game }) {
                   ? `⚖️ Accusation infondée : ${accusers.map((id) => names[id]).join(", ")} boi${accusers.length > 1 ? "vent" : "t"} !`
                   : "⚖️ Accusation infondée… mais personne à punir 🤷",
                 style: "font-weight:800;margin-top:8px",
+              }));
+            }
+          }
+          // 🕵️ Dénouement de la Taupe (une fois le verdict rendu).
+          if (taupeId && taupeTarget) {
+            const taupeVote = inputs[taupeId] && inputs[taupeId].vote;
+            const won = verdict === "grille" && grilled.includes(taupeTarget.id) && taupeVote === taupeTarget.id;
+            if (!verdict) {
+              bits.push(el("p.screen__subtitle", { text: "🕵️ Une Taupe se cachait dans la partie…", style: "margin-top:12px" }));
+            } else {
+              bits.push(el("p", {
+                text: won
+                  ? `🕵️ La Taupe ${names[taupeId]} a fait griller sa cible ${taupeTarget.name} → 3 gorgées à distribuer ! 😈`
+                  : `🕵️ La Taupe était ${names[taupeId]} (cible : ${taupeTarget.name}) — mission ratée.`,
+                style: "font-weight:700;margin-top:12px",
               }));
             }
           }

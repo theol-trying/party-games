@@ -143,6 +143,7 @@ export function render(container, { game }) {
     if (liveStop) liveStop();
     const deck = createDeck(questions(), { seen, keyOf: qKey });
     const scores = {}; // deviceId -> total cumulé (converge sur tous les clients)
+    const streaks = {}; // deviceId -> série de bonnes réponses consécutives (autorité meta)
     let level = "soft"; // niveau des gages, réglé par l'hôte
     // Catégories filtrées par l'hôte (deck côté hôte : c'est lui qui tire les questions).
     const cats = new Set(CATEGORIES.map((c) => c.id));
@@ -168,23 +169,38 @@ export function render(container, { game }) {
       assign: (ps) => {
         const item = deck.next() || { q: "?", choices: ["?"], correct: 0 };
         const base = {};
-        ps.forEach((p) => (base[p.id] = scores[p.id] || 0));
+        const strk = {};
+        ps.forEach((p) => { base[p.id] = scores[p.id] || 0; strk[p.id] = streaks[p.id] || 0; });
         const roles = {};
         ps.forEach((p) => (roles[p.id] = true)); // tout le monde reçoit la même question
-        return { roles, meta: { q: item.q, choices: item.choices, correct: item.correct, level, base } };
+        return { roles, meta: { q: item.q, choices: item.choices, correct: item.correct, level, base, streaks: strk } };
       },
       renderMine: (mine, ctx) => liveRound(ctx),
-      renderReveal: (live, ctx) => liveReveal(live, scores, ctx), // ctx porte n (manche)
+      renderReveal: (live, ctx) => liveReveal(live, scores, streaks, ctx), // ctx porte n (manche)
     });
   }
 
   // Écran de réponse (identique sur chaque téléphone).
   function liveRound({ api, meta, n }) {
     let answered = false;
+    let myX2 = false; // « Tout ou rien » : la réponse compte double (ou -100 si fausse)
     const total = api.players().length;
     const prog = el("p.screen__subtitle", { text: `0 / ${total} ont répondu`, style: "margin-top:14px" });
     const timerLine = el("p", { style: "min-height:22px;font-weight:800;font-size:1.2rem;margin-top:10px" });
     const feedback = el("div.qz-feedback", { style: "min-height:24px;margin-top:8px" });
+
+    // 🎯 Tout ou rien : à activer AVANT de répondre.
+    const myStreak = (meta.streaks && meta.streaks[api.me]) || 0;
+    const x2Btn = el("button.chip", {
+      text: "🔥 Je double (risqué : faux = −100 + gage)",
+      style: "margin-top:12px",
+      onClick: () => {
+        if (answered) return;
+        myX2 = !myX2;
+        x2Btn.classList.toggle("is-active", myX2);
+        x2Btn.textContent = myX2 ? "🔥 DOUBLÉ ! (faux = −100 + gage)" : "🔥 Je double (risqué : faux = −100 + gage)";
+      },
+    });
 
     const btns = meta.choices.map((c, idx) =>
       el("button.btn.btn--ghost.btn--full.qz-choice", {
@@ -193,11 +209,12 @@ export function render(container, { game }) {
         onClick: () => {
           if (answered) return;
           answered = true;
-          api.submit({ choice: idx });
+          api.submit({ choice: idx, x2: myX2 || undefined });
           btns.forEach((b) => (b.disabled = true));
+          x2Btn.disabled = true;
           btns[idx].style.borderColor = "var(--accent)";
           btns[idx].style.color = "var(--accent)";
-          feedback.textContent = "✅ Réponse envoyée — en attente des autres…";
+          feedback.textContent = (myX2 ? "🔥 Doublé ! " : "✅ ") + "Réponse envoyée — en attente des autres…";
         },
       })
     );
@@ -225,9 +242,10 @@ export function render(container, { game }) {
       : null;
 
     return [
-      el("p.screen__subtitle", { text: `Question ${n}` }),
+      el("p.screen__subtitle", { text: `Question ${n}${myStreak >= 2 ? ` · série ${myStreak} 🔥` : ""}` }),
       el("h2.qz-question", { text: meta.q, style: "margin:8px 0 8px" }),
       el("div.stack", {}, btns),
+      el("div.row", { style: "justify-content:center" }, [x2Btn]),
       timerLine,
       feedback,
       prog,
@@ -236,40 +254,64 @@ export function render(container, { game }) {
   }
 
   // Résultats de la manche + classement (calcul déterministe partagé).
-  function liveReveal(live, scores, { api, n }) {
-    const { choices, correct, base = {}, level = "soft" } = live.meta || {};
+  function liveReveal(live, scores, streaks, { api, n }) {
+    const { choices, correct, base = {}, level = "soft", streaks: metaStreaks = {} } = live.meta || {};
     const inputs = live.inputs || {};
     const order = live.order || [];
     const names = live.names || {};
 
-    // Delta de la manche : bonne réponse + bonus au rang d'arrivée (déterministe).
+    // Delta de la manche : bonne réponse + bonus rapidité, ×2 si « Je double »,
+    // + bonus de série (déterministe, autorité meta.streaks). Faux + doublé = −100.
     const delta = {};
     let rank = 0;
     order.forEach((id) => {
-      if (inputs[id] && inputs[id].choice === correct) delta[id] = roundPoints(rank++);
+      const inp = inputs[id];
+      if (inp && inp.choice === correct) {
+        let pts = roundPoints(rank++);
+        if (inp.x2) pts *= 2;
+        const st = (metaStreaks[id] || 0) + 1;
+        if (st >= 3) pts += Math.min(40, (st - 2) * 20); // série ≥3 : +20, +40 (cap)
+        delta[id] = pts;
+      }
     });
-    // Totaux recalculés depuis la base autoritative → aucune dérive entre appareils.
+    // Totaux (base autoritative + delta, plancher 0) + mise à jour des séries.
     const ids = Object.keys(names);
-    ids.forEach((id) => (scores[id] = (base[id] || 0) + (delta[id] || 0)));
+    ids.forEach((id) => {
+      const inp = inputs[id];
+      const ok = inp && inp.choice === correct;
+      if (ok) streaks[id] = (metaStreaks[id] || 0) + 1;
+      else { streaks[id] = 0; if (inp && inp.x2) delta[id] = -100; } // doublé raté
+      scores[id] = Math.max(0, (base[id] || 0) + (delta[id] || 0));
+    });
 
     const rows = ids
       .map((id) => ({ id, name: names[id], total: scores[id], d: delta[id] || 0, choice: inputs[id] ? inputs[id].choice : null }))
       .sort((a, b) => b.total - a.total);
 
     const me = api.me;
-    const myChoice = inputs[me] ? inputs[me].choice : null;
+    const myInp = inputs[me];
+    const myChoice = myInp ? myInp.choice : null;
+    const myOk = myChoice === correct;
     const others = Object.keys(names).filter((id) => id !== me).map((id) => names[id]);
-    const myGage = myChoice === correct ? null : pickGage(level, others);
-    const myCallout = myChoice === correct
-      ? el("div.qz-feedback", { text: `✅ Bravo ! +${delta[me] || 0} points`, style: "margin:6px 0 14px" })
-      : el("div.qz-feedback", { style: "margin:6px 0 14px" }, [`❌ Raté. Ton gage : `, el("strong", { text: myGage })]);
+    const myGage = myOk ? null : pickGage(level, others);
+    let myCallout;
+    if (myOk) {
+      const st = streaks[me] || 0;
+      myCallout = el("div.qz-feedback", { text: `✅ Bravo ! +${delta[me] || 0}${myInp.x2 ? " 🔥 DOUBLÉ" : ""}${st >= 3 ? ` · série ${st} 🔥` : ""}`, style: "margin:6px 0 14px" });
+    } else if (myInp && myInp.x2) {
+      myCallout = el("div.qz-feedback", { style: "margin:6px 0 14px" }, [`💥 Doublé raté : −100 ! Ton gage : `, el("strong", { text: myGage })]);
+    } else if (myInp) {
+      myCallout = el("div.qz-feedback", { style: "margin:6px 0 14px" }, [`❌ Raté. Ton gage : `, el("strong", { text: myGage })]);
+    } else {
+      myCallout = el("div.qz-feedback", { text: "⏳ Pas de réponse cette manche.", style: "margin:6px 0 14px" });
+    }
 
     // FX personnels : une seule fois par manche (n identifie la manche → pas de
     // re-tir à « Revoir la révélation » ni au replay du state, ni de collision de clé).
     if (n != null && n !== quizFxRound) {
       quizFxRound = n;
-      if (myChoice === correct) celebrate();
-      else if (myChoice != null) stampGage(myGage);
+      if (myOk) celebrate();
+      else if (myInp != null) stampGage(myGage);
     }
 
     return el("div", {}, [
@@ -280,7 +322,7 @@ export function render(container, { game }) {
       el("div.stack", {}, rows.map((r, i) =>
         el("div.uc-role-row", {}, [
           el("span", { text: `${i + 1}. ${r.name}${r.id === me ? " (toi)" : ""}` }),
-          el("span", { text: `${r.total} pts${r.d ? ` (+${r.d})` : ""} ${r.choice === correct ? "✅" : r.choice == null ? "⏳" : "❌"}` }),
+          el("span", { text: `${r.total} pts${r.d ? ` (${r.d > 0 ? "+" : ""}${r.d})` : ""} ${r.choice === correct ? "✅" : r.choice == null ? "⏳" : "❌"}` }),
         ])
       )),
     ]);

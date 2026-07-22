@@ -53,6 +53,9 @@ export function render(container, { game }) {
     const deckFor = (lv) => (liveDecks[lv] ||= createDeck(pool(lv), { seen }));
     let liveMode = "classic"; // classique : phrase de la banque · grill : la table piège une cible
     let grillTurn = -1; // rotation équitable de la cible du grill
+    // Mémoire de la manche (keyée sur n) : survit au re-render « Revenir à la manche »
+    // → on restaure la réponse + le pari au lieu de les écraser en re-répondant.
+    let jjN = -1, jjDone = null, jjGuess = null;
 
     liveStop = liveSession(stage, {
       gameId: "jamais-jamais",
@@ -91,29 +94,69 @@ export function render(container, { game }) {
         if (p == null) { deckFor(level).reset(); p = deckFor(level).next(); }
         return { roles, meta: { phrase: p || "…", level } };
       },
-      renderMine: (mine, { api, meta }) => {
+      renderMine: (mine, { api, meta, n }) => {
         if (meta && meta.mode === "grill") return grillRound(api, meta);
-        let done = false;
-        const status = el("p.screen__subtitle", { text: "Réponds en secret 🤫", style: "margin-top:12px" });
+        if (n !== jjN) { jjN = n; jjDone = null; jjGuess = null; } // nouvelle manche : mémoire fraîche
+        // Restauration : si on revient sur une manche déjà jouée (« Revenir à la
+        // manche »), on repart de l'état mémorisé au lieu de tout réinitialiser.
+        let done = jjDone != null;
+        let myDone = jjDone;
+        let myGuess = jjGuess;
+        const nPlayers = api.players().length;
+        const status = el("p.screen__subtitle", { text: done ? "✅ Réponse envoyée — parie sur le nombre de coupables…" : "Réponds en secret 🤫", style: "margin-top:12px" });
         const bYes = el("button.btn.btn--full", { text: "🙋 Je l'ai fait", style: "margin-top:14px" });
         const bNo = el("button.btn.btn--full.btn--ghost", { text: "😇 Jamais", style: "margin-top:10px" });
+
+        // 🔢 Pari : combien de joueurs l'ont fait ? (apparaît après ta réponse)
+        let guessVal = myGuess != null ? myGuess : Math.round(nPlayers / 2);
+        const guessNum = el("span", { text: String(guessVal), style: "font-weight:800;font-size:1.3rem;margin:0 14px" });
+        const guessOk = el("span", { text: myGuess != null ? " ✅" : "" });
+        const step = (d) => () => { if (myGuess != null) return; guessVal = Math.max(0, Math.min(nPlayers, guessVal + d)); guessNum.textContent = String(guessVal); };
+        const decB = el("button.chip", { text: "−", onClick: step(-1), disabled: myGuess != null });
+        const incB = el("button.chip", { text: "+", onClick: step(1), disabled: myGuess != null });
+        const betB = el("button.chip", {
+          text: "🔮 Parier",
+          disabled: myGuess != null,
+          onClick: () => {
+            if (myGuess != null || myDone == null) return;
+            myGuess = guessVal;
+            jjGuess = myGuess; // mémorisé (survit au re-render)
+            api.submit({ done: myDone, guess: myGuess }); // re-soumission : remplace la donnée, garde le rang
+            [decB, incB, betB].forEach((b) => (b.disabled = true));
+            guessOk.textContent = " ✅";
+          },
+        });
+        const guessRow = el("div", { style: `margin-top:16px;${done ? "" : "display:none"}` }, [
+          el("p.screen__subtitle", { text: "🔮 Bonus : combien de joueurs l'ont fait (toi inclus) ?", style: "margin-bottom:6px" }),
+          el("div.row", { style: "justify-content:center;align-items:center" }, [decB, guessNum, incB, betB, guessOk]),
+        ]);
+
         const answer = (val, btn) => {
           if (done) return;
           done = true;
+          myDone = val;
+          jjDone = val; // mémorisé (survit au re-render → pas d'écrasement du pari)
           api.submit({ done: val });
           [bYes, bNo].forEach((b) => (b.disabled = true));
           btn.style.borderColor = "var(--accent)";
-          status.textContent = "✅ Réponse envoyée — en attente des autres…";
+          status.textContent = "✅ Réponse envoyée — parie sur le nombre de coupables…";
+          guessRow.style.display = "";
         };
         bYes.addEventListener("click", () => answer(true, bYes));
         bNo.addEventListener("click", () => answer(false, bNo));
+        // Reflète l'état restauré : réponse figée + camp choisi surligné.
+        if (done) {
+          bYes.disabled = true;
+          bNo.disabled = true;
+          (myDone ? bYes : bNo).style.borderColor = "var(--accent)";
+        }
         api.on("progress", (d, total) => {
           if (done) status.textContent = `✅ Répondu · ${d.length} / ${total}`;
         });
         return [
           el("p.screen__subtitle", { text: "Je n'ai jamais…" }),
           el("div.big-prompt.jj-prompt", { text: meta.phrase }),
-          bYes, bNo, status,
+          bYes, bNo, status, guessRow,
         ];
       },
       renderReveal: (live, { api }) => {
@@ -127,6 +170,19 @@ export function render(container, { game }) {
         if (!did.length && not.length) verdict = "Personne ne l'a fait… tables d'anges 😇";
         else if (did.length === ids.length) verdict = "TOUT LE MONDE l'a fait 😱 Santé générale !";
         else verdict = `${did.length} coupable${did.length > 1 ? "s" : ""} → ils boivent ! 🍻`;
+
+        // 🔮 Pari sur le nombre de coupables : le plus proche gagne, le plus loin boit.
+        const actual = did.length;
+        const guessers = ids.filter((id) => inputs[id] && typeof inputs[id].guess === "number");
+        let prophets = [], wrongest = [];
+        if (guessers.length) {
+          const dist = (id) => Math.abs(inputs[id].guess - actual);
+          const minD = Math.min(...guessers.map(dist));
+          const maxD = Math.max(...guessers.map(dist));
+          prophets = guessers.filter((id) => dist(id) === minD);
+          if (maxD > minD) wrongest = guessers.filter((id) => dist(id) === maxD);
+        }
+
         const row = (id, tag) =>
           el("div.uc-role-row", {}, [
             el("span", { text: names[id] + (id === api.me ? " (toi)" : "") }),
@@ -137,10 +193,17 @@ export function render(container, { game }) {
           el("p", { text: (live.meta || {}).phrase || "…", style: "font-weight:800;margin:6px 0 12px" }),
           el("p", { text: verdict, style: "font-weight:700;margin-bottom:12px" }),
           el("div.stack", {}, [
-            ...did.map((id) => row(id, "🙋🍺")),
-            ...not.map((id) => row(id, "😇")),
+            ...did.map((id) => row(id, "🙋🍺" + (inputs[id].guess != null ? ` · 🔮 ${inputs[id].guess}` : ""))),
+            ...not.map((id) => row(id, "😇" + (inputs[id].guess != null ? ` · 🔮 ${inputs[id].guess}` : ""))),
             ...ids.filter((id) => !inputs[id]).map((id) => row(id, "⏳")),
           ]),
+          guessers.length
+            ? el("div", { style: "margin-top:12px" }, [
+                el("p", { text: `🔮 Pari : ${actual} coupable${actual > 1 ? "s" : ""} au total.`, style: "font-weight:700" }),
+                el("p", { text: `🎯 Meilleur pronostic : ${prophets.map((id) => names[id]).join(", ")}`, style: "margin-top:4px" }),
+                wrongest.length ? el("p", { text: `😵 Le plus loin du compte boit : ${wrongest.map((id) => names[id]).join(", ")} 🍻`, style: "margin-top:4px" }) : null,
+              ])
+            : null,
         ]);
       },
     });

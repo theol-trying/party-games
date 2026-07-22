@@ -53,6 +53,9 @@ export function render(container, { game }) {
   function startLive() {
     if (liveStop) liveStop();
     let turn = -1; // rotation équitable des joueurs désignés
+    // Mémoire de la manche (keyée sur n) : survit au re-render « Revenir à la manche »
+    // → on restaure la carte / le pari déjà posé au lieu de rouvrir la mise.
+    let avN = -1, avBet = null, avCard = null;
 
     liveStop = liveSession(stage, {
       gameId: "action-verite",
@@ -79,12 +82,14 @@ export function render(container, { game }) {
         // open : le choix du joueur désigné est diffusé à tous en direct.
         return { roles, meta: { target: target.id, targetName: target.name, v, a, level }, open: true };
       },
-      renderMine: (mine, { api, meta }) => {
+      renderMine: (mine, { api, meta, n }) => {
+        if (n !== avN) { avN = n; avBet = null; avCard = null; } // nouvelle manche : mémoire fraîche
         const isTarget = api.me === meta.target;
         const head = el("h3", { text: `🎯 Au tour de ${meta.targetName}${isTarget ? " (toi !)" : ""}` });
         const zone = el("div", { style: "margin-top:14px" });
 
         function showCard(data) {
+          avCard = data; // mémorisé → au re-render (« Revenir à la manche ») on restaure la carte, pas la mise
           const choice = data.choice;
           const kind = choice === "verite" ? "🗣️ Vérité" : "🔥 Action";
           const card = choice === "verite" ? meta.v : meta.a;
@@ -114,20 +119,27 @@ export function render(container, { game }) {
               }));
             }
           }
+          // Résultat du pari du public (le désigné, lui, ne parie pas).
+          if (!isTarget && avBet) {
+            const won = avBet === choice;
+            const betLabel = avBet === "verite" ? "🗣️ Vérité" : "🔥 Action";
+            bits.push(el("p", {
+              text: won ? `😎 Bien vu ! Tu avais parié ${betLabel}` : `🍺 Perdu : tu avais parié ${betLabel} → bois avec ${meta.targetName}`,
+              style: "font-weight:700;margin-top:10px",
+            }));
+          }
           if (api.isHost()) bits.push(el("p.screen__subtitle", { text: "« 🎯 Joueur suivant » pour continuer.", style: "margin-top:8px;opacity:.75" }));
           zone.replaceChildren(...bits);
         }
 
-        if (isTarget) {
-          let chosen = false;
+        if (avCard) {
+          // Le choix du désigné est déjà connu (même après un aller-retour au salon) :
+          // on restaure la carte → les paris sont fermés, pas de re-mise possible.
+          showCard(avCard);
+        } else if (isTarget) {
           const bV = el("button.btn.av-btn-verite", { text: "Vérité" });
           const bA = el("button.btn.av-btn-action", { text: "Action" });
-          const choose = (c) => {
-            if (chosen) return;
-            chosen = true;
-            api.submit({ choice: c });
-            showCard({ choice: c });
-          };
+          const choose = (c) => { if (avCard) return; api.submit({ choice: c }); showCard({ choice: c }); };
           bV.addEventListener("click", () => choose("verite"));
           bA.addEventListener("click", () => choose("action"));
           zone.replaceChildren(
@@ -135,7 +147,28 @@ export function render(container, { game }) {
             el("div.row", { style: "justify-content:center;margin-top:12px" }, [bV, bA])
           );
         } else {
-          zone.replaceChildren(el("p.screen__subtitle", { text: `${meta.targetName} choisit… 🥁` }));
+          // 🗣️ Pari du public : mise sur le choix du désigné pendant qu'il hésite.
+          const label = (s) => (s === "verite" ? "🗣️ Vérité" : "🔥 Action");
+          const betStatus = el("p.screen__subtitle", {
+            text: avBet ? `✅ Tu as parié ${label(avBet)}` : "🗣️ Pendant qu'il hésite, parie sur son choix !",
+            style: "margin-top:8px",
+          });
+          const mkBet = (side) => el("button.btn.btn--ghost", {
+            text: label(side), disabled: !!avBet,
+            onClick: () => {
+              if (avBet || avCard) return; // déjà parié, ou le choix est déjà tombé
+              avBet = side;
+              api.submit({ bet: side });
+              [...betRow.querySelectorAll("button")].forEach((b) => (b.disabled = true));
+              betStatus.textContent = `✅ Tu as parié ${label(side)}`;
+            },
+          });
+          const betRow = el("div.row", { style: "justify-content:center;margin-top:12px" }, [mkBet("verite"), mkBet("action")]);
+          zone.replaceChildren(
+            el("p.screen__subtitle", { text: `${meta.targetName} choisit… 🥁` }),
+            betStatus,
+            betRow,
+          );
         }
 
         // Tout le monde voit la carte (et un éventuel refus) dès que le désigné agit.
@@ -148,7 +181,13 @@ export function render(container, { game }) {
       },
       renderReveal: (live) => {
         const meta = live.meta || {};
-        const ch = live.inputs && live.inputs[meta.target] && live.inputs[meta.target].choice;
+        const inputs = live.inputs || {};
+        const names = live.names || {};
+        const ch = inputs[meta.target] && inputs[meta.target].choice;
+        // Bilan des paris du public.
+        const bettors = Object.keys(names).filter((id) => id !== meta.target && inputs[id] && inputs[id].bet);
+        const right = ch ? bettors.filter((id) => inputs[id].bet === ch) : [];
+        const wrong = ch ? bettors.filter((id) => inputs[id].bet !== ch) : [];
         return el("div", {}, [
           el("h3", { text: `Récap — ${meta.targetName || "?"}` }),
           ch
@@ -157,6 +196,13 @@ export function render(container, { game }) {
                 el("div.big-prompt.av-prompt", { text: ch === "verite" ? meta.v : meta.a }),
               ])
             : el("p.screen__subtitle", { text: "Aucun choix fait cette manche." }),
+          bettors.length
+            ? el("div", { style: "margin-top:12px" }, [
+                el("p.screen__subtitle", { text: "🗣️ Paris du public :", style: "margin-bottom:4px" }),
+                right.length ? el("p", { text: `😎 Bien vu : ${right.map((id) => names[id]).join(", ")}`, style: "font-weight:700" }) : null,
+                wrong.length ? el("p", { text: `🍺 À côté (ils boivent) : ${wrong.map((id) => names[id]).join(", ")}`, style: "font-weight:700;margin-top:2px" }) : null,
+              ])
+            : null,
         ]);
       },
     });
