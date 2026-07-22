@@ -11,6 +11,7 @@ import { contentSource } from "../../game-kit.js";
 import { liveSession, syncCountdown, peekAutoLive } from "../../realtime.js";
 import { tick, vibrate } from "../../sound.js";
 import { confettiBurst, celebrate, stampGage } from "../../fx.js";
+import { awardStanding } from "../../crown.js";
 import { QUESTIONS, CATEGORIES } from "./data.js";
 
 // Points d'une bonne réponse : base + bonus de rapidité selon le rang d'arrivée.
@@ -312,6 +313,8 @@ export function render(container, { game }) {
       quizFxRound = n;
       if (myOk) celebrate();
       else if (myInp != null) stampGage(myGage);
+      // 👑 Contribue au Roi de la soirée (classement courant du quiz).
+      if (api.isHost()) awardStanding("quiz-gages", rows.map((r) => r.id), names, live.avatars || {});
     }
 
     return el("div", {}, [

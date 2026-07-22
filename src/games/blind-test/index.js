@@ -8,6 +8,7 @@ import { openEditor } from "../../content.js";
 import { contentSource } from "../../game-kit.js";
 import { liveSession } from "../../realtime.js";
 import { celebrate } from "../../fx.js";
+import { awardStanding } from "../../crown.js";
 import { TRACKS } from "./data.js";
 
 const BT_SCHEMA = {
@@ -342,6 +343,8 @@ export function render(container, { game }) {
         const names = live.names || {};
         const totals = lastTotals || (live.meta && live.meta.base) || {};
         const rows = Object.keys(names).map((id) => ({ id, t: totals[id] || 0 })).sort((a, b) => b.t - a.t);
+        // 👑 Contribue au Roi de la soirée (classement final du blind test).
+        if (api.isHost() && rows.some((r) => r.t > 0)) awardStanding("blind-test", rows.map((r) => r.id), names, live.avatars || {});
         return el("div", {}, [
           el("h3", { text: "🏁 Classement final", style: "margin-bottom:10px" }),
           el("div.stack", {}, rows.map((r, i) =>

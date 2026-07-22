@@ -4,6 +4,7 @@ import { openEditor } from "../../content.js";
 import { contentSource } from "../../game-kit.js";
 import { liveSession, peekAutoLive } from "../../realtime.js";
 import { makeSeen } from "../../seen.js";
+import { awardStanding } from "../../crown.js";
 import { DILEMMES } from "./data.js";
 
 const SCHEMA = {
@@ -195,6 +196,8 @@ export function render(container, { game }) {
         const prophets = majority ? ids.filter((id) => inputs[id] && inputs[id].predict === majority) : [];
         ids.forEach((id) => (predScores[id] = (base[id] || 0) + (prophets.includes(id) ? 1 : 0)));
         const predRank = ids.map((id) => ({ id, s: predScores[id] })).filter((r) => r.s > 0).sort((a, b) => b.s - a.s);
+        // 👑 Contribue au Roi de la soirée (classement des prophètes).
+        if (api.isHost() && predRank.length) awardStanding("tu-preferes", predRank.map((r) => r.id), names, live.avatars || {});
 
         // 📊 Stats de soirée (déterministes : chaque téléphone calcule pareil).
         const total = na + nb;

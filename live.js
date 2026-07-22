@@ -3,7 +3,7 @@
 
    Un salon = un couple (code de soirée, jeu). Protocole JSON :
    Client → serveur :
-     { t:"join", room, game, id, name }
+     { t:"join", room, game, id, name, avatar? }
      { t:"start", roles:{deviceId:payload}, meta?, open? }  (hôte ; open=true →
                        les inputs sont diffusés en cours de manche via progress)
      { t:"input", data }                               (réponse du joueur, manche en cours)
@@ -16,12 +16,12 @@
      { t:"reveal" }                                    (hôte uniquement)
      { t:"leave" }
    Serveur → client :
-     { t:"lobby", players:[{id,name}], host }
-     { t:"round", n, you, names, meta }               (rôle PRIVÉ du joueur)
+     { t:"lobby", players:[{id,name,avatar}], host, avatars }
+     { t:"round", n, you, names, meta, avatars }      (rôle PRIVÉ du joueur)
      { t:"progress", n, done:[ids], total, inputs? }  (ordre = buzzer ; inputs si open)
      { t:"timer", n, endsAt, now }                    (horloge serveur pour compenser l'offset)
      { t:"state", n, data }
-     { t:"revealed", n, roles, inputs, order, names, meta }
+     { t:"revealed", n, roles, inputs, order, names, meta, avatars }
      { t:"kicked" }                                   (à la cible d'un kick, avant fermeture)
      { t:"error", error }
 
@@ -54,8 +54,9 @@ function ensureHost(r) {
 function lobbyMessage(r) {
   return JSON.stringify({
     t: "lobby",
-    players: [...r.players.entries()].map(([id, p]) => ({ id, name: p.name })),
+    players: [...r.players.entries()].map(([id, p]) => ({ id, name: p.name, avatar: p.avatar })),
     host: ensureHost(r),
+    avatars: avatarsOf(r),
   });
 }
 
@@ -69,16 +70,22 @@ function namesOf(r) {
   return names;
 }
 
+function avatarsOf(r) {
+  const avatars = {};
+  for (const [id, p] of r.players.entries()) if (p.avatar) avatars[id] = p.avatar;
+  return avatars;
+}
+
 function sendRoundTo(r, id) {
   const p = r.players.get(id);
   if (!p || !r.round) return;
-  const { n, roles, names, meta, revealed, inputs, order, timerEndsAt, open, lastState } = r.round;
-  p.ws.send(JSON.stringify({ t: "round", n, you: roles[id] ?? null, names, meta }));
+  const { n, roles, names, meta, revealed, inputs, order, timerEndsAt, open, lastState, avatars } = r.round;
+  p.ws.send(JSON.stringify({ t: "round", n, you: roles[id] ?? null, names, meta, avatars }));
   if (order.length)
     p.ws.send(JSON.stringify({ t: "progress", n, done: order, total: r.players.size, ...(open ? { inputs } : {}) }));
   if (timerEndsAt && timerEndsAt > Date.now())
     p.ws.send(JSON.stringify({ t: "timer", n, endsAt: timerEndsAt, now: Date.now() }));
-  if (revealed) p.ws.send(JSON.stringify({ t: "revealed", n, roles, inputs, order, names, meta }));
+  if (revealed) p.ws.send(JSON.stringify({ t: "revealed", n, roles, inputs, order, names, meta, avatars }));
   // Le state part APRÈS revealed : l'écran de révélation du retardataire est
   // ainsi déjà abonné quand l'état (verdict, contestation…) lui parvient.
   if (lastState !== undefined && lastState !== null)
@@ -113,6 +120,7 @@ function handleSocket(ws) {
       const game = String(msg.game || "");
       const id = String(msg.id || "");
       const name = String(msg.name || "").trim().slice(0, 20);
+      const avatar = String(msg.avatar || "").slice(0, 8); // emoji d'avatar (optionnel)
       if (!ROOM_RE.test(room) || !GAME_RE.test(game) || !ID_RE.test(id) || !name) {
         ws.send(JSON.stringify({ t: "error", error: "join invalide" }));
         return ws.close();
@@ -127,7 +135,7 @@ function handleSocket(ws) {
       if (!r.players.has(id) && r.players.size >= MAX_PLAYERS) return ws.close();
       const old = r.players.get(id);
       if (old && old.ws !== ws) old.ws.close(); // reconnexion : remplace l'ancien socket
-      r.players.set(id, { name, ws });
+      r.players.set(id, { name, avatar, ws });
       ensureHost(r); // premier arrivé = hôte
       key = k;
       myId = id;
@@ -147,6 +155,7 @@ function handleSocket(ws) {
         n: (r.round ? r.round.n : 0) + 1,
         roles,
         names: namesOf(r),
+        avatars: avatarsOf(r),
         meta: msg.meta ?? null,
         revealed: false,
         inputs: {}, // deviceId -> réponse soumise
@@ -200,8 +209,8 @@ function handleSocket(ws) {
     } else if (msg.t === "reveal") {
       if (myId !== ensureHost(r) || !r.round) return;
       r.round.revealed = true;
-      const { n, roles, inputs, order, names, meta } = r.round;
-      broadcast(r, JSON.stringify({ t: "revealed", n, roles, inputs, order, names, meta }));
+      const { n, roles, inputs, order, names, meta, avatars } = r.round;
+      broadcast(r, JSON.stringify({ t: "revealed", n, roles, inputs, order, names, meta, avatars }));
     } else if (msg.t === "leave") {
       removePlayer(key, myId, null);
       key = null;

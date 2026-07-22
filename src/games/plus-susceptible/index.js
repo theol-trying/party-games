@@ -2,6 +2,7 @@ import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
 import { makeSeen } from "../../seen.js";
+import { awardStanding } from "../../crown.js";
 import { createScores, scoreboard } from "../../scoring.js";
 import { openEditor } from "../../content.js";
 import { passThePhone, contentSource } from "../../game-kit.js";
@@ -120,6 +121,11 @@ export function render(container, { game }) {
         // Couronnes : base autoritative + delta → aucun décalage entre appareils.
         const base = (live.meta && live.meta.base) || {};
         ids.forEach((id) => (crowns[id] = (base[id] || 0) + (winners.includes(id) ? 1 : 0)));
+        // 👑 Contribue au Roi de la soirée (classement par couronnes).
+        if (api.isHost()) {
+          const cranked = ids.filter((id) => crowns[id] > 0).sort((a, b) => crowns[b] - crowns[a]);
+          if (cranked.length) awardStanding("plus-susceptible", cranked, names, live.avatars || {});
+        }
         const ranking = ids.map((id) => ({ id, v: tally[id] })).sort((a, b) => b.v - a.v);
         const wNames = winners.map((id) => names[id]);
         return el("div", {}, [

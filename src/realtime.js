@@ -34,12 +34,17 @@ import { currentRoom, setRoom, normalizeCode } from "./room.js";
 import { pop, roundCue, jingle } from "./sound.js";
 import { qrCanvas } from "./qr.js";
 import { GAMES } from "./registry.js";
+import { openCrown } from "./crown.js";
 
 const DEV_KEY = "soiree.device";
 const NAME_KEY = "soiree.name";
+const AVATAR_KEY = "soiree.avatar"; // emoji choisi par le joueur (apparaît partout dans le salon)
 const AUTO_KEY = "soiree.autolive"; // « suivre l'hôte » : le prochain jeu ouvre direct son salon
 const JOINED_KEY = "soiree.joined"; // déjà connecté cette session : plus de re-saisie du prénom
 const LASTGAME_KEY = "soiree.lastgame"; // dernier salon rejoint (bannière « Reprendre » de l'accueil)
+
+// Palette d'avatars (emoji) proposée dans l'écran de connexion.
+export const AVATARS = ["🦊", "🐼", "🐸", "🦁", "🐙", "🦄", "🐵", "🐧", "🦉", "🐝", "🦖", "🐳", "👽", "🤖", "👻", "🎃", "🦩", "🐺", "🐷", "🦌", "🐨", "🦈", "🌮", "🍕"];
 // Repli polling (identique à l'ancienne version, volontairement économe).
 const HEARTBEAT_MS = 8000;
 const POLL_MS = 4000;
@@ -60,6 +65,32 @@ export function deviceId() {
   return id;
 }
 const savedName = () => { try { return localStorage.getItem(NAME_KEY) || ""; } catch { return ""; } };
+const savedAvatar = () => { try { return localStorage.getItem(AVATAR_KEY) || ""; } catch { return ""; } };
+// Avatar par défaut : dérivé (stable) de l'id d'appareil, tant que le joueur n'a pas choisi.
+function defaultAvatar(id) {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return AVATARS[h % AVATARS.length];
+}
+/** Couleur stable dérivée d'un texte (pastille d'avatar / accents). */
+export function colorOf(text) {
+  let h = 0;
+  for (let i = 0; i < (text || "").length; i++) h = (h * 31 + text.charCodeAt(i)) >>> 0;
+  return `hsl(${h % 360} 70% 55%)`;
+}
+/** Prénoms d'affichage avec suffixe en cas de doublon (Léa, Léa · 2…). */
+export function dedupeNames(entries) {
+  const counts = {};
+  const seen = {};
+  entries.forEach((e) => { const k = (e.name || "").toLowerCase(); counts[k] = (counts[k] || 0) + 1; });
+  const out = {};
+  entries.forEach((e) => {
+    const k = (e.name || "").toLowerCase();
+    if (counts[k] > 1) { seen[k] = (seen[k] || 0) + 1; out[e.id] = `${e.name} · ${seen[k]}`; }
+    else out[e.id] = e.name;
+  });
+  return out;
+}
 
 /** Le jeu qui se charge doit-il ouvrir directement son salon multi ?
     (posé par « Changer de jeu » avant la navigation ; lu par chaque jeu). */
@@ -118,10 +149,12 @@ export function liveSession(stage, {
   const me = deviceId();
   let stopped = false;
   let myName = "";
+  let myAvatar = savedAvatar() || defaultAvatar(me);
   let net = null; // transport actif : { mode, start, reveal, leave, destroy }
 
   // État partagé rendu par les écrans.
-  let players = []; // [{id, name}]
+  let players = []; // [{id, name, avatar}]
+  let avatars = {}; // deviceId -> emoji (salon courant)
   let host = null;
   let round = null; // { n, you, names, meta }
   let shownRound = -1;
@@ -142,6 +175,7 @@ export function liveSession(stage, {
     me,
     isHost: () => host === me,
     players: () => players.slice(),
+    avatars: () => ({ ...avatars }), // deviceId -> emoji
     submit: (data) => net && net.input(data), // ma réponse (l'ordre d'arrivée sert de buzzer)
     startTimer: (s) => net && net.timer(s), // hôte : chrono synchronisé pour tous
     sendState: (d) => net && net.state(d), // hôte : update diffusé en cours de manche
@@ -222,6 +256,16 @@ export function liveSession(stage, {
       style: "text-transform:uppercase;letter-spacing:.25em;font-weight:800;text-align:center",
       "aria-label": "Code de la soirée",
     });
+    // 😎 Choix de l'avatar : apparaît partout (salon, reveals, podium du Roi).
+    const avatarGrid = el("div.av-grid");
+    const paintAvatars = () => [...avatarGrid.children].forEach((c) => c.classList.toggle("is-active", c.dataset.emoji === myAvatar));
+    AVATARS.forEach((emoji) => {
+      const b = el("button.av-pick", { text: emoji, "aria-label": `Avatar ${emoji}` });
+      b.dataset.emoji = emoji;
+      b.addEventListener("click", () => { myAvatar = emoji; paintAvatars(); });
+      avatarGrid.appendChild(b);
+    });
+    paintAvatars();
     const go = el("button.btn.btn--full", {
       text: "Rejoindre la partie",
       style: "margin-top:14px",
@@ -231,7 +275,7 @@ export function liveSession(stage, {
         const code = normalizeCode(codeInput.value);
         if (!code) { codeInput.focus(); return; }
         setRoom(code); // rejoint la soirée saisie (ou garde la sienne)
-        try { localStorage.setItem(NAME_KEY, name); } catch {}
+        try { localStorage.setItem(NAME_KEY, name); localStorage.setItem(AVATAR_KEY, myAvatar); } catch {}
         myName = name;
         if (net) { try { net.leave(); } catch {} net.destroy(); net = null; } // re-saisie depuis le salon
         connect();
@@ -242,6 +286,8 @@ export function liveSession(stage, {
       el("h3", { text: "🌐 Multi-appareils" }),
       el("p.screen__subtitle", { text: "Chacun sur son téléphone", style: "margin:6px 0 12px" }),
       input,
+      el("p.screen__subtitle", { text: "Choisis ton avatar :", style: "margin:14px 0 6px" }),
+      avatarGrid,
       el("p.screen__subtitle", { text: "Code de la soirée — le MÊME pour tous les joueurs :", style: "margin:14px 0 6px" }),
       codeInput,
       go,
@@ -252,9 +298,13 @@ export function liveSession(stage, {
     if (stopped) return;
     view = "lobby";
     const isHost = host === me;
+    const disp = dedupeNames(players);
     const list = players.length
       ? el("div.stack", {}, players.map((p) => el("div.sb-row", {}, [
-          el("span", { text: p.name + (p.id === me ? " (toi)" : "") }),
+          el("span", { style: "display:flex;align-items:center;gap:8px" }, [
+            el("span.av-badge", { text: p.avatar || avatars[p.id] || "🎲", style: `background:${colorOf(p.name)}` }),
+            el("span", { text: disp[p.id] + (p.id === me ? " (toi)" : "") }),
+          ]),
           p.id === host
             ? el("span", { text: "🎬 hôte" })
             : isHost
@@ -298,13 +348,20 @@ export function liveSession(stage, {
       list,
       extra,
       el("div", { style: "margin-top:14px" }, [action, backToRound]),
-      el("div.row", { style: "justify-content:center;margin-top:12px" }, [
+      el("div.row", { style: "justify-content:center;margin-top:12px;flex-wrap:wrap" }, [
+        el("button.chip", { text: "👑 Palmarès", onClick: crownScreen }),
         isHost ? el("button.chip", { text: "🎮 Changer de jeu", onClick: switchScreen }) : null,
         el("button.chip", { text: "👤 Prénom / code", onClick: nameScreen }),
         el("button.chip", { text: "🚪 Quitter", onClick: leave }),
       ]),
       statusLine(),
     ]));
+  }
+
+  // 👑 Palmarès « Roi de la soirée » — cumul des jeux à score du salon.
+  function crownScreen() {
+    view = "crown";
+    openCrown(stage, { onBack: () => { view = "lobby"; lobbyScreen(); }, isHost: host === me, me });
   }
 
   // L'hôte choisit un autre jeu : toute la soirée y est emmenée (message goto).
@@ -380,14 +437,16 @@ export function liveSession(stage, {
 
   /* ========================= ÉVÉNEMENTS RÉSEAU ========================= */
 
-  function onLobby(list, hostId) {
+  function onLobby(list, hostId, avs) {
     if (view === "lobby" && list.length > lastCount && lastCount > 0) pop(); // un joueur arrive
     lastCount = list.length;
     players = list;
+    if (avs) avatars = avs;
     host = hostId;
     if (view === "lobby" || view === "name") lobbyScreen();
   }
-  function onRound(n, you, names, meta) {
+  function onRound(n, you, names, meta, avs) {
+    if (avs) avatars = avs;
     round = { n, you, names, meta };
     if (n !== shownRound) {
       shownRound = n;
@@ -400,11 +459,12 @@ export function liveSession(stage, {
       roleScreen();
     }
   }
-  function onRevealed(n, roles, names, meta, inputs, order) {
+  function onRevealed(n, roles, names, meta, inputs, order, avs) {
+    if (avs) avatars = avs;
     if (shownReveal && n === shownRound) return;
     shownReveal = true;
     shownRound = n;
-    lastRevealed = { n, roles, names, meta, inputs: inputs || {}, order: order || [] };
+    lastRevealed = { n, roles, names, meta, inputs: inputs || {}, order: order || [], avatars };
     jingle();
     revealScreen(lastRevealed);
   }
@@ -489,7 +549,7 @@ export function liveSession(stage, {
       retries = 0;
       status = "⚡ temps réel";
       if (view === "lobby") lobbyScreen();
-      sock.send(JSON.stringify({ t: "join", room: currentRoom(), game: gameId, id: me, name: myName }));
+      sock.send(JSON.stringify({ t: "join", room: currentRoom(), game: gameId, id: me, name: myName, avatar: myAvatar }));
     }
 
     function open() {
@@ -507,8 +567,8 @@ export function liveSession(stage, {
       sock.onmessage = (e) => {
         let m;
         try { m = JSON.parse(e.data); } catch { return; }
-        if (m.t === "lobby") onLobby(m.players || [], m.host || null);
-        else if (m.t === "round") onRound(m.n, m.you, m.names || {}, m.meta ?? null);
+        if (m.t === "lobby") onLobby(m.players || [], m.host || null, m.avatars || {});
+        else if (m.t === "round") onRound(m.n, m.you, m.names || {}, m.meta ?? null, m.avatars || {});
         else if (m.t === "progress") { if (round && m.n === round.n) emit("progress", m.done || [], m.total || 0, m.inputs || null); }
         else if (m.t === "timer") {
           // Convertit l'échéance serveur en horloge locale (compense l'offset).
@@ -517,7 +577,7 @@ export function liveSession(stage, {
         else if (m.t === "state") { if (round && m.n === round.n) emit("state", m.data ?? null); }
         else if (m.t === "goto") onGoto(m.game);
         else if (m.t === "kicked") onKicked();
-        else if (m.t === "revealed") onRevealed(m.n, m.roles || {}, m.names || {}, m.meta ?? null, m.inputs, m.order);
+        else if (m.t === "revealed") onRevealed(m.n, m.roles || {}, m.names || {}, m.meta ?? null, m.inputs, m.order, m.avatars || {});
       };
       sock.onclose = () => {
         if (destroyed) return;
@@ -583,14 +643,16 @@ export function liveSession(stage, {
         if (k.startsWith("__")) continue;
         if (now - ((l[k] && l[k].ts) || 0) > STALE_MS) delete l[k];
       }
-      l[me] = { name: myName, ts: now, since: (l[me] && l[me].since) || now };
+      l[me] = { name: myName, avatar: myAvatar, ts: now, since: (l[me] && l[me].since) || now };
       await setData(LOBBY, l);
       // Hôte = transfert volontaire (__host) s'il est encore là, sinon le plus
       // ancien joueur présent (parité avec le serveur WS : premier arrivé).
       const ids = Object.keys(l).filter((k) => !k.startsWith("__"));
       ids.sort((a, b) => (((l[a] && l[a].since) || 0) - ((l[b] && l[b].since) || 0)) || (a < b ? -1 : 1));
       const hostPick = l.__host && ids.includes(l.__host) ? l.__host : ids[0] || null;
-      onLobby(ids.map((id) => ({ id, name: l[id].name })), hostPick);
+      const avs = {};
+      ids.forEach((id) => { if (l[id] && l[id].avatar) avs[id] = l[id].avatar; });
+      onLobby(ids.map((id) => ({ id, name: l[id].name, avatar: l[id].avatar })), hostPick, avs);
     }
 
     let seenOrder = 0;
@@ -609,7 +671,7 @@ export function liveSession(stage, {
       if (!live) return;
       if (typeof live.round === "number" && live.round !== shownRound) {
         seenOrder = 0; seenTimer = 0; seenState = "";
-        onRound(live.round, (live.roles || {})[me] ?? null, live.names || {}, live.meta ?? null);
+        onRound(live.round, (live.roles || {})[me] ?? null, live.names || {}, live.meta ?? null, live.avatars || {});
       }
       const order = live.order || [];
       // En mode open, une re-soumission change les inputs sans changer l'ordre :
@@ -628,7 +690,7 @@ export function liveSession(stage, {
         seenState = st;
         if (live.state !== undefined && live.state !== null) emit("state", live.state);
       }
-      if (live.revealed) onRevealed(live.round, live.roles || {}, live.names || {}, live.meta ?? null, live.inputs, live.order);
+      if (live.revealed) onRevealed(live.round, live.roles || {}, live.names || {}, live.meta ?? null, live.inputs, live.order, live.avatars || {});
     }
 
     beat();
@@ -641,9 +703,10 @@ export function liveSession(stage, {
       async start(roles, meta, open) {
         const prev = (await getData(LIVE, null)) || { round: 0 };
         const names = {};
-        players.forEach((p) => (names[p.id] = p.name));
+        const avs = {};
+        players.forEach((p) => { names[p.id] = p.name; if (p.avatar) avs[p.id] = p.avatar; });
         await setData(LIVE, {
-          round: (prev.round || 0) + 1, roles, names, meta: meta ?? null,
+          round: (prev.round || 0) + 1, roles, names, avatars: avs, meta: meta ?? null,
           revealed: false, inputs: {}, order: [], state: null, timerEndsAt: null,
           open: open === true,
         });
