@@ -13,6 +13,7 @@
      { t:"goto", game }                                (hôte : toute la soirée change de jeu)
      { t:"kick", id }                                  (hôte : éjecte un joueur du salon)
      { t:"host", id }                                  (hôte : passe la main à un autre joueur)
+     { t:"ceremony", top }                             (hôte : cérémonie du Roi jouée en même temps partout)
      { t:"reveal" }                                    (hôte uniquement)
      { t:"leave" }
    Serveur → client :
@@ -23,6 +24,7 @@
      { t:"state", n, data }
      { t:"revealed", n, roles, inputs, order, names, meta, avatars }
      { t:"kicked" }                                   (à la cible d'un kick, avant fermeture)
+     { t:"ceremony", top:[{id,name,avatar,pts}] }      (tous : lance la cérémonie du Roi, podium identique)
      { t:"error", error }
 
    L'état vit en mémoire (une seule instance Render) ; les scores durables
@@ -206,6 +208,18 @@ function handleSocket(ws) {
       if (target === myId || !r.players.has(target)) return;
       r.hostId = target;
       broadcast(r, lobbyMessage(r));
+    } else if (msg.t === "ceremony") {
+      // Cérémonie du Roi : l'hôte la déclenche, tous les téléphones la jouent
+      // en même temps avec le MÊME podium. Transitoire (pas mémorisée dans la
+      // manche) : un retardataire ne rejoue pas une cérémonie déjà passée.
+      if (myId !== ensureHost(r)) return;
+      const top = (Array.isArray(msg.top) ? msg.top : []).slice(0, 3).map((e) => ({
+        id: String((e && e.id) || "").slice(0, 20),
+        name: String((e && e.name) || "?").slice(0, 24),
+        avatar: String((e && e.avatar) || "").slice(0, 8),
+        pts: Number(e && e.pts) || 0,
+      }));
+      broadcast(r, JSON.stringify({ t: "ceremony", top }));
     } else if (msg.t === "reveal") {
       if (myId !== ensureHost(r) || !r.round) return;
       r.round.revealed = true;

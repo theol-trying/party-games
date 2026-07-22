@@ -88,8 +88,11 @@ function rankRow(r, i, me) {
   ]);
 }
 
-/** Rendu du palmarès dans `stage`. { onBack, isHost, me }. */
-export async function openCrown(stage, { onBack, isHost, me }) {
+/** Rendu du palmarès dans `stage`. { onBack, isHost, me, onStartCeremony }.
+    onStartCeremony(top) : l'hôte demande la cérémonie POUR TOUT LE SALON
+    (realtime la diffuse → chaque téléphone la joue en même temps). Absent →
+    repli local (mono-appareil). */
+export async function openCrown(stage, { onBack, isHost, me, onStartCeremony }) {
   const crown = await getCrown();
   const totals = crownTotals(crown);
   const wrap = el("div.card", {});
@@ -102,7 +105,12 @@ export async function openCrown(stage, { onBack, isHost, me }) {
       bits.push(el("p.screen__subtitle.center", { text: "Cumul des jeux à score de la soirée.", style: "margin-bottom:12px" }));
       bits.push(el("div.stack", {}, totals.map((r, i) => rankRow(r, i, me))));
       if (isHost && totals.length >= 2) {
-        bits.push(el("button.btn.btn--full", { text: "👑 Couronner le Roi ! (cérémonie)", style: "margin-top:16px", onClick: () => playCeremony(wrap, totals, me, renderList) }));
+        // Podium synchronisé : on n'envoie que le strict nécessaire à l'animation.
+        const top = totals.slice(0, 3).map((r) => ({ id: r.id, name: r.name, avatar: r.avatar, pts: r.pts }));
+        bits.push(el("button.btn.btn--full", {
+          text: "👑 Couronner le Roi ! (cérémonie)", style: "margin-top:16px",
+          onClick: () => { if (onStartCeremony) onStartCeremony(top); else playCeremony(wrap, top, me, renderList); },
+        }));
       }
     }
     const row = el("div.row", { style: "justify-content:center;margin-top:14px;flex-wrap:wrap" }, [
@@ -116,9 +124,20 @@ export async function openCrown(stage, { onBack, isHost, me }) {
   stage.replaceChildren(wrap);
 }
 
-/** Cérémonie animée : podium 3e → 2e → 1er + confettis + roulement. */
-function playCeremony(wrap, totals, me, onDone) {
-  const top = totals.slice(0, 3);
+/** Ouvre la cérémonie dans `stage` (déclenchée localement OU par le broadcast
+    « ceremony » de l'hôte, avec le même top-3 pour tous). Renvoie un nettoyage
+    (arrête les timers si l'écran est quitté en pleine animation). */
+export function openCeremony(stage, top, { me, onDone } = {}) {
+  const wrap = el("div.card", {});
+  stage.replaceChildren(wrap);
+  return playCeremony(wrap, top, me, onDone);
+}
+
+/** Cérémonie animée : podium 3e → 2e → 1er + confettis + roulement.
+    `top` = jusqu'à 3 entrées {id,name,avatar,pts}, meilleur d'abord.
+    Renvoie stop() : coupe les timers en cours (anti-fuite / anti-double). */
+function playCeremony(wrap, top, me, onDone) {
+  top = (Array.isArray(top) ? top : []).slice(0, 3);
   const podium = el("div.cr-podium");
   // 3 marches : 2e (gauche), 1er (centre), 3e (droite).
   const slots = { 0: null, 1: null, 2: null };
@@ -169,4 +188,9 @@ function playCeremony(wrap, totals, me, onDone) {
   };
   skip.addEventListener("click", finish);
   timers.push(setTimeout(finish, 4200));
+
+  // Nettoyage externe : écran quitté (stop du salon / nouvelle cérémonie) en
+  // pleine animation → on coupe les timers pour ne pas tirer confettis/sons
+  // sur un DOM détaché (n'appelle PAS onDone : c'est un abandon, pas une fin).
+  return () => { done = true; timers.forEach(clearTimeout); };
 }

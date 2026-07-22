@@ -34,7 +34,7 @@ import { currentRoom, setRoom, normalizeCode } from "./room.js";
 import { pop, roundCue, jingle } from "./sound.js";
 import { qrCanvas } from "./qr.js";
 import { GAMES } from "./registry.js";
-import { openCrown } from "./crown.js";
+import { openCrown, openCeremony } from "./crown.js";
 
 const DEV_KEY = "soiree.device";
 const NAME_KEY = "soiree.name";
@@ -180,6 +180,7 @@ export function liveSession(stage, {
     startTimer: (s) => net && net.timer(s), // hôte : chrono synchronisé pour tous
     sendState: (d) => net && net.state(d), // hôte : update diffusé en cours de manche
     reveal: () => net && net.reveal(),
+    ceremony: (top) => net && net.ceremony(top), // hôte : cérémonie du Roi jouée partout en même temps
     newRound: () => distribute(),
     on: (ev, cb) => {
       (listeners[ev] || (listeners[ev] = [])).push(cb); // progress | state | timer
@@ -199,6 +200,7 @@ export function liveSession(stage, {
   let hasLastState = false;
   let lastRevealed = null; // dernier reveal reçu (bouton « Revenir » depuis le salon)
   let wakeLock = null; // anti-mise en veille pendant le salon/les manches
+  let ceremonyCleanup = null; // arrêt de la cérémonie en cours (timers)
 
   // Au retour au premier plan (téléphone déverrouillé) : reconnexion immédiate
   // au lieu d'attendre les timers de retry, et ré-acquisition du wake lock
@@ -223,6 +225,7 @@ export function liveSession(stage, {
   function stop() {
     stopped = true;
     document.removeEventListener("visibilitychange", onVisibility);
+    cancelCeremony();
     if (wakeLock) { try { wakeLock.release(); } catch {} wakeLock = null; }
     if (upgradeTimer) clearTimeout(upgradeTimer);
     if (net) net.destroy();
@@ -361,7 +364,34 @@ export function liveSession(stage, {
   // 👑 Palmarès « Roi de la soirée » — cumul des jeux à score du salon.
   function crownScreen() {
     view = "crown";
-    openCrown(stage, { onBack: () => { view = "lobby"; lobbyScreen(); }, isHost: host === me, me });
+    openCrown(stage, {
+      onBack: () => { view = "lobby"; lobbyScreen(); },
+      isHost: host === me,
+      me,
+      // L'hôte lance la cérémonie POUR TOUT LE SALON : on diffuse le podium ;
+      // le broadcast revient à l'hôte lui-même (WS) → une seule et même
+      // animation, synchronisée sur tous les téléphones (voir onCeremony).
+      onStartCeremony: (top) => api.ceremony(top),
+    });
+  }
+
+  // Coupe une cérémonie en cours (timers confettis/sons) ; idempotent. Appelé
+  // avant tout écran qui remplacerait le podium (nouvelle cérémonie, manche,
+  // révélation) et à l'arrêt du salon → jamais de setTimeout sur un DOM détaché.
+  function cancelCeremony() {
+    if (ceremonyCleanup) { try { ceremonyCleanup(); } catch {} ceremonyCleanup = null; }
+  }
+
+  // Cérémonie reçue (déclenchée par l'hôte) : tous les téléphones jouent le
+  // même podium en même temps, quel que soit l'écran où ils se trouvaient.
+  function onCeremony(top) {
+    if (stopped || !Array.isArray(top) || !top.length) return;
+    cancelCeremony();
+    view = "crown";
+    ceremonyCleanup = openCeremony(stage, top, {
+      me,
+      onDone: () => { ceremonyCleanup = null; if (!stopped) crownScreen(); },
+    });
   }
 
   // L'hôte choisit un autre jeu : toute la soirée y est emmenée (message goto).
@@ -449,6 +479,7 @@ export function liveSession(stage, {
     if (avs) avatars = avs;
     round = { n, you, names, meta };
     if (n !== shownRound) {
+      cancelCeremony(); // une manche neuve interrompt un podium encore animé (onglet en arrière-plan)
       shownRound = n;
       shownReveal = false;
       listeners = { progress: [], state: [], timer: [] }; // nouvelle manche : abonnements frais
@@ -462,6 +493,7 @@ export function liveSession(stage, {
   function onRevealed(n, roles, names, meta, inputs, order, avs) {
     if (avs) avatars = avs;
     if (shownReveal && n === shownRound) return;
+    cancelCeremony(); // une révélation qui s'affiche coupe un podium encore animé
     shownReveal = true;
     shownRound = n;
     lastRevealed = { n, roles, names, meta, inputs: inputs || {}, order: order || [], avatars };
@@ -577,6 +609,7 @@ export function liveSession(stage, {
         else if (m.t === "state") { if (round && m.n === round.n) emit("state", m.data ?? null); }
         else if (m.t === "goto") onGoto(m.game);
         else if (m.t === "kicked") onKicked();
+        else if (m.t === "ceremony") onCeremony(m.top || []);
         else if (m.t === "revealed") onRevealed(m.n, m.roles || {}, m.names || {}, m.meta ?? null, m.inputs, m.order, m.avatars || {});
       };
       sock.onclose = () => {
@@ -603,6 +636,9 @@ export function liveSession(stage, {
       goto(game) { sendJson({ t: "goto", game }); },
       kick(id) { sendJson({ t: "kick", id }); },
       host(id) { sendJson({ t: "host", id }); },
+      // La cérémonie est diffusée par le serveur À TOUS, hôte inclus (écho) :
+      // pas de lecture locale ici, l'animation part quand le broadcast revient.
+      ceremony(top) { sendJson({ t: "ceremony", top }); },
       reveal() { sendJson({ t: "reveal" }); },
       leave() { sendJson({ t: "leave" }); },
       // Retour au premier plan : si le socket est fermé, on se reconnecte tout
@@ -659,6 +695,7 @@ export function liveSession(stage, {
     let seenTimer = 0;
     let seenState = "";
     let seenGoto; // undefined = pas encore lu (ignore une valeur périmée d'une partie passée)
+    let seenCeremony; // idem : baseline au 1er poll → pas de rejeu d'une cérémonie passée
 
     async function poll() {
       if (destroyed || stopped) return;
@@ -669,6 +706,12 @@ export function liveSession(stage, {
       if (seenGoto === undefined) seenGoto = g;
       else if (g && g !== seenGoto) { seenGoto = g; return onGoto(g); }
       if (!live) return;
+      // Cérémonie du Roi : un ts inédit = l'hôte vient de la déclencher → on la
+      // joue (return : on ne re-rend pas la manche par-dessus ce cycle-ci).
+      const cer = live.ceremony || null;
+      const cerTs = cer && cer.ts;
+      if (seenCeremony === undefined) seenCeremony = cerTs || null;
+      else if (cerTs && cerTs !== seenCeremony) { seenCeremony = cerTs; onCeremony(cer.top || []); return; }
       if (typeof live.round === "number" && live.round !== shownRound) {
         seenOrder = 0; seenTimer = 0; seenState = "";
         onRound(live.round, (live.roles || {})[me] ?? null, live.names || {}, live.meta ?? null, live.avatars || {});
@@ -709,6 +752,10 @@ export function liveSession(stage, {
           round: (prev.round || 0) + 1, roles, names, avatars: avs, meta: meta ?? null,
           revealed: false, inputs: {}, order: [], state: null, timerEndsAt: null,
           open: open === true,
+          // On garde le déclencheur de cérémonie : sans écho serveur, un client
+          // lent pourrait sinon rater le podium si l'hôte relance vite une manche
+          // (il le rejouera au prochain poll, puis basculera sur la manche).
+          ...(prev.ceremony ? { ceremony: prev.ceremony } : {}),
         });
         poll();
       },
@@ -754,6 +801,16 @@ export function liveSession(stage, {
         l.__host = id; // transfert volontaire, lu par tous les beats
         await setData(LOBBY, l);
         beat();
+      },
+      // Mode dégradé : pas d'écho serveur → l'hôte écrit le déclencheur (les
+      // autres le liront au prochain poll) ET joue la cérémonie tout de suite.
+      async ceremony(top) {
+        const live = (await getData(LIVE, null)) || {};
+        const ts = Date.now();
+        live.ceremony = { top, ts };
+        await setData(LIVE, live);
+        seenCeremony = ts; // évite que le poll local ne la re-déclenche
+        onCeremony(top);
       },
       // Retour au premier plan : resynchronisation immédiate (les intervalles
       // ont pu être gelés par le navigateur pendant la mise en veille).
