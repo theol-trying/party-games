@@ -231,6 +231,10 @@ function handleSocket(ws) {
         open: msg.open === true, // inputs publics en cours de manche (votes visibles, choix…)
       };
       for (const id of r.players.keys()) sendRoundTo(r, id);
+      // Les écrans TV reçoivent aussi la manche (rôle null) : sans ça, un
+      // spectateur présent AVANT le lancement ne basculerait jamais sur la manche
+      // (le message « round » est poussé par joueur, pas via broadcast).
+      for (const [sid, sp] of r.spectators) sendRoundTo(r, sid, sp.ws);
     } else if (msg.t === "input") {
       if (!r.round || r.round.revealed) return;
       const data = msg.data === undefined ? true : msg.data;
