@@ -190,6 +190,46 @@ async function renderGame(id, token) {
   }
 }
 
+/* ---------- Écran TV / spectateur ---------- */
+async function renderTV(code, token) {
+  document.title = "📺 Écran TV — Soirée";
+  if (!code) return renderTVEntry();
+  mount(el("div.center", {}, [el("p.screen__subtitle", { text: "Chargement de l'écran TV…" })]));
+  try {
+    const mod = await import("./tv.js");
+    if (token !== routeToken) return; // navigation changée pendant l'import
+    const container = el("div.screen", { dataset: { game: "tv" } });
+    mount(container);
+    const cleanup = mod.render(container, { code });
+    currentCleanup = typeof cleanup === "function" ? cleanup : null;
+  } catch (err) {
+    if (token !== routeToken) return;
+    console.error(err);
+    mount(el("div.screen", {}, [el("div.placeholder", {}, [
+      el("p", { text: "Écran TV indisponible." }),
+      el("p", { text: String(err.message || err) }),
+      el("a.btn.btn--ghost", { href: "#/", text: "Retour à l'accueil", style: "margin-top:14px;display:inline-block" }),
+    ])]));
+  }
+}
+
+// Saisie du code quand on arrive sur #/tv sans code.
+function renderTVEntry() {
+  const input = el("input.input", {
+    placeholder: "CODE DE LA SOIRÉE", maxlength: "8", autocapitalize: "characters", autocomplete: "off",
+    style: "text-transform:uppercase;letter-spacing:.25em;text-align:center;font-weight:800",
+    "aria-label": "Code de la soirée à afficher",
+  });
+  const go = () => { const c = normalizeCode(input.value); if (c) location.hash = "#/tv/" + c; else input.focus(); };
+  const btn = el("button.btn.btn--full", { text: "Afficher l'écran TV", style: "margin-top:14px", onClick: go });
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+  mount(el("div.screen", {}, [el("div.card.center", {}, [
+    el("h3", { text: "📺 Écran TV / spectateur" }),
+    el("p.screen__subtitle", { text: "Pose ce grand écran sur la table : QR d'invitation permanent, salon, manches et palmarès en grand. Entre le code de la soirée pour commencer.", style: "margin:8px 0 12px" }),
+    input, btn,
+  ])]));
+}
+
 /* ---------- Écran « jeu introuvable » ---------- */
 function renderNotFound() {
   document.title = "Introuvable — Soirée";
@@ -221,6 +261,10 @@ function router() {
     location.hash = "#/"; // déclenche un nouveau routage vers l'accueil
     return;
   }
+
+  // Écran TV / spectateur : #/tv (saisie du code) ou #/tv/CODE.
+  const tvm = hash.match(/^#\/tv(?:\/([A-Za-z0-9]{1,8}))?/);
+  if (tvm) return renderTV(tvm[1] ? tvm[1].toUpperCase() : null, token);
 
   const m = hash.match(/^#\/jeu\/([\w-]+)/);
   if (m) renderGame(m[1], token);

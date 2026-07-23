@@ -4,6 +4,8 @@
    Un salon = un couple (code de soirée, jeu). Protocole JSON :
    Client → serveur :
      { t:"join", room, game, id, name, avatar? }
+     { t:"join", room, id, spectator:true, game? }    (écran TV : regarde sans jouer ;
+                       game absent/inconnu → jeu courant de la room, sinon "nogame")
      { t:"start", roles:{deviceId:payload}, meta?, open? }  (hôte ; open=true →
                        les inputs sont diffusés en cours de manche via progress)
      { t:"input", data }                               (réponse du joueur, manche en cours)
@@ -25,6 +27,9 @@
      { t:"revealed", n, roles, inputs, order, names, meta, avatars }
      { t:"kicked" }                                   (à la cible d'un kick, avant fermeture)
      { t:"ceremony", top:[{id,name,avatar,pts}] }      (tous : lance la cérémonie du Roi, podium identique)
+     { t:"watching", game }                            (au spectateur : jeu qu'il regarde, à sa connexion)
+     { t:"nogame" }                                    (au spectateur : aucun jeu actif dans la room → réessayer)
+     { t:"full" }                                      (au spectateur : trop d'écrans TV → ne pas réessayer)
      { t:"error", error }
 
    L'état vit en mémoire (une seule instance Render) ; les scores durables
@@ -33,12 +38,14 @@
    ========================================================================= */
 
 const MAX_PLAYERS = 32;
+const MAX_SPECTATORS = 8; // écrans TV par salon (ne comptent pas comme joueurs)
 const MAX_ROOMS = 500;
 const ROOM_RE = /^[A-Z0-9]{1,8}$/;
 const GAME_RE = /^[a-z0-9-]{1,32}$/;
 const ID_RE = /^[a-zA-Z0-9]{1,20}$/;
 
-const rooms = new Map(); // "ROOM|game" -> { players: Map<id,{name,ws}>, hostId, round }
+const rooms = new Map(); // "ROOM|game" -> { players: Map<id,{name,avatar,ws}>, spectators: Map<id,{ws}>, hostId, round, room, game }
+const roomGame = new Map(); // "ROOM" -> dernier jeu où un joueur est entré (pour router un spectateur « wildcard »)
 
 function roomKey(room, game) {
   return room + "|" + game;
@@ -64,6 +71,7 @@ function lobbyMessage(r) {
 
 function broadcast(r, text) {
   for (const p of r.players.values()) p.ws.send(text);
+  if (r.spectators) for (const s of r.spectators.values()) s.ws.send(text); // écrans TV : reçoivent tout
 }
 
 function namesOf(r) {
@@ -78,36 +86,57 @@ function avatarsOf(r) {
   return avatars;
 }
 
-function sendRoundTo(r, id) {
-  const p = r.players.get(id);
-  if (!p || !r.round) return;
+// Rejoue la manche en cours à un membre (joueur ou spectateur). Pour un
+// spectateur, on passe son ws (il n'est pas dans r.players) ; roles[id] est
+// alors absent → you:null (aucun rôle privé).
+function sendRoundTo(r, id, ws) {
+  const sock = ws || (r.players.get(id) && r.players.get(id).ws);
+  if (!sock || !r.round) return;
   const { n, roles, names, meta, revealed, inputs, order, timerEndsAt, open, lastState, avatars } = r.round;
-  p.ws.send(JSON.stringify({ t: "round", n, you: roles[id] ?? null, names, meta, avatars }));
+  sock.send(JSON.stringify({ t: "round", n, you: roles[id] ?? null, names, meta, avatars }));
   if (order.length)
-    p.ws.send(JSON.stringify({ t: "progress", n, done: order, total: r.players.size, ...(open ? { inputs } : {}) }));
+    sock.send(JSON.stringify({ t: "progress", n, done: order, total: r.players.size, ...(open ? { inputs } : {}) }));
   if (timerEndsAt && timerEndsAt > Date.now())
-    p.ws.send(JSON.stringify({ t: "timer", n, endsAt: timerEndsAt, now: Date.now() }));
-  if (revealed) p.ws.send(JSON.stringify({ t: "revealed", n, roles, inputs, order, names, meta, avatars }));
+    sock.send(JSON.stringify({ t: "timer", n, endsAt: timerEndsAt, now: Date.now() }));
+  if (revealed) sock.send(JSON.stringify({ t: "revealed", n, roles, inputs, order, names, meta, avatars }));
   // Le state part APRÈS revealed : l'écran de révélation du retardataire est
   // ainsi déjà abonné quand l'état (verdict, contestation…) lui parvient.
   if (lastState !== undefined && lastState !== null)
-    p.ws.send(JSON.stringify({ t: "state", n, data: lastState }));
+    sock.send(JSON.stringify({ t: "state", n, data: lastState }));
 }
 
 function removePlayer(key, id, ws) {
   const r = rooms.get(key);
   if (!r) return;
+  // Spectateur (écran TV) : départ silencieux, ne change pas la liste des joueurs.
+  const s = r.spectators && r.spectators.get(id);
+  if (s && (!ws || s.ws === ws)) {
+    r.spectators.delete(id);
+    if (r.players.size === 0 && r.spectators.size === 0) rooms.delete(key);
+    return;
+  }
   const p = r.players.get(id);
   if (!p || (ws && p.ws !== ws)) return; // une reconnexion a déjà remplacé ce socket
   r.players.delete(id);
-  if (r.players.size === 0) rooms.delete(key);
-  else broadcast(r, lobbyMessage(r));
+  if (r.players.size === 0) {
+    // Plus de joueurs : les écrans TV re-cherchent le jeu courant de la room
+    // (nouveau jeu choisi via le menu, sans « goto »…).
+    if (r.spectators) {
+      for (const sp of r.spectators.values()) { try { sp.ws.send(JSON.stringify({ t: "nogame" })); } catch {} }
+      r.spectators.clear();
+    }
+    rooms.delete(key);
+    if (roomGame.get(r.room) === r.game) roomGame.delete(r.room); // pas de fuite : purge le routage du salon disparu
+  } else {
+    broadcast(r, lobbyMessage(r));
+  }
 }
 
 /** Branche un socket WebSocket sur le protocole des salons. */
 function handleSocket(ws) {
   let key = null;
   let myId = null;
+  let isSpectator = false;
 
   ws.onmessage = (text) => {
     let msg;
@@ -119,8 +148,37 @@ function handleSocket(ws) {
 
     if (msg.t === "join") {
       const room = String(msg.room || "").toUpperCase();
-      const game = String(msg.game || "");
       const id = String(msg.id || "");
+
+      // ---- Spectateur (écran TV) : regarde le salon sans jouer -------------
+      if (msg.spectator === true) {
+        if (!ROOM_RE.test(room) || !ID_RE.test(id)) {
+          ws.send(JSON.stringify({ t: "error", error: "join invalide" }));
+          return ws.close();
+        }
+        const wanted = String(msg.game || "");
+        // Jeu voulu explicitement (suivi d'un goto), sinon jeu courant de la room.
+        const game = GAME_RE.test(wanted) ? wanted : roomGame.get(room);
+        const r = game && rooms.get(roomKey(room, game));
+        if (!game || !r) { ws.send(JSON.stringify({ t: "nogame" })); return; } // aucun jeu actif → la TV réessaiera
+        if (!r.spectators.has(id) && r.spectators.size >= MAX_SPECTATORS) {
+          ws.send(JSON.stringify({ t: "full" })); // trop d'écrans TV : message explicite → la TV cesse de réessayer
+          return ws.close();
+        }
+        const oldS = r.spectators.get(id);
+        if (oldS && oldS.ws !== ws) oldS.ws.close();
+        r.spectators.set(id, { ws });
+        key = roomKey(room, game);
+        myId = id;
+        isSpectator = true;
+        ws.send(JSON.stringify({ t: "watching", game })); // dit à la TV quel jeu elle regarde (≠ goto → pas de reconnexion)
+        ws.send(lobbyMessage(r));
+        sendRoundTo(r, id, ws); // état de la manche en cours
+        return;
+      }
+
+      // ---- Joueur normal ---------------------------------------------------
+      const game = String(msg.game || "");
       const name = String(msg.name || "").trim().slice(0, 20);
       const avatar = String(msg.avatar || "").slice(0, 8); // emoji d'avatar (optionnel)
       if (!ROOM_RE.test(room) || !GAME_RE.test(game) || !ID_RE.test(id) || !name) {
@@ -131,7 +189,7 @@ function handleSocket(ws) {
       let r = rooms.get(k);
       if (!r) {
         if (rooms.size >= MAX_ROOMS) return ws.close();
-        r = { players: new Map(), hostId: null, round: null };
+        r = { players: new Map(), spectators: new Map(), hostId: null, round: null, room, game };
         rooms.set(k, r);
       }
       if (!r.players.has(id) && r.players.size >= MAX_PLAYERS) return ws.close();
@@ -139,6 +197,7 @@ function handleSocket(ws) {
       if (old && old.ws !== ws) old.ws.close(); // reconnexion : remplace l'ancien socket
       r.players.set(id, { name, avatar, ws });
       ensureHost(r); // premier arrivé = hôte
+      roomGame.set(room, game); // ce salon devient le « jeu courant » de la room (routage des spectateurs)
       key = k;
       myId = id;
       broadcast(r, lobbyMessage(r));
@@ -149,6 +208,12 @@ function handleSocket(ws) {
     if (!key || !myId) return;
     const r = rooms.get(key);
     if (!r) return;
+
+    // Un spectateur (écran TV) est purement passif : seul « leave » est accepté.
+    if (isSpectator) {
+      if (msg.t === "leave") { removePlayer(key, myId, null); key = null; myId = null; isSpectator = false; }
+      return;
+    }
 
     if (msg.t === "start") {
       if (myId !== ensureHost(r)) return;
