@@ -44,13 +44,21 @@ export function render(container, { game }) {
   const src = contentSource("quiz-gages", { builtIn: QUESTIONS, keyOf: (q) => q.q, toValue: toQuestion });
   let liveStop = null;
   let quizFxRound = -1; // manche dont les FX du reveal ont déjà été joués (anti-refire)
+  // Chrono : vit ICI (et pas dans la closure de manche) pour survivre aux re-rendus
+  // — sinon un 2e décompte se lance et verrouille les réponses avant l'heure.
+  let cdStop = null;
+  let cdRound = -1;
   const seen = makeSeen("quiz-gages"); // anti-répétition entre soirées
   const qKey = (q) => q.q; // identité d'une question
   if (peekAutoLive()) startLive(); else modeSelect(); // « suivre l'hôte » : salon direct
   src.reload();
 
   // Cleanup routeur : stoppe les timers/socket du mode multi si actif.
-  return () => { if (liveStop) liveStop(); };
+  return () => { stopCountdown(); if (liveStop) liveStop(); };
+
+  function stopCountdown() {
+    if (cdStop) { cdStop(); cdStop = null; }
+  }
 
   function questions() { return src.cards(); }
   function builtInList() { return QUESTIONS.map((q) => ({ key: q.q, label: `${q.q} → ${q.choices[q.correct]}` })); }
@@ -183,6 +191,10 @@ export function render(container, { game }) {
 
   // Écran de réponse (identique sur chaque téléphone).
   function liveRound({ api, meta, n }) {
+    // Nouvelle manche : un décompte encore en cours appartient à la précédente
+    // (son chrono ne concerne plus personne) — on le coupe. Un simple re-rendu
+    // de la MÊME manche ne le touche pas.
+    if (n !== cdRound) { stopCountdown(); cdRound = n; }
     let answered = false;
     let myX2 = false; // « Tout ou rien » : la réponse compte double (ou -100 si fausse)
     const total = api.players().length;
@@ -228,15 +240,20 @@ export function render(container, { game }) {
     }
 
     api.on("progress", (done) => { prog.textContent = `${done.length} / ${total} ont répondu`; });
-    api.on("timer", (endsAt) =>
-      syncCountdown(endsAt, {
+    api.on("timer", (endsAt) => {
+      // Un seul décompte à la fois : l'hôte peut relancer le chrono, et cet
+      // abonnement est repris à chaque re-rendu de la manche (« Revenir à la
+      // manche »). Sans ce stop, deux décomptes coexistaient et le premier
+      // arrivé à zéro verrouillait les réponses malgré le temps affiché.
+      stopCountdown();
+      cdStop = syncCountdown(endsAt, {
         onTick: (s) => {
           timerLine.textContent = s > 0 ? `⏱️ ${s}` : "⏰";
           if (s <= 3 && s > 0 && !answered) tick(); // tension des dernières secondes
         },
-        onEnd: () => { if (!answered) vibrate(150); lockOut(); },
-      })
-    );
+        onEnd: () => { cdStop = null; if (!answered) vibrate(150); lockOut(); },
+      });
+    });
 
     const hostCtrl = api.isHost()
       ? el("button.chip", { text: "⏱️ Lancer un chrono (20 s)", style: "margin-top:14px", onClick: () => api.startTimer(20) })

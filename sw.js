@@ -48,8 +48,14 @@ self.addEventListener("fetch", (e) => {
   e.respondWith(
     fetch(req)
       .then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+        // On ne mémorise QUE les réponses saines. Sans ce filtre, la page
+        // d'erreur 502/503 que Render renvoie au réveil (plan gratuit endormi)
+        // écrasait la copie valide, et c'est elle qui était servie plus tard
+        // hors-ligne — exactement ce que ce service worker doit empêcher.
+        if (res.ok && res.type === "basic") {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+        }
         return res;
       })
       .catch(() =>
