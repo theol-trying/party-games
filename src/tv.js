@@ -18,7 +18,7 @@ import { currentRoom, setRoom, normalizeCode } from "./room.js";
 import { qrCanvas } from "./qr.js";
 import { getGame } from "./registry.js";
 import { getData } from "./store.js";
-import { colorOf, dedupeNames } from "./realtime.js";
+import { colorOf, dedupeNames, floatReaction, clearReactions } from "./realtime.js";
 import { openCeremony, crownTotals } from "./crown.js";
 import { roundCue, jingle } from "./sound.js";
 
@@ -95,11 +95,18 @@ export function render(stage, { code } = {}) {
       timerEndsAt = 0; stopTimer(); phase = "reveal"; jingle(); refreshCrown(); draw();
     },
     onCeremony: (top) => playCeremony(top),
+    // Les réactions flottent par-dessus la TV : c'est l'écran où elles se
+    // voient le mieux, et le spectateur n'a rien d'autre à faire.
+    onReact: (id, emoji) => {
+      const p = players.find((x) => x.id === id);
+      floatReaction(emoji, p ? p.name : "");
+    },
   });
 
   return function cleanup() {
     stopped = true;
     cancelCeremony();
+    clearReactions();
     stopTimer();
     net.destroy();
   };
@@ -313,6 +320,7 @@ function spectatorSocket(room, tvId, h) {
     else if (m.t === "state") { /* la TV n'affiche pas les états de manche détaillés */ }
     else if (m.t === "revealed") h.onRevealed(m.n, m.order || [], m.names || {}, m.avatars || {}, m.meta ?? null);
     else if (m.t === "ceremony") h.onCeremony(m.top || []);
+    else if (m.t === "react") h.onReact && h.onReact(m.id, m.emoji);
     else if (m.t === "goto") { wantGame = m.game; h.onGoto(m.game); reconnectNow(); }
   }
   open();

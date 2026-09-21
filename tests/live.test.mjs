@@ -212,6 +212,37 @@ test("la cérémonie est diffusée à tous, émetteur compris, et son contenu es
   assert.equal(all(a, "ceremony").length, 1, "un non-hôte ne déclenche rien");
 });
 
+test("les réactions sont diffusées à tous, mais bornées et filtrées", () => {
+  const r = newRoom();
+  const a = join(r, "quiz-gages", "alice", "Alice");
+  const b = join(r, "quiz-gages", "bob", "Bob");
+
+  send(b, { t: "react", emoji: "🔥" });
+  const chezA = last(a, "react");
+  assert.deepEqual(chezA, { t: "react", id: "bob", emoji: "🔥" }, "tout le monde la voit, avec son auteur");
+  assert.ok(last(b, "react"), "l'émetteur aussi (retour visuel immédiat)");
+
+  // Cadence : une deuxième réaction dans la foulée est ignorée.
+  send(b, { t: "react", emoji: "😂" });
+  assert.equal(all(a, "react").length, 1, "le spam est absorbé côté serveur");
+
+  // Mais un AUTRE joueur n'est pas pénalisé par la cadence de son voisin.
+  send(a, { t: "react", emoji: "👏" });
+  assert.equal(all(b, "react").length, 2, "la limite est par joueur");
+
+  // Liste fermée : rien d'arbitraire ne transite.
+  send(a, { t: "react", emoji: "<img src=x onerror=alert(1)>" });
+  assert.equal(all(b, "react").length, 2, "emoji hors liste refusé");
+});
+
+test("un spectateur ne peut pas envoyer de réaction", () => {
+  const r = newRoom();
+  const a = join(r, "quiz-gages", "alice", "Alice");
+  const tv = spectate(r, "tv1");
+  send(tv, { t: "react", emoji: "🔥" });
+  assert.equal(all(a, "react").length, 0, "l'écran TV affiche, il ne participe pas");
+});
+
 test("si l'hôte part, la main passe au joueur présent le plus ancien", () => {
   const r = newRoom();
   const a = join(r, "quiz-gages", "alice", "Alice");

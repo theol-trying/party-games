@@ -16,6 +16,7 @@
      { t:"kick", id }                                  (hôte : éjecte un joueur du salon)
      { t:"host", id }                                  (hôte : passe la main à un autre joueur)
      { t:"ceremony", top }                             (hôte : cérémonie du Roi jouée en même temps partout)
+     { t:"react", emoji }                              (tout joueur : réaction emoji, cadence bornée)
      { t:"reveal" }                                    (hôte uniquement)
      { t:"leave" }
    Serveur → client :
@@ -27,6 +28,7 @@
      { t:"revealed", n, roles, inputs, order, names, meta, avatars }
      { t:"kicked" }                                   (à la cible d'un kick, avant fermeture)
      { t:"ceremony", top:[{id,name,avatar,pts}] }      (tous : lance la cérémonie du Roi, podium identique)
+     { t:"react", id, emoji }                          (tous : une réaction à faire flotter à l'écran)
      { t:"watching", game }                            (au spectateur : jeu qu'il regarde, à sa connexion)
      { t:"nogame" }                                    (au spectateur : aucun jeu actif dans la room → réessayer)
      { t:"full" }                                      (au spectateur : trop d'écrans TV → ne pas réessayer)
@@ -39,6 +41,11 @@
 
 const MAX_PLAYERS = 32;
 const MAX_SPECTATORS = 8; // écrans TV par salon (ne comptent pas comme joueurs)
+// Réactions emoji : liste fermée (rien d'arbitraire ne transite) et cadence
+// bornée par joueur, sinon un seul téléphone peut noyer tous les écrans.
+// ⚠️ Doit rester alignée avec REACTIONS dans src/realtime.js.
+const REACTIONS = ["😂", "😱", "🔥", "👏", "💀", "🤡"];
+const REACT_MIN_MS = 700;
 const MAX_ROOMS = 500;
 const ROOM_RE = /^[A-Z0-9]{1,8}$/;
 const GAME_RE = /^[a-z0-9-]{1,32}$/;
@@ -245,6 +252,17 @@ function handleSocket(ws) {
         t: "progress", n: r.round.n, done: r.round.order, total: r.players.size,
         ...(r.round.open ? { inputs: r.round.inputs } : {}),
       }));
+    } else if (msg.t === "react") {
+      // Ouvert à TOUS les joueurs (c'est l'intérêt : réagir pendant que les
+      // autres jouent), mais borné en cadence et limité à la liste fermée.
+      const p = r.players.get(myId);
+      if (!p) return;
+      const emoji = String(msg.emoji || "");
+      if (!REACTIONS.includes(emoji)) return;
+      const now = Date.now();
+      if (p.lastReact && now - p.lastReact < REACT_MIN_MS) return;
+      p.lastReact = now;
+      broadcast(r, JSON.stringify({ t: "react", id: myId, emoji }));
     } else if (msg.t === "timer") {
       if (myId !== ensureHost(r) || !r.round) return;
       const seconds = Math.max(1, Math.min(600, Number(msg.seconds) || 0));

@@ -78,6 +78,37 @@ export function colorOf(text) {
   for (let i = 0; i < (text || "").length; i++) h = (h * 31 + text.charCodeAt(i)) >>> 0;
   return `hsl(${h % 360} 70% 55%)`;
 }
+// Réactions emoji — liste fermée, ⚠️ doit rester alignée avec live.js.
+export const REACTIONS = ["😂", "😱", "🔥", "👏", "💀", "🤡"];
+const RX_MAX_A_LECRAN = 24; // au-delà, on retire les plus anciennes
+
+let rxLayer = null;
+/** Fait flotter une réaction par-dessus l'écran (joueurs comme écran TV). */
+export function floatReaction(emoji, label) {
+  try {
+    if (!rxLayer || !rxLayer.isConnected) {
+      rxLayer = el("div.rx-layer", { "aria-hidden": "true" });
+      document.body.appendChild(rxLayer);
+    }
+    while (rxLayer.childElementCount >= RX_MAX_A_LECRAN) rxLayer.firstElementChild.remove();
+    const node = el("div.rx", {}, [
+      el("span.rx__emoji", { text: emoji }),
+      label ? el("span.rx__who", { text: label }) : null,
+    ].filter(Boolean));
+    node.style.left = 6 + Math.random() * 74 + "%";
+    node.style.animationDuration = 2.4 + Math.random() * 0.8 + "s";
+    rxLayer.appendChild(node);
+    node.addEventListener("animationend", () => node.remove());
+    // Filet : dans un onglet masqué l'animation ne démarre pas, donc
+    // animationend n'arrive jamais et le nœud resterait indéfiniment.
+    setTimeout(() => node.remove(), 5000);
+  } catch {}
+}
+/** Vide l'overlay (changement d'écran, sortie du salon). */
+export function clearReactions() {
+  if (rxLayer) rxLayer.replaceChildren();
+}
+
 /** Prénoms d'affichage avec suffixe en cas de doublon (Léa, Léa · 2…). */
 export function dedupeNames(entries) {
   const counts = {};
@@ -181,6 +212,7 @@ export function liveSession(stage, {
     sendState: (d) => net && net.state(d), // hôte : update diffusé en cours de manche
     reveal: () => net && net.reveal(),
     ceremony: (top) => net && net.ceremony(top), // hôte : cérémonie du Roi jouée partout en même temps
+    react: (emoji) => net && net.react && net.react(emoji), // réaction emoji visible par tous
     newRound: () => distribute(),
     on: (ev, cb) => {
       (listeners[ev] || (listeners[ev] = [])).push(cb); // progress | state | timer
@@ -226,6 +258,7 @@ export function liveSession(stage, {
     stopped = true;
     document.removeEventListener("visibilitychange", onVisibility);
     cancelCeremony();
+    clearReactions(); // pas de réactions qui continuent de flotter après la sortie
     if (wakeLock) { try { wakeLock.release(); } catch {} wakeLock = null; }
     if (upgradeTimer) clearTimeout(upgradeTimer);
     if (net) net.destroy();
@@ -248,6 +281,27 @@ export function liveSession(stage, {
 
   function statusLine() {
     return status ? el("p.screen__subtitle", { text: status, style: "margin-top:10px" }) : null;
+  }
+
+  // Barre de réactions : présente sur l'écran de manche et de révélation, donc
+  // dans les 10 jeux sans qu'ils aient à s'en occuper. Masquée en repli
+  // polling : à 4 s de latence, une réaction n'a plus aucun intérêt.
+  function reactionBar() {
+    if (!net || net.mode !== "ws") return null;
+    return el("div.rx-bar", {}, REACTIONS.map((e) =>
+      el("button.rx-btn", {
+        text: e,
+        "aria-label": `Réagir ${e}`,
+        onClick: () => net && net.react(e),
+      })
+    ));
+  }
+
+  // Une réaction reçue : elle flotte par-dessus l'écran courant, quel qu'il soit.
+  function onReact(id, emoji) {
+    if (stopped) return;
+    const p = players.find((x) => x.id === id);
+    floatReaction(emoji, p ? p.name : "");
   }
 
   function nameScreen() {
@@ -423,6 +477,7 @@ export function liveSession(stage, {
     showPhase(stage, el("div.card.center", {}, [
       Array.isArray(body) ? el("div", {}, body) : body,
       el("div", { style: "margin-top:16px" }, actions),
+      reactionBar(),
       statusLine(),
     ]));
   }
@@ -438,6 +493,7 @@ export function liveSession(stage, {
       // salve par manche, pas de re-tir à « Revoir la révélation »).
       renderReveal(revealed, { api, n: revealed && revealed.n }),
       el("div", { style: "margin-top:16px" }, actions),
+      reactionBar(),
       statusLine(),
     ]));
   }
@@ -610,6 +666,7 @@ export function liveSession(stage, {
         else if (m.t === "goto") onGoto(m.game);
         else if (m.t === "kicked") onKicked();
         else if (m.t === "ceremony") onCeremony(m.top || []);
+        else if (m.t === "react") onReact(m.id, m.emoji);
         else if (m.t === "revealed") onRevealed(m.n, m.roles || {}, m.names || {}, m.meta ?? null, m.inputs, m.order, m.avatars || {});
       };
       sock.onclose = () => {
@@ -639,6 +696,7 @@ export function liveSession(stage, {
       // La cérémonie est diffusée par le serveur À TOUS, hôte inclus (écho) :
       // pas de lecture locale ici, l'animation part quand le broadcast revient.
       ceremony(top) { sendJson({ t: "ceremony", top }); },
+      react(emoji) { sendJson({ t: "react", emoji }); },
       reveal() { sendJson({ t: "reveal" }); },
       leave() { sendJson({ t: "leave" }); },
       // Retour au premier plan : si le socket est fermé, on se reconnecte tout
