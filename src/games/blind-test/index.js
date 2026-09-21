@@ -1,4 +1,4 @@
-import { el, screenHead, announce, showPhase } from "../../ui.js";
+import { el, screenHead, announce, showPhase, shuffle } from "../../ui.js";
 import { playersCard } from "../../players.js";
 import { createScores, scoreboard } from "../../scoring.js";
 import { createDeck } from "../../deck.js";
@@ -136,7 +136,25 @@ export function render(container, { game }) {
           results.replaceChildren(el("p.screen__subtitle", { text: "Aucun extrait trouvé." }));
           return;
         }
+        // Remplissage express : monter une playlist en tapant 20 fois
+        // « + Ajouter » décourageait tout le monde. Un tap sur un thème puis
+        // un tap ici, et la partie peut commencer.
+        const dejaLa = new Set(queue.map((t) => t.src));
+        const express = el("button.btn.btn--full", {
+          text: `⚡ Ajouter ${Math.min(10, list.length)} titres d'un coup`,
+          style: "margin-bottom:10px",
+          onClick: (e) => {
+            const ajoutes = shuffle(list.filter((t) => !dejaLa.has(t.preview)))
+              .slice(0, 10)
+              .map((t) => ({ title: t.title, artist: t.artist, src: t.preview }));
+            ajoutes.forEach(addTrack);
+            e.currentTarget.disabled = true;
+            e.currentTarget.textContent = `✓ ${ajoutes.length} titres ajoutés`;
+            announce(`${ajoutes.length} titres ajoutés à la playlist`);
+          },
+        });
         results.replaceChildren(
+          express,
           ...list.map((t) =>
             el("div.bt-result", {}, [
               el("div.bt-result__meta", {}, [
@@ -171,9 +189,15 @@ export function render(container, { game }) {
     });
 
     // -- Liste par défaut + mes titres --
+    // Ces titres n'ont pas d'extrait : c'est l'hôte qui lance la musique depuis
+    // son appli. Le libellé doit le dire, sinon on croit à des pistes muettes.
     const defaultBtn = el("button.chip", {
-      text: `Charger la liste (${defaultTracks().length})`,
-      onClick: () => defaultTracks().forEach((t) => addTrack({ title: t.title, artist: t.artist, src: t.audioUrl || "" })),
+      text: `🎤 Liste à chanter/jouer soi-même (${defaultTracks().length})`,
+      title: "Titres connus, sans extrait audio : tu lances la musique depuis ton téléphone",
+      onClick: () => {
+        shuffle(defaultTracks().slice()).forEach((t) => addTrack({ title: t.title, artist: t.artist, src: t.audioUrl || "" }));
+        announce("Liste manuelle chargée");
+      },
     });
     const editBtn = el("button.chip", {
       text: "✏️ Mes titres",
