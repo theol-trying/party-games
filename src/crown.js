@@ -14,6 +14,7 @@
 
 import { el } from "./ui.js";
 import { getData, setData } from "./store.js";
+import { currentRoom } from "./room.js";
 import { celebrate, confettiRain, confettiBurst } from "./fx.js";
 import { jingle, roundCue, pop } from "./sound.js";
 
@@ -75,6 +76,149 @@ export function crownTotals(crown) {
   return rows.sort((a, b) => b.pts - a.pts);
 }
 
+/* ========================= 📸 RÉCAP PARTAGEABLE ========================= */
+
+/** Dessine le récap de la soirée sur un canvas vertical (format story). */
+export function dessineRecap(totals, room) {
+  const nbPodium = Math.min(3, totals.length);
+  const nbReste = Math.max(0, Math.min(8, totals.length) - 3);
+  // Hauteur calée sur le contenu : à 3 joueurs, une image de hauteur fixe
+  // laissait un grand vide sous le classement.
+  const W = 1080;
+  const H = Math.max(900, 480 + nbPodium * 150 + (nbReste ? 20 + nbReste * 58 : 0) + 190);
+  const cv = document.createElement("canvas");
+  cv.width = W; cv.height = H;
+  const g = cv.getContext("2d");
+
+  // Fond : le dégradé sombre du site + deux halos.
+  g.fillStyle = "#0f0f1a";
+  g.fillRect(0, 0, W, H);
+  const halo = (x, y, r, couleur) => {
+    const grad = g.createRadialGradient(x, y, 0, x, y, r);
+    grad.addColorStop(0, couleur);
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, W, H);
+  };
+  halo(W * 0.85, -60, 700, "rgba(255,77,109,0.30)");
+  halo(0, H + 60, 620, "rgba(77,208,225,0.22)");
+
+  const centre = (texte, y, taille, couleur, gras = 800) => {
+    g.font = `${gras} ${taille}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+    g.fillStyle = couleur;
+    g.textAlign = "center";
+    g.fillText(texte, W / 2, y);
+  };
+
+  centre("🍻", 150, 92, "#fff");
+  centre("SOIRÉE", 236, 44, "#a0a0c0", 700);
+  centre("Le palmarès", 320, 78, "#f2f2f7", 900);
+
+  const date = new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  centre(`${date}  ·  code ${room}`, 376, 32, "#a0a0c0", 600);
+
+  // Podium : les trois premiers, en plus gros.
+  const top = totals.slice(0, 3);
+  const medailles = ["🥇", "🥈", "🥉"];
+  let y = 480;
+  top.forEach((r, i) => {
+    const h = 132;
+    g.fillStyle = i === 0 ? "rgba(255,212,59,0.14)" : "rgba(255,255,255,0.05)";
+    arrondi(g, 80, y - 78, W - 160, h, 26);
+    g.fill();
+    if (i === 0) { g.strokeStyle = "#ffd43b"; g.lineWidth = 3; g.stroke(); }
+
+    g.textAlign = "left";
+    g.font = `800 60px system-ui, sans-serif`;
+    g.fillStyle = "#fff";
+    g.fillText(medailles[i], 120, y);
+    g.font = `800 56px system-ui, sans-serif`;
+    g.fillText(r.avatar || "🎲", 210, y);
+    g.font = `800 46px system-ui, sans-serif`;
+    g.fillStyle = "#f2f2f7";
+    g.fillText(coupe(g, r.name, 420), 300, y - 8);
+    if (r.titles && r.titles.length) {
+      g.font = `600 27px system-ui, sans-serif`;
+      g.fillStyle = "#a0a0c0";
+      g.fillText(coupe(g, r.titles.join("  "), 520), 300, y + 30);
+    }
+    g.textAlign = "right";
+    g.font = `900 50px system-ui, sans-serif`;
+    g.fillStyle = "#ffd43b";
+    g.fillText(`${r.pts} 👑`, W - 120, y);
+    y += h + 18;
+  });
+
+  // Le reste du classement, en liste compacte.
+  const reste = totals.slice(3, 8);
+  if (reste.length) {
+    y += 20;
+    reste.forEach((r, i) => {
+      g.textAlign = "left";
+      g.font = `700 34px system-ui, sans-serif`;
+      g.fillStyle = "#a0a0c0";
+      g.fillText(`${i + 4}.`, 120, y);
+      g.font = `700 38px system-ui, sans-serif`;
+      g.fillStyle = "#f2f2f7";
+      g.fillText(`${r.avatar || "🎲"}  ${coupe(g, r.name, 520)}`, 190, y);
+      g.textAlign = "right";
+      g.fillStyle = "#ffd43b";
+      g.fillText(`${r.pts} 👑`, W - 120, y);
+      y += 58;
+    });
+  }
+
+  centre("Rejoue avec tes potes", H - 96, 34, "#a0a0c0", 600);
+  centre(location.host, H - 50, 30, "#4dd0e1", 700);
+  return cv;
+}
+
+// Rectangle arrondi (roundRect n'existe pas partout).
+function arrondi(g, x, y, w, h, r) {
+  g.beginPath();
+  if (g.roundRect) { g.roundRect(x, y, w, h, r); return; }
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+
+// Tronque proprement un texte trop long pour la largeur disponible.
+function coupe(g, texte, largeurMax) {
+  let t = String(texte || "");
+  if (g.measureText(t).width <= largeurMax) return t;
+  while (t.length > 1 && g.measureText(t + "…").width > largeurMax) t = t.slice(0, -1);
+  return t + "…";
+}
+
+/** Génère le récap et le partage (ou le télécharge si le partage est indispo). */
+export async function partagerRecap(totals, room) {
+  const cv = dessineRecap(totals, room);
+  const blob = await new Promise((r) => cv.toBlob(r, "image/png"));
+  if (!blob) throw new Error("image indisponible");
+  const fichier = new File([blob], `soiree-${room}.png`, { type: "image/png" });
+
+  // Sur mobile : feuille de partage native (WhatsApp, Messages…).
+  if (navigator.canShare && navigator.canShare({ files: [fichier] })) {
+    try {
+      await navigator.share({ files: [fichier], title: "Soirée 🎉", text: "Le palmarès de la soirée !" });
+      return "partage";
+    } catch (e) {
+      if (e && e.name === "AbortError") return "annule"; // l'utilisateur a fermé la feuille
+    }
+  }
+  // Sinon : téléchargement du PNG.
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fichier.name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  return "telecharge";
+}
+
 /* ============================== ÉCRAN 👑 ============================== */
 
 function medalFor(i) { return i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`; }
@@ -112,6 +256,25 @@ export async function openCrown(stage, { onBack, isHost, me, onStartCeremony }) 
           onClick: () => { if (onStartCeremony) onStartCeremony(top); else playCeremony(wrap, top, me, renderList); },
         }));
       }
+      // Le récap est ouvert à tous : chacun peut repartir avec l'image.
+      const recapBtn = el("button.btn.btn--ghost.btn--full", {
+        text: "📸 Partager le récap de la soirée",
+        style: "margin-top:10px",
+        onClick: async () => {
+          recapBtn.disabled = true;
+          const avant = recapBtn.textContent;
+          recapBtn.textContent = "Création de l'image…";
+          try {
+            const r = await partagerRecap(totals, currentRoom());
+            recapBtn.textContent = r === "telecharge" ? "✓ Image enregistrée" : avant;
+          } catch {
+            recapBtn.textContent = "Échec — réessaie";
+          }
+          recapBtn.disabled = false;
+          setTimeout(() => { recapBtn.textContent = avant; }, 2500);
+        },
+      });
+      bits.push(recapBtn);
     }
     const row = el("div.row", { style: "justify-content:center;margin-top:14px;flex-wrap:wrap" }, [
       el("button.chip", { text: "← Retour au salon", onClick: () => onBack && onBack() }),
