@@ -5,7 +5,8 @@
   "description": "Soirée — site de jeux à boire et jeux d'ambiance",
   "type": "commonjs",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18"

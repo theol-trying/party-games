@@ -7,25 +7,50 @@
    L'API /api/* n'est JAMAIS mise en cache (données de persistance).
    ========================================================================= */
 
-const CACHE = "soiree-v1";
+// v2 : précache élargie (la v1 n'avait que la coquille, donc le hors-ligne était
+// largement illusoire) — le changement de nom purge aussi les anciens caches,
+// y compris d'éventuelles réponses d'erreur mémorisées avant le filtre res.ok.
+const CACHE = "soiree-v2";
+// La coquille + TOUS les modules transverses : ce sont ceux que le routeur et
+// n'importe quel jeu chargent. Les modules propres à un jeu (index/data/style)
+// restent mis en cache à la volée, à la première visite du jeu.
 const PRECACHE = [
   "./",
   "index.html",
+  "manifest.webmanifest",
   "assets/css/base.css",
+  "assets/icon.svg",
   "src/main.js",
-  "src/ui.js",
   "src/registry.js",
+  "src/ui.js",
   "src/room.js",
   "src/store.js",
-  "src/players.js",
+  "src/realtime.js",
+  "src/tv.js",
+  "src/crown.js",
+  "src/fx.js",
+  "src/sound.js",
+  "src/qr.js",
   "src/deck.js",
+  "src/content.js",
+  "src/seen.js",
+  "src/names.js",
   "src/gages.js",
+  "src/levels.js",
+  "src/players.js",
   "src/scoring.js",
+  "src/teams.js",
+  "src/game-kit.js",
 ];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting())
+    caches
+      .open(CACHE)
+      // addAll() est tout-ou-rien : un seul 404 et le service worker ne
+      // s'installe pas du tout. On met donc en cache fichier par fichier.
+      .then((c) => Promise.all(PRECACHE.map((u) => c.add(u).catch(() => {}))))
+      .then(() => self.skipWaiting())
   );
 });
 

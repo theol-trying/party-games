@@ -6,8 +6,10 @@ services:
     name: soiree-jeux
     runtime: node
     plan: free
-    # Aucune dépendance npm, mais npm install reste inoffensif :
-    buildCommand: npm install
+    # Aucune dépendance npm à installer. On en profite pour afficher la version
+    # de Node réellement utilisée : c'est la trace qui confirme que
+    # `.node-version` est bien pris en compte par Render.
+    buildCommand: node --version
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:

@@ -200,25 +200,57 @@ function readBody(req, limit) {
   });
 }
 
+// Seuls ces chemins sont publics. Le dépôt entier vit sous ROOT : sans cette
+// liste, `server.js`, `live.js`, `render.yaml`, `serve.ps1`… seraient servis au
+// premier venu, et tout fichier futur déposé à la racine le deviendrait aussi.
+const PUBLIC_PATH_RE = /^\/(?:index\.html|sw\.js|manifest\.webmanifest|assets\/[\w./-]+|src\/[\w./-]+)$/;
+
 function serveStatic(req, res, urlPath) {
   if (urlPath === "/") urlPath = "/index.html";
-  const filePath = path.normalize(path.join(ROOT, decodeURIComponent(urlPath)));
-  if (!filePath.startsWith(ROOT)) {
+  let decoded;
+  try {
+    decoded = decodeURIComponent(urlPath);
+  } catch {
+    decoded = urlPath; // séquence % invalide : on laisse la liste blanche trancher
+  }
+  const filePath = path.normalize(path.join(ROOT, decoded));
+
+  const send404 = () => {
+    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8", ...SECURITY_HEADERS });
+    res.end("404 - " + urlPath);
+  };
+
+  // Comparer le préfixe seul serait faux (ROOT="/app" laisserait passer
+  // "/app-secret/…") : on exige le séparateur.
+  if (!filePath.startsWith(ROOT + path.sep)) {
     res.writeHead(403, SECURITY_HEADERS);
     return res.end("Forbidden");
   }
-  fs.readFile(filePath, (err, buf) => {
-    if (err) {
-      res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8", ...SECURITY_HEADERS });
-      return res.end("404 - " + urlPath);
-    }
-    const ext = path.extname(filePath).toLowerCase();
-    res.writeHead(200, {
-      "Content-Type": MIME[ext] || "application/octet-stream",
+  const rel = "/" + path.relative(ROOT, filePath).split(path.sep).join("/");
+  if (!PUBLIC_PATH_RE.test(rel)) return send404();
+
+  fs.stat(filePath, (err, st) => {
+    if (err || !st.isFile()) return send404();
+    // Les noms de fichiers ne sont pas versionnés (pas de build) : on garde donc
+    // une revalidation systématique, mais l'ETag permet de répondre 304 à vide
+    // au lieu de renvoyer tout le fichier. Sur le quiz, cela évite de
+    // re-télécharger ~566 Ko à chaque ouverture.
+    const etag = `W/"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`;
+    const headers = {
+      "Content-Type": MIME[path.extname(filePath).toLowerCase()] || "application/octet-stream",
       "Cache-Control": "no-cache",
+      ETag: etag,
       ...SECURITY_HEADERS,
+    };
+    if (req.headers["if-none-match"] === etag) {
+      res.writeHead(304, headers);
+      return res.end();
+    }
+    fs.readFile(filePath, (e2, buf) => {
+      if (e2) return send404();
+      res.writeHead(200, headers);
+      res.end(buf);
     });
-    res.end(buf);
   });
 }
 
