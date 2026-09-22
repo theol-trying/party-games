@@ -6,10 +6,11 @@ services:
     name: soiree-jeux
     runtime: node
     plan: free
-    # Aucune dépendance npm à installer. On en profite pour afficher la version
-    # de Node réellement utilisée : c'est la trace qui confirme que
-    # `.node-version` est bien pris en compte par Render.
-    buildCommand: node --version
+    # Aucune dépendance npm, mais npm install reste inoffensif :
+    # ⚠️ ne pas modifier ce fichier sans raison — toute modification de
+    # render.yaml peut désynchroniser le Blueprint et suspendre les
+    # déploiements automatiques jusqu'à une validation manuelle.
+    buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
