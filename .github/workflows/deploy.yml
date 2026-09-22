@@ -1,0 +1,44 @@
+# Déploiement automatique vers Render.
+#
+# Pourquoi ce fichier : l'auto-déploiement natif de Render ne fonctionne pas sur
+# ce service — ses logs de build affichent « we don't have access to your repo »,
+# donc aucun webhook n'a été installé côté GitHub et Render n'est jamais prévenu
+# des push. Plutôt que de dépendre de cette connexion, c'est GitHub qui prévient
+# Render, via un « Deploy Hook ».
+#
+# Mise en route (deux actions, une seule fois) :
+#   1. Render → le service → Settings → Deploy Hook → copier l'URL secrète.
+#   2. GitHub → le dépôt → Settings → Secrets and variables → Actions →
+#      New repository secret → nom : RENDER_DEPLOY_HOOK, valeur : cette URL.
+#
+# Tant que le secret n'existe pas, ce workflow ne fait rien et ne casse rien.
+# Le déploiement n'est déclenché QUE si les tests passent : mieux que le
+# déploiement manuel, qui ne vérifiait rien.
+name: deploy
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Tests (on ne déploie pas du code cassé)
+        run: npm test
+      - name: Déclencher le déploiement Render
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::warning::Secret RENDER_DEPLOY_HOOK absent — déploiement non déclenché."
+            echo "Voir les instructions en haut de .github/workflows/deploy.yml"
+            exit 0
+          fi
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$HOOK")
+          echo "Render a répondu $code"
+          # Render renvoie 200 (ou 201) quand le déploiement est accepté.
+          case "$code" in 200|201) echo "Déploiement déclenché ✓" ;; *) exit 1 ;; esac
