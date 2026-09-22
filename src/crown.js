@@ -15,7 +15,7 @@
 import { el } from "./ui.js";
 import { getData, setData } from "./store.js";
 import { currentRoom } from "./room.js";
-import { enregistrerSoiree, palmaresCumule, nbSoirees, effacerHistorique } from "./history.js";
+import { enregistrerSoiree, palmaresCumule, chargerHistorique, effacerHistorique } from "./history.js";
 import { getStats, superlatifs } from "./stats.js";
 import { celebrate, confettiRain, confettiBurst } from "./fx.js";
 import { jingle, roundCue, pop } from "./sound.js";
@@ -283,13 +283,15 @@ export async function openCrown(stage, { onBack, isHost, me, onStartCeremony }) 
     ]);
   }
 
-  // Dès qu'il y a des scores, la soirée entre dans l'historique local : c'est
-  // le seul moment où l'on sait qui a joué ET combien. Idempotent (une entrée
-  // par code de soirée et par jour).
-  if (totals.length) enregistrerSoiree(currentRoom(), totals);
+  // Dès qu'il y a des scores, la soirée entre dans l'historique du groupe :
+  // c'est le seul moment où l'on sait qui a joué ET combien. Idempotent (une
+  // entrée par code de soirée et par jour).
+  let historique = totals.length
+    ? (await enregistrerSoiree(currentRoom(), totals)) || []
+    : await chargerHistorique();
 
   function ongletsHistorique() {
-    const n = nbSoirees();
+    const n = historique.length;
     if (n < 2) return null; // un palmarès cumulé sur une seule soirée n'apprend rien
     return el("div.row", { style: "justify-content:center;margin-bottom:12px" }, [
       el("button.chip" + (vue === "soiree" ? ".is-active" : ""), {
@@ -302,12 +304,12 @@ export async function openCrown(stage, { onBack, isHost, me, onStartCeremony }) 
   }
 
   function renderCumul() {
-    const lignes = palmaresCumule();
+    const lignes = palmaresCumule(historique);
     const bits = [
       el("h3.center", { text: "🏆 Palmarès de tous les temps", style: "margin-bottom:4px" }),
       ongletsHistorique(),
       el("p.screen__subtitle.center", {
-        text: `Cumul de ${nbSoirees()} soirée(s) enregistrée(s) sur cet appareil. Les joueurs sont regroupés par prénom.`,
+        text: `Cumul de ${historique.length} soirée(s) sous le code ${currentRoom()} — partagé par tous les téléphones qui l'utilisent. Les joueurs sont regroupés par prénom.`,
         style: "margin-bottom:12px",
       }),
       el("div.stack", {}, lignes.map((r, i) =>
@@ -322,9 +324,12 @@ export async function openCrown(stage, { onBack, isHost, me, onStartCeremony }) 
         el("button.chip", { text: "← Retour au salon", onClick: () => onBack && onBack() }),
         el("button.chip", {
           text: "🗑 Effacer l'historique",
-          onClick: () => {
-            if (!window.confirm("Effacer définitivement l'historique de toutes les soirées de cet appareil ?")) return;
-            effacerHistorique();
+          onClick: async () => {
+            // Le palmarès est partagé : l'effacer touche tout le groupe, pas
+            // seulement cet appareil. Le message doit le dire.
+            if (!window.confirm(`Effacer le palmarès de toutes les soirées sous le code ${currentRoom()} ? Cela l'efface pour TOUT LE GROUPE.`)) return;
+            await effacerHistorique();
+            historique = [];
             vue = "soiree";
             renderList();
           },
