@@ -197,30 +197,79 @@ export function openEditor(container, { gameId, schema, builtInList = [], onDone
     bulkBlock = el("details.ed-bulk", {}, [el("summary", { text: "Coller en masse" }), bulkArea, bulkBtn]);
   }
 
-  const ioArea = el("textarea.input", { rows: "3", placeholder: "Colle ici du JSON pour importer…" });
-  const importBtn = el("button.btn.btn--ghost", { text: "Importer", style: "margin-top:8px" });
-  const exportBtn = el("button.btn.btn--ghost", { text: "Exporter", style: "margin-top:8px" });
+  const ioArea = el("textarea.input", { rows: "3", placeholder: "Colle ici un paquet pour l'importer…" });
+  const importBtn = el("button.btn.btn--ghost", { text: "Importer le texte", style: "margin-top:8px" });
+  const exportBtn = el("button.btn.btn--ghost", { text: "Copier", style: "margin-top:8px" });
+  const fichierBtn = el("button.btn.btn--ghost", { text: "📂 Ouvrir un fichier", style: "margin-top:8px" });
+  const telechargerBtn = el("button.btn.btn--ghost", { text: "💾 Enregistrer le paquet", style: "margin-top:8px" });
+  const fichierInput = el("input", { type: "file", accept: "application/json,.json", style: "display:none" });
   const ioMsg = el("p.screen__subtitle");
-  importBtn.addEventListener("click", async () => {
+
+  /* Un paquet partagé est une enveloppe : elle porte le jeu d'origine, ce qui
+     évite d'injecter des questions de quiz dans « Action ou Vérité ». Le format
+     nu (simple tableau) reste accepté, pour ne pas casser les anciens exports. */
+  const paquet = () => ({
+    soiree: 1,
+    jeu: gameId,
+    titre: schema.title || gameId,
+    cartes: entries.map(({ id, ...reste }) => reste),
+  });
+
+  function ingere(parsed) {
+    let cartes = parsed;
+    if (parsed && !Array.isArray(parsed) && Array.isArray(parsed.cartes)) {
+      if (parsed.jeu && parsed.jeu !== gameId) {
+        return { erreur: `Ce paquet vient de « ${parsed.titre || parsed.jeu} » — ouvre-le depuis ce jeu-là.` };
+      }
+      cartes = parsed.cartes;
+    }
+    const arr = Array.isArray(cartes) ? cartes : [cartes];
+    let ajoutees = 0;
+    arr.forEach((raw) => { const e = sanitizeEntry(raw, schema); if (e) { entries.push(e); ajoutees++; } });
+    return { ajoutees, ignorees: arr.length - ajoutees };
+  }
+
+  async function importeDepuis(texte) {
     let parsed;
-    try { parsed = JSON.parse(ioArea.value); } catch { ioMsg.textContent = "JSON invalide."; return; }
-    const arr = Array.isArray(parsed) ? parsed : [parsed];
-    let added = 0;
-    arr.forEach((raw) => { const e = sanitizeEntry(raw, schema); if (e) { entries.push(e); added++; } });
+    try { parsed = JSON.parse(texte); } catch { ioMsg.textContent = "Fichier ou texte illisible (JSON invalide)."; return; }
+    const r = ingere(parsed);
+    if (r.erreur) { ioMsg.textContent = r.erreur; return; }
     ioArea.value = "";
-    ioMsg.textContent = `${added} carte(s) importée(s).`;
+    ioMsg.textContent = `${r.ajoutees} carte(s) importée(s)${r.ignorees ? `, ${r.ignorees} ignorée(s)` : ""}.`;
     await persist();
+  }
+
+  importBtn.addEventListener("click", () => importeDepuis(ioArea.value));
+  fichierBtn.addEventListener("click", () => fichierInput.click());
+  fichierInput.addEventListener("change", async () => {
+    const f = fichierInput.files && fichierInput.files[0];
+    if (!f) return;
+    await importeDepuis(await f.text());
+    fichierInput.value = "";
   });
   exportBtn.addEventListener("click", async () => {
-    const json = JSON.stringify(entries.map(({ id, ...rest }) => rest), null, 2);
+    const json = JSON.stringify(paquet(), null, 2);
     ioArea.value = json;
-    try { await navigator.clipboard.writeText(json); ioMsg.textContent = "Copié dans le presse-papiers."; }
-    catch { ioMsg.textContent = "Sélectionne et copie le JSON ci-dessus."; }
+    try { await navigator.clipboard.writeText(json); ioMsg.textContent = "Paquet copié — colle-le à un ami."; }
+    catch { ioMsg.textContent = "Sélectionne et copie le texte ci-dessus."; }
   });
+  telechargerBtn.addEventListener("click", () => {
+    if (!entries.length) { ioMsg.textContent = "Aucune carte perso à enregistrer."; return; }
+    const blob = new Blob([JSON.stringify(paquet(), null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = el("a", { href: url, download: `soiree-${gameId}-${entries.length}-cartes.json` });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    ioMsg.textContent = "Fichier enregistré — envoie-le à tes potes.";
+  });
+
   const ioBlock = el("details.ed-bulk", {}, [
-    el("summary", { text: "Importer / Exporter (JSON)" }),
+    el("summary", { text: "📦 Partager mes cartes (import / export)" }),
+    el("p.screen__subtitle", { text: "Enregistre tes cartes dans un fichier pour les envoyer, ou ouvre celui d'un ami.", style: "margin-bottom:8px" }),
+    el("div.row", {}, [telechargerBtn, fichierBtn]),
     ioArea,
     el("div.row", {}, [importBtn, exportBtn]),
+    fichierInput,
     ioMsg,
   ]);
 

@@ -15,6 +15,7 @@
 import { el } from "./ui.js";
 import { getData, setData } from "./store.js";
 import { currentRoom } from "./room.js";
+import { enregistrerSoiree, palmaresCumule, nbSoirees, effacerHistorique } from "./history.js";
 import { celebrate, confettiRain, confettiBurst } from "./fx.js";
 import { jingle, roundCue, pop } from "./sound.js";
 
@@ -240,12 +241,67 @@ export async function openCrown(stage, { onBack, isHost, me, onStartCeremony }) 
   const crown = await getCrown();
   const totals = crownTotals(crown);
   const wrap = el("div.card", {});
+  let vue = "soiree"; // soiree | cumul
+
+  // Dès qu'il y a des scores, la soirée entre dans l'historique local : c'est
+  // le seul moment où l'on sait qui a joué ET combien. Idempotent (une entrée
+  // par code de soirée et par jour).
+  if (totals.length) enregistrerSoiree(currentRoom(), totals);
+
+  function ongletsHistorique() {
+    const n = nbSoirees();
+    if (n < 2) return null; // un palmarès cumulé sur une seule soirée n'apprend rien
+    return el("div.row", { style: "justify-content:center;margin-bottom:12px" }, [
+      el("button.chip" + (vue === "soiree" ? ".is-active" : ""), {
+        text: "Ce soir", onClick: () => { vue = "soiree"; renderList(); },
+      }),
+      el("button.chip" + (vue === "cumul" ? ".is-active" : ""), {
+        text: `🏆 Depuis toujours (${n} soirées)`, onClick: () => { vue = "cumul"; renderList(); },
+      }),
+    ]);
+  }
+
+  function renderCumul() {
+    const lignes = palmaresCumule();
+    const bits = [
+      el("h3.center", { text: "🏆 Palmarès de tous les temps", style: "margin-bottom:4px" }),
+      ongletsHistorique(),
+      el("p.screen__subtitle.center", {
+        text: `Cumul de ${nbSoirees()} soirée(s) enregistrée(s) sur cet appareil. Les joueurs sont regroupés par prénom.`,
+        style: "margin-bottom:12px",
+      }),
+      el("div.stack", {}, lignes.map((r, i) =>
+        el("div.cr-row" + (i === 0 ? ".is-first" : ""), {}, [
+          el("span.cr-rank", { text: medalFor(i) }),
+          el("span.av-badge", { text: r.avatar || "🎲", style: `background:${colorOf(r.nom)}` }),
+          el("span.cr-name", { text: `${r.nom} · ${r.soirees} soirée${r.soirees > 1 ? "s" : ""}${r.victoires ? ` · ${r.victoires} 🥇` : ""}` }),
+          el("span.cr-pts", { text: `${r.pts} 👑` }),
+        ])
+      )),
+      el("div.row", { style: "justify-content:center;margin-top:14px;flex-wrap:wrap" }, [
+        el("button.chip", { text: "← Retour au salon", onClick: () => onBack && onBack() }),
+        el("button.chip", {
+          text: "🗑 Effacer l'historique",
+          onClick: () => {
+            if (!window.confirm("Effacer définitivement l'historique de toutes les soirées de cet appareil ?")) return;
+            effacerHistorique();
+            vue = "soiree";
+            renderList();
+          },
+        }),
+      ]),
+    ];
+    wrap.replaceChildren(...bits.filter(Boolean));
+  }
 
   function renderList() {
+    if (vue === "cumul") return renderCumul();
     const bits = [el("h3.center", { text: "👑 Roi de la soirée", style: "margin-bottom:4px" })];
     if (!totals.length) {
       bits.push(el("p.screen__subtitle.center", { text: "Aucun score pour l'instant — jouez quelques manches à score (Quiz, Blind Test, Plus susceptible, Tu préfères) !", style: "margin:10px 0" }));
     } else {
+      const onglets = ongletsHistorique();
+      if (onglets) bits.push(onglets);
       bits.push(el("p.screen__subtitle.center", { text: "Cumul des jeux à score de la soirée.", style: "margin-bottom:12px" }));
       bits.push(el("div.stack", {}, totals.map((r, i) => rankRow(r, i, me))));
       if (isHost && totals.length >= 2) {
