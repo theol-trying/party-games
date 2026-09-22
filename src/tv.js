@@ -48,6 +48,10 @@ export function render(stage, { code } = {}) {
   let crown = []; // crownTotals(...)
   let ceremonyCleanup = null;
   let timerInt = null;
+  // Rotation d'infos : posé sur une table, l'écran ne doit jamais être figé.
+  // En salon, on alterne « rejoignez la soirée » et le palmarès.
+  let panneau = 0;
+  let rotationInt = null;
 
   const main = el("div.tv");
   stage.replaceChildren(main);
@@ -108,12 +112,27 @@ export function render(stage, { code } = {}) {
     cancelCeremony();
     clearReactions();
     stopTimer();
+    stopRotation();
     net.destroy();
   };
 
   /* ----------------------------- helpers ------------------------------ */
   function cancelCeremony() { if (ceremonyCleanup) { try { ceremonyCleanup(); } catch {} ceremonyCleanup = null; } }
   function stopTimer() { if (timerInt) { clearInterval(timerInt); timerInt = null; } }
+
+  function stopRotation() { if (rotationInt) { clearInterval(rotationInt); rotationInt = null; } }
+  // Ne tourne QUE dans le salon, et seulement s'il y a un palmarès à montrer :
+  // faire clignoter deux fois le même écran n'apporterait rien.
+  function syncRotation() {
+    const doitTourner = (phase === "lobby" || phase === "waiting") && crown.length > 0;
+    if (!doitTourner) { stopRotation(); panneau = 0; return; }
+    if (rotationInt) return;
+    rotationInt = setInterval(() => {
+      if (stopped) return stopRotation();
+      panneau = (panneau + 1) % 2;
+      draw();
+    }, 9000);
+  }
   function startTimer() {
     if (stopped) return; // un setTimeout(startTimer,0) en vol ne doit pas ressusciter un intervalle après cleanup
     stopTimer();
@@ -211,6 +230,24 @@ export function render(stage, { code } = {}) {
         el("p.tv-sub", { text: "Cette soirée a déjà le maximum d'écrans TV connectés. Ferme un autre écran puis recharge cette page." }),
       ]));
     } else if (phase === "lobby") {
+      // Panneau 1 : le palmarès en grand (il n'apparaît qu'une fois des scores
+      // existants, sinon on reste sur l'invitation).
+      if (panneau === 1 && crown.length) {
+        bits.push(el("div.tv-hero", {}, [
+          el("div.tv-hero__title", { text: "👑 Roi de la soirée" }),
+          el("div.tv-cr.tv-cr--grand", {}, [
+            el("div", {}, crown.slice(0, 6).map((r, i) =>
+              el("div.tv-cr__row" + (i === 0 ? ".is-first" : ""), {}, [
+                el("span.tv-cr__rank", { text: i < 3 ? MEDALS[i] : `${i + 1}.` }),
+                el("span.tv-av.tv-av--big", { text: r.avatar || "🎲", style: `background:${colorOf(r.name)}` }),
+                el("span.tv-cr__name", { text: r.name }),
+                el("span.tv-cr__pts", { text: `${r.pts} 👑` }),
+              ])
+            )),
+          ]),
+          el("p.tv-sub", { text: `Soirée ${room} — rejoignez quand vous voulez` }),
+        ]));
+      } else {
       bits.push(el("div.tv-lobby", {}, [
         el("div.tv-lobby__left", {}, [
           el("div.tv-hero__title", { text: "Rejoins la soirée 🎉" }),
@@ -224,6 +261,7 @@ export function render(stage, { code } = {}) {
           crownPanel(),
         ]),
       ]));
+      }
     } else if (phase === "round") {
       const done = progress.done || [];
       const total = progress.total || players.length;
@@ -265,6 +303,7 @@ export function render(stage, { code } = {}) {
       ]));
     }
     main.replaceChildren(...bits.filter(Boolean));
+    syncRotation();
   }
 }
 

@@ -8,6 +8,7 @@ import { CATEGORIES, getGame, gamesByCategory } from "./registry.js";
 import { el, ensureGameStyle, announce } from "./ui.js";
 import { currentRoom, newRoom, setRoom, normalizeCode } from "./room.js";
 import { qrCanvas } from "./qr.js";
+import { gameArt } from "./art.js";
 import { resumeInfo, requestAutoLive } from "./realtime.js";
 
 const app = document.getElementById("app");
@@ -115,12 +116,18 @@ function renderHome() {
     if (!games.length) continue;
     const grid = el("div.game-grid");
     for (const g of games) {
+      // Illustration maison quand elle existe, emoji sinon : les dessins sont
+      // identiques d'un téléphone à l'autre, contrairement aux emoji système.
+      const art = gameArt(g.id, { size: 34 });
+      const icone = art
+        ? el("div.game-card__icon.game-card__icon--art", {}, [art])
+        : el("div.game-card__icon", { text: g.icon });
       grid.appendChild(
         el(
           "a.game-card",
           { href: `#/jeu/${g.id}`, style: `--card-accent:${g.accent}` },
           [
-            el("div.game-card__icon", { text: g.icon }),
+            icone,
             el("div.game-card__title", { text: g.title }),
             el("div.game-card__desc", { text: g.desc }),
           ]

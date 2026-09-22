@@ -405,13 +405,18 @@ export function liveSession(stage, {
     let qr = null;
     try {
       qr = qrCanvas(`${location.origin}${location.pathname}#/r/${currentRoom()}`, { scale: 3 });
-      qr.style.cssText = "display:block;margin:0 auto 10px;border-radius:10px;max-width:140px";
+      qr.style.cssText = "display:block;border-radius:14px";
       qr.setAttribute("aria-label", "QR code d'invitation à la soirée");
     } catch {}
     showPhase(stage, el("div.card.center", {}, [
       el("h3", { text: title }),
-      el("p.screen__subtitle", { text: `Code soirée : ${currentRoom()}`, style: "margin:4px 0 8px" }),
-      qr,
+      // Bloc d'invitation : le code et le QR sont ce que les invités cherchent
+      // en premier, ils méritent mieux qu'une ligne de sous-titre.
+      el("div.lobby-invite", {}, [
+        el("div.lobby-code", { text: currentRoom() }),
+        qr,
+        el("p.screen__subtitle", { text: "Scanne ou entre ce code pour rejoindre" }),
+      ]),
       el("button.chip", { text: "🔗 Partager le lien", onClick: share, style: "margin-bottom:10px" }),
       list,
       extra,

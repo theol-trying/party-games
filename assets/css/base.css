@@ -651,3 +651,84 @@ select:focus-visible {
 .tn-etape.is-fait { opacity: 1; border-color: #69db7c; background: rgba(105, 219, 124, 0.15); }
 .tn-etape.is-encours { opacity: 1; border-color: #ffd43b; background: rgba(255, 212, 59, 0.18); transform: scale(1.1); }
 .btn--ghost.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--bg-card)); }
+
+/* ================== 🎨 Illustrations de jeu (art.js) ================== */
+.game-art { display: block; color: var(--card-accent, var(--accent)); }
+.game-card__icon--art { background: color-mix(in srgb, var(--card-accent, var(--accent)) 14%, transparent); }
+/* Sur l'en-tête d'un écran de jeu, l'illustration prend la couleur du jeu. */
+.screen__art { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; color: var(--accent); }
+
+/* ============ 📺 Écran TV : sa propre échelle (lu à 2-3 m) ============ */
+/* Le reste du site se lit à 30 cm ; ici on repart d'une base bien plus grande
+   et d'un contraste renforcé, sinon le texte est illisible depuis le canapé. */
+.tv .tv-hero__title { font-size: clamp(34px, 6.4vw, 92px); }
+.tv .tv-sub { font-size: clamp(17px, 2.3vw, 34px); max-width: 26ch; color: #c3c3dc; }
+.tv .tv-h2 { font-size: clamp(21px, 3vw, 44px); }
+.tv .tv-code { font-size: clamp(48px, 9vw, 132px); letter-spacing: 12px; }
+.tv .tv-qr { width: clamp(210px, 30vw, 420px); }
+.tv .tv-head__room { font-size: clamp(20px, 2.8vw, 38px); }
+.tv .tv-head__game { font-size: clamp(18px, 2.4vw, 32px); color: #c3c3dc; }
+.tv .tv-player__name { font-size: clamp(15px, 1.7vw, 26px); }
+.tv .tv-timer { font-size: clamp(44px, 8vw, 120px); }
+.tv .tv-buzz__row { padding: 16px 24px; }
+
+/* Palmarès plein écran du panneau en rotation. */
+.tv-cr--grand { background: transparent; border: none; padding: 0; width: min(92vw, 900px); }
+.tv-cr--grand .tv-cr__row { padding: 12px 18px; gap: 18px; }
+.tv-cr--grand .tv-cr__name { font-size: clamp(20px, 2.8vw, 40px); }
+.tv-cr--grand .tv-cr__pts { font-size: clamp(20px, 2.8vw, 40px); }
+.tv-cr--grand .tv-cr__rank { font-size: clamp(24px, 3.2vw, 46px); width: 56px; }
+
+/* La rotation de panneaux ne doit pas « sauter » : léger fondu. */
+.tv > * { animation: tv-fondu 0.45s ease; }
+@keyframes tv-fondu { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* Les tuiles joueurs doivent suivre l'agrandissement, sinon le prénom est
+   tronqué alors qu'il y a toute la place autour. */
+.tv .tv-player { width: clamp(110px, 13vw, 190px); padding: 14px; }
+.tv .tv-players { gap: clamp(12px, 2vw, 26px); }
+
+/* ============ 🎉 Salon : un écran d'accueil de soirée ============ */
+/* Le salon est le premier écran que voient les invités : le code et le QR y
+   sont l'information principale, pas une ligne de texte parmi d'autres. */
+.lobby-invite {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 18px; margin-bottom: 16px; border-radius: var(--radius);
+  background: linear-gradient(165deg, color-mix(in srgb, var(--accent-2) 14%, transparent), transparent 60%), var(--bg-soft);
+  border: 1px solid color-mix(in srgb, var(--accent-2) 26%, var(--border));
+}
+.lobby-code {
+  font-family: var(--font-display); font-weight: 900;
+  font-size: clamp(38px, 11vw, 64px); letter-spacing: 10px; line-height: 1;
+  color: var(--accent-2);
+  text-shadow: 0 0 34px color-mix(in srgb, var(--accent-2) 45%, transparent);
+}
+.lobby-invite canvas { border-radius: 14px; max-width: 168px; width: 42vw; }
+
+/* Les joueurs apparaissent au lieu de surgir. */
+.sb-row, .lobby-player { animation: joueur-arrive 0.35s cubic-bezier(.2,.8,.3,1); }
+@keyframes joueur-arrive {
+  from { opacity: 0; transform: translateX(-10px) scale(0.96); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ============ 🃏 Les cartes se comportent comme un paquet ============ */
+/* La carte suivante glisse par-dessus la précédente : on sent qu'on pioche,
+   au lieu d'un simple remplacement de texte. */
+.big-prompt, .qz-question, .ps-statement, .av-card, .jj-card, .mt-mission, .uc-word {
+  animation: carte-piochee 0.4s cubic-bezier(.2, .85, .3, 1);
+}
+@keyframes carte-piochee {
+  from { opacity: 0; transform: translateY(26px) rotate(-2.2deg) scale(0.94); }
+  60%  { opacity: 1; }
+  to   { opacity: 1; transform: none; }
+}
+/* Épaisseur du paquet : deux cartes empilées dessous, purement décoratives. */
+.big-prompt::after, .qz-question::after, .ps-statement::after,
+.av-card::after, .jj-card::after, .uc-word::after {
+  content: "";
+  position: absolute; inset: auto 10px -7px 10px; height: 14px; z-index: -1;
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: var(--bg-card);
+  border: 1px solid var(--border); border-top: none;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+}
