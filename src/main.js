@@ -197,6 +197,30 @@ async function renderGame(id, token) {
   }
 }
 
+/* ---------- Rejoindre la partie en cours d'une soirée ---------- */
+// Demande au serveur quel jeu est en cours dans cette soirée. Si une partie
+// tourne, on y entre directement en mode multi ; sinon on va à l'accueil.
+// Le serveur seul connaît cette information : elle vit dans les salons en
+// mémoire, pas dans le stockage partagé.
+async function rejoindrePartieEnCours() {
+  const code = currentRoom();
+  mount(el("div.screen", {}, [el("div.card.center", {}, [
+    el("h3", { text: `🎉 Soirée ${code}` }),
+    el("p.screen__subtitle", { text: "On regarde si une partie est en cours…", style: "margin-top:8px" }),
+  ])]));
+  let info = null;
+  try {
+    const r = await fetch(`/api/room/${encodeURIComponent(code)}`);
+    if (r.ok) info = await r.json();
+  } catch {}
+  if (info && info.game && getGame(info.game)) {
+    requestAutoLive(); // le jeu ouvrira son salon sans repasser par le menu
+    location.hash = "#/jeu/" + info.game;
+  } else {
+    location.hash = "#/"; // personne ne joue : accueil classique
+  }
+}
+
 /* ---------- Écran TV / spectateur ---------- */
 async function renderTV(code, token) {
   document.title = "📺 Écran TV — Soirée";
@@ -261,11 +285,13 @@ function router() {
   teardown(); // nettoie l'écran précédent (timers, audio…)
   const hash = location.hash || "#/";
 
-  // Lien d'invitation #/r/CODE : rejoint la soirée puis renvoie à l'accueil.
+  // Lien d'invitation #/r/CODE : rejoint la soirée. Si une partie est DÉJÀ en
+  // cours dans cette soirée, on y emmène directement — sinon l'invité
+  // atterrissait sur l'accueil et devait deviner quel jeu l'hôte préparait.
   const rm = hash.match(/^#\/r\/([A-Za-z0-9]{1,8})/);
   if (rm) {
     setRoom(rm[1]);
-    location.hash = "#/"; // déclenche un nouveau routage vers l'accueil
+    rejoindrePartieEnCours();
     return;
   }
 

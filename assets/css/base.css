@@ -41,12 +41,22 @@ h1, h2, h3,
 h1, h2, .home-hero h1, .screen__title { font-weight: 900; }
 
 html, body { height: 100%; }
+/* Les décors animés (halos du fond, filigrane du jeu) débordent volontairement
+   du viewport ; leur transform élargissait le scroll horizontal de quelques
+   pixels sur téléphone. `clip` supprime ce débordement SANS créer de conteneur
+   de défilement — contrairement à `hidden`, qui casserait le header collant. */
+html { overflow-x: clip; }
 
 body {
   font-family: var(--font);
   background: var(--bg);
   color: var(--text);
+  /* iOS : « 100% » se réfère au viewport barre masquée, donc le bas du contenu
+     passait SOUS la barre de navigation de Safari — elle coupait le jeu sur
+     iPhone 13. `dvh` suit la hauteur réellement visible. Le 100% reste en
+     repli pour les navigateurs qui ignorent dvh. */
   min-height: 100%;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   -webkit-font-smoothing: antialiased;
@@ -58,7 +68,10 @@ body {
    des animations réduites (règle globale plus bas). */
 body::before {
   content: "";
-  position: fixed; inset: -10%;
+  /* Le scale de l'animation fait déborder cette couche du viewport ; c'est
+     voulu (sinon les halos laisseraient un bord vide), et le `overflow-x: clip`
+     posé sur <html> empêche ce débordement de créer un scroll horizontal. */
+  position: fixed; inset: 0;
   z-index: -3; pointer-events: none;
   background:
     radial-gradient(1200px 600px at 80% -10%, rgba(255, 77, 109, 0.17), transparent 60%),
@@ -68,7 +81,7 @@ body::before {
 }
 @keyframes derive {
   from { transform: translate3d(0, 0, 0) scale(1); }
-  to   { transform: translate3d(2.5%, -2%, 0) scale(1.08); }
+  to   { transform: translate3d(2.5%, -2%, 0) scale(1.18); }
 }
 
 /* Grain : casse les aplats trop lisses des dégradés. SVG en data-URI (donc du
@@ -120,7 +133,9 @@ body::after {
   text-align: center;
   color: var(--text-dim);
   font-size: 12px;
-  padding: 24px 16px 40px;
+  /* Marge basse généreuse : sur iPhone, la barre de Safari mange le bas de
+     l'écran, et c'est souvent là que se trouve le dernier bouton d'un jeu. */
+  padding: 24px 16px calc(40px + env(safe-area-inset-bottom, 0px));
 }
 
 /* ---------- Bandeau soirée (room) ---------- */
@@ -227,9 +242,12 @@ body::after {
 }
 .screen[data-game]::after {
   content: var(--wm, "");
-  position: fixed; right: -0.15em; bottom: -0.1em; z-index: -1; pointer-events: none;
+  /* Ce filigrane déborde volontairement par le coin bas-droit ; le
+     `overflow-x: clip` de <html> l'empêche d'ouvrir un scroll horizontal
+     (~16 px de trop sur iPhone 13 avant correction). */
+  position: fixed; right: 0; bottom: 0; z-index: -1; pointer-events: none;
   font-size: clamp(130px, 32vw, 260px); line-height: 1;
-  opacity: 0.07; transform: rotate(-12deg);
+  opacity: 0.07; transform: rotate(-12deg) translate(0.15em, 0.1em);
 }
 /* L'accent colore aussi le bouton retour et le titre de l'écran. */
 .screen[data-game] .screen__back { border-color: var(--accent); }
@@ -517,7 +535,7 @@ select:focus-visible {
 .cr-step--3 .cr-step__base { height: 62px; background: linear-gradient(#f0b479, #cd7f32); }
 
 /* ========================= 📺 Écran TV (tv.js) ========================= */
-.tv { display: flex; flex-direction: column; gap: clamp(12px, 2.5vh, 28px); min-height: 70vh; }
+.tv { display: flex; flex-direction: column; gap: clamp(12px, 2.5vh, 28px); min-height: 70dvh; }
 .tv-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
   padding-bottom: 10px; border-bottom: 1px solid var(--border); }
 .tv-head__room { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: clamp(18px, 2.4vw, 30px); }
@@ -737,3 +755,7 @@ select:focus-visible {
 .btn--art .game-art { flex: 0 0 auto; }
 /* Activation du son sur l'écran TV (Blind Test) — facultatif. */
 .tv-son { align-self: center; font-size: clamp(16px, 2vw, 24px); padding: 14px 26px; }
+
+/* iPhone : réserve sous le contenu de jeu pour que le dernier bouton ne passe
+   jamais sous la barre de navigation de Safari (signalé sur iPhone 13). */
+.app-main { padding-bottom: calc(clamp(20px, 5vw, 40px) + env(safe-area-inset-bottom, 0px)); }

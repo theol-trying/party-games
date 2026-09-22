@@ -24,7 +24,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const { attachWebSocket } = require("./ws.js");
-const { handleSocket } = require("./live.js");
+const { handleSocket, jeuDeLaRoom } = require("./live.js");
 
 const PORT = process.env.PORT || 5178;
 const ROOT = __dirname;
@@ -312,6 +312,15 @@ const server = http.createServer(async (req, res) => {
   if (pathname.startsWith("/api/")) {
     if (!originAllowed(req)) return sendJson(res, 403, { error: "origine non autorisée" });
     if (rateLimited(clientIp(req))) return sendJson(res, 429, { error: "trop de requêtes" });
+  }
+
+  // Salon en cours d'une soirée : /api/room/ABCD → { game, joueurs } ou { game: null }
+  // Permet à un invité qui scanne le QR d'atterrir directement dans la partie
+  // que l'hôte prépare, au lieu de devoir retrouver le bon jeu à la main.
+  const roomMatch = pathname.match(/^\/api\/room\/([A-Za-z0-9]{1,8})$/);
+  if (roomMatch) {
+    const info = jeuDeLaRoom(roomMatch[1]);
+    return sendJson(res, 200, info || { game: null });
   }
 
   // Recherche musicale : /api/music?q=...&provider=itunes|deezer&limit=N

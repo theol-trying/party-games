@@ -329,4 +329,17 @@ function handleSocket(ws) {
   };
 }
 
-module.exports = { handleSocket };
+/** Jeu actuellement joué dans une soirée, ou null. Sert à envoyer un invité
+    qui scanne le QR directement dans le salon en cours, au lieu de le laisser
+    sur l'accueil à devoir deviner quel jeu l'hôte est en train de préparer. */
+function jeuDeLaRoom(room) {
+  const code = String(room || "").toUpperCase();
+  if (!ROOM_RE.test(code)) return null;
+  const game = roomGame.get(code);
+  if (!game) return null;
+  const r = rooms.get(roomKey(code, game));
+  if (!r || r.players.size === 0) return null; // salon vidé : plus rien à rejoindre
+  return { game, joueurs: r.players.size };
+}
+
+module.exports = { handleSocket, jeuDeLaRoom };
