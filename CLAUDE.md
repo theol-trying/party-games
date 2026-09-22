@@ -21,6 +21,14 @@ Site **modulaire** : les jeux s'enrichissent un par un. Audit et état : `AUDIT.
   aucun effet — inutile d'y toucher pour changer le build.
 - ⚠️ **Un déploiement prend ~10 min** sur le plan gratuit. Ne pas conclure à un blocage
   avant d'avoir attendu : vérifier plutôt l'onglet Events du dashboard.
+- 🚨 **L'auto-déploiement NE FONCTIONNE PAS** (constaté le 2026-09-22). Les logs de build
+  affichent « It looks like we don't have access to your repo » : Render n'a pas accès au
+  dépôt GitHub, donc aucun webhook n'y a été installé et il n'est jamais prévenu des push.
+  Il clone quand même, le dépôt étant public — d'où l'illusion que tout va bien.
+  **Ne pas dire à l'utilisateur que « Render redéploie tout seul »** tant que ce n'est pas
+  corrigé : il doit déclencher « Manual Deploy » à la main.
+  Correctif : Settings → Repository → reconnecter via l'intégration GitHub (installer l'app
+  Render et lui donner accès au dépôt), puis vérifier Auto-Deploy = Yes.
 - `ALLOWED_ORIGIN` restreint l'API au domaine de prod — vide = pas de restriction.
 - `kv-local.*` = persistance de dev du serveur PowerShell, hors dépôt.
 - **Ne pas proposer de « Mode Soirée »** : l'utilisateur l'a explicitement refusé.
