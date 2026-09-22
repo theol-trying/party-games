@@ -6,10 +6,10 @@ services:
     name: soiree-jeux
     runtime: node
     plan: free
-    # Aucune dépendance npm, mais npm install reste inoffensif :
-    # ⚠️ ne pas modifier ce fichier sans raison — toute modification de
-    # render.yaml peut désynchroniser le Blueprint et suspendre les
-    # déploiements automatiques jusqu'à une validation manuelle.
+    # Aucune dépendance npm, mais npm install reste inoffensif.
+    # Note : un déploiement Render sur le plan gratuit peut prendre ~10 min.
+    # Ne pas en conclure trop vite qu'il est bloqué et se mettre à changer
+    # ce fichier — il suffit d'attendre.
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /api/health
