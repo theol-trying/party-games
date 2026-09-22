@@ -12,6 +12,7 @@ import { liveSession, syncCountdown, peekAutoLive } from "../../realtime.js";
 import { tick, vibrate } from "../../sound.js";
 import { confettiBurst, celebrate, stampGage } from "../../fx.js";
 import { awardStanding } from "../../crown.js";
+import { bump, bumpMany } from "../../stats.js";
 import { QUESTIONS, CATEGORIES } from "./data.js";
 
 // Points d'une bonne réponse : base + bonus de rapidité selon le rang d'arrivée.
@@ -331,7 +332,17 @@ export function render(container, { game }) {
       if (myOk) celebrate();
       else if (myInp != null) stampGage(myGage);
       // 👑 Contribue au Roi de la soirée (classement courant du quiz).
-      if (api.isHost()) awardStanding("quiz-gages", rows.map((r) => r.id), names, live.avatars || {});
+      if (api.isHost()) {
+        awardStanding("quiz-gages", rows.map((r) => r.id), names, live.avatars || {});
+        // Superlatifs : premier au buzzer, et bonnes réponses. Hôte only, comme
+        // ci-dessus, sinon l'événement serait compté une fois par téléphone.
+        const premier = (live.order || [])[0];
+        if (premier) bump(premier, "buzz1");
+        const justes = ids.filter((id) => inputs[id] && inputs[id].choice === correct);
+        if (justes.length) bumpMany(justes, "bonneRep");
+        const rates = ids.filter((id) => inputs[id] && inputs[id].choice !== correct);
+        if (rates.length) bumpMany(rates, "gage");
+      }
     }
 
     return el("div", {}, [

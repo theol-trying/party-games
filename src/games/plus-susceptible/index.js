@@ -4,6 +4,7 @@ import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
 import { makeSeen } from "../../seen.js";
 import { awardStanding } from "../../crown.js";
+import { bumpMany } from "../../stats.js";
 import { createScores, scoreboard } from "../../scoring.js";
 import { openEditor } from "../../content.js";
 import { passThePhone, contentSource } from "../../game-kit.js";
@@ -132,6 +133,8 @@ export function render(container, { game }) {
         if (api.isHost()) {
           const cranked = ids.filter((id) => crowns[id] > 0).sort((a, b) => crowns[b] - crowns[a]);
           if (cranked.length) awardStanding("plus-susceptible", cranked, names, live.avatars || {});
+          // Superlatif « le plus désigné » : ceux que le groupe vient d'élire.
+          if (winners.length) bumpMany(winners, "designe");
         }
         const ranking = ids.map((id) => ({ id, v: tally[id] })).sort((a, b) => b.v - a.v);
         const wNames = winners.map((id) => names[id]);

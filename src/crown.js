@@ -16,6 +16,7 @@ import { el } from "./ui.js";
 import { getData, setData } from "./store.js";
 import { currentRoom } from "./room.js";
 import { enregistrerSoiree, palmaresCumule, nbSoirees, effacerHistorique } from "./history.js";
+import { getStats, superlatifs } from "./stats.js";
 import { celebrate, confettiRain, confettiBurst } from "./fx.js";
 import { jingle, roundCue, pop } from "./sound.js";
 
@@ -80,13 +81,14 @@ export function crownTotals(crown) {
 /* ========================= 📸 RÉCAP PARTAGEABLE ========================= */
 
 /** Dessine le récap de la soirée sur un canvas vertical (format story). */
-export function dessineRecap(totals, room) {
+export function dessineRecap(totals, room, palmes = []) {
   const nbPodium = Math.min(3, totals.length);
   const nbReste = Math.max(0, Math.min(8, totals.length) - 3);
+  const nbPalmes = Math.min(4, palmes.length);
   // Hauteur calée sur le contenu : à 3 joueurs, une image de hauteur fixe
   // laissait un grand vide sous le classement.
   const W = 1080;
-  const H = Math.max(900, 480 + nbPodium * 150 + (nbReste ? 20 + nbReste * 58 : 0) + 190);
+  const H = Math.max(900, 480 + nbPodium * 150 + (nbReste ? 20 + nbReste * 58 : 0) + (nbPalmes ? 70 + nbPalmes * 52 : 0) + 190);
   const cv = document.createElement("canvas");
   cv.width = W; cv.height = H;
   const g = cv.getContext("2d");
@@ -169,6 +171,24 @@ export function dessineRecap(totals, room) {
     });
   }
 
+  // Les palmes : c'est ce qui fait rire au réveil, plus que le classement.
+  if (nbPalmes) {
+    y += 34;
+    centre("🏅 LES PALMES", y, 32, "#a0a0c0", 800);
+    y += 44;
+    palmes.slice(0, 4).forEach((p) => {
+      g.textAlign = "left";
+      g.font = "700 34px system-ui, sans-serif";
+      g.fillStyle = "#f2f2f7";
+      g.fillText(`${p.emoji}  ${coupe(g, `${p.titre} — ${p.nom}`, 700)}`, 120, y);
+      g.textAlign = "right";
+      g.font = "600 26px system-ui, sans-serif";
+      g.fillStyle = "#a0a0c0";
+      g.fillText(coupe(g, p.detail, 260), W - 120, y);
+      y += 52;
+    });
+  }
+
   centre("Rejoue avec tes potes", H - 96, 34, "#a0a0c0", 600);
   centre(location.host, H - 50, 30, "#4dd0e1", 700);
   return cv;
@@ -195,8 +215,8 @@ function coupe(g, texte, largeurMax) {
 }
 
 /** Génère le récap et le partage (ou le télécharge si le partage est indispo). */
-export async function partagerRecap(totals, room) {
-  const cv = dessineRecap(totals, room);
+export async function partagerRecap(totals, room, palmes = []) {
+  const cv = dessineRecap(totals, room, palmes);
   const blob = await new Promise((r) => cv.toBlob(r, "image/png"));
   if (!blob) throw new Error("image indisponible");
   const fichier = new File([blob], `soiree-${room}.png`, { type: "image/png" });
@@ -242,6 +262,26 @@ export async function openCrown(stage, { onBack, isHost, me, onStartCeremony }) 
   const totals = crownTotals(crown);
   const wrap = el("div.card", {});
   let vue = "soiree"; // soiree | cumul
+
+  // Superlatifs : le classement dit qui a gagné, ceux-ci disent comment.
+  const noms = {}, avs = {};
+  totals.forEach((r) => { noms[r.id] = r.name; avs[r.id] = r.avatar; });
+  const palmes = superlatifs(await getStats(), noms, avs);
+
+  function blocSuperlatifs() {
+    if (!palmes.length) return null;
+    return el("div", { style: "margin-top:18px" }, [
+      el("h3.center", { text: "🏅 Les palmes de la soirée", style: "margin-bottom:10px" }),
+      el("div.stack", {}, palmes.map((p) =>
+        el("div.cr-row", {}, [
+          el("span.cr-rank", { text: p.emoji }),
+          el("span.av-badge", { text: p.avatar, style: `background:${colorOf(p.nom)}` }),
+          el("span.cr-name", { text: `${p.titre} — ${p.nom}` }),
+          el("span.cr-pts", { text: p.detail, style: "font-size:13px;color:var(--text-dim);font-weight:600" }),
+        ])
+      )),
+    ]);
+  }
 
   // Dès qu'il y a des scores, la soirée entre dans l'historique local : c'est
   // le seul moment où l'on sait qui a joué ET combien. Idempotent (une entrée
@@ -321,7 +361,7 @@ export async function openCrown(stage, { onBack, isHost, me, onStartCeremony }) 
           const avant = recapBtn.textContent;
           recapBtn.textContent = "Création de l'image…";
           try {
-            const r = await partagerRecap(totals, currentRoom());
+            const r = await partagerRecap(totals, currentRoom(), palmes);
             recapBtn.textContent = r === "telecharge" ? "✓ Image enregistrée" : avant;
           } catch {
             recapBtn.textContent = "Échec — réessaie";
@@ -331,6 +371,8 @@ export async function openCrown(stage, { onBack, isHost, me, onStartCeremony }) 
         },
       });
       bits.push(recapBtn);
+      const sup = blocSuperlatifs();
+      if (sup) bits.push(sup);
     }
     const row = el("div.row", { style: "justify-content:center;margin-top:14px;flex-wrap:wrap" }, [
       el("button.chip", { text: "← Retour au salon", onClick: () => onBack && onBack() }),
