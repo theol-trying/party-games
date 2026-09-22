@@ -35,6 +35,7 @@ import { pop, roundCue, jingle } from "./sound.js";
 import { qrCanvas } from "./qr.js";
 import { GAMES } from "./registry.js";
 import { openCrown, openCeremony } from "./crown.js";
+import { getTournoi, demarrerTournoi, avancerTournoi, arreterTournoi, jeuCourant, estTermine, bandeauTournoi, ecranTournoi } from "./tournament.js";
 
 const DEV_KEY = "soiree.device";
 const NAME_KEY = "soiree.name";
@@ -233,6 +234,7 @@ export function liveSession(stage, {
   let lastRevealed = null; // dernier reveal reçu (bouton « Revenir » depuis le salon)
   let wakeLock = null; // anti-mise en veille pendant le salon/les manches
   let ceremonyCleanup = null; // arrêt de la cérémonie en cours (timers)
+  let tournoi = null; // tournoi en cours (rafraîchi à chaque affichage du salon)
 
   // Au retour au premier plan (téléphone déverrouillé) : reconnexion immédiate
   // au lieu d'attendre les timers de retry, et ré-acquisition du wake lock
@@ -354,6 +356,15 @@ export function liveSession(stage, {
   function lobbyScreen() {
     if (stopped) return;
     view = "lobby";
+    // Le tournoi vit dans le KV partagé : on le relit à l'affichage du salon
+    // pour que tous les téléphones voient la même progression, puis on
+    // re-rend si l'état a changé depuis le dernier affichage.
+    getTournoi().then((t) => {
+      const avant = tournoi ? `${tournoi.index}/${tournoi.jeux.length}` : "";
+      const apres = t ? `${t.index}/${t.jeux.length}` : "";
+      if (avant !== apres && !stopped && view === "lobby") { tournoi = t; lobbyScreen(); }
+      else tournoi = t;
+    }).catch(() => {});
     const isHost = host === me;
     const disp = dedupeNames(players);
     const list = players.length
@@ -405,8 +416,23 @@ export function liveSession(stage, {
       list,
       extra,
       el("div", { style: "margin-top:14px" }, [action, backToRound]),
+      // Bandeau de tournoi : où on en est, et le passage au jeu suivant.
+      tournoi
+        ? bandeauTournoi(tournoi, {
+            isHost,
+            onSuivant: async () => {
+              const t = await avancerTournoi();
+              tournoi = t;
+              const suivant = jeuCourant(t);
+              if (suivant && net) net.goto(suivant); // emmène toute la soirée
+              else lobbyScreen(); // terminé : on reste, le palmarès fait le reste
+            },
+            onArreter: async () => { await arreterTournoi(); tournoi = null; lobbyScreen(); },
+          })
+        : null,
       el("div.row", { style: "justify-content:center;margin-top:12px;flex-wrap:wrap" }, [
         el("button.chip", { text: "👑 Palmarès", onClick: crownScreen }),
+        isHost && !tournoi ? el("button.chip", { text: "🏆 Tournoi", onClick: tournoiScreen }) : null,
         isHost ? el("button.chip", { text: "🎮 Changer de jeu", onClick: switchScreen }) : null,
         el("button.chip", { text: "👤 Prénom / code", onClick: nameScreen }),
         el("button.chip", { text: "🚪 Quitter", onClick: leave }),
@@ -446,6 +472,21 @@ export function liveSession(stage, {
       me,
       onDone: () => { ceremonyCleanup = null; if (!stopped) crownScreen(); },
     });
+  }
+
+  // 🏆 Composition d'un tournoi (hôte). Le premier jeu est lancé via goto.
+  function tournoiScreen() {
+    view = "tournoi";
+    showPhase(stage, ecranTournoi({
+      onAnnuler: () => { view = "lobby"; lobbyScreen(); },
+      onLancer: async (jeux) => {
+        tournoi = await demarrerTournoi(jeux);
+        view = "lobby";
+        const premier = jeuCourant(tournoi);
+        if (premier && premier !== gameId && net) net.goto(premier);
+        else lobbyScreen();
+      },
+    }));
   }
 
   // L'hôte choisit un autre jeu : toute la soirée y est emmenée (message goto).
