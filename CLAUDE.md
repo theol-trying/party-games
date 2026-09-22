@@ -15,6 +15,12 @@ Site **modulaire** : les jeux s'enrichissent un par un. Audit et état : `AUDIT.
 - **Web Service** Node, pas un Static Site : `server.js` sert le site *et* l'API de
   persistance. En Static Site les jeux s'afficheraient sans sauvegarde partagée.
 - Santé du déploiement : **`/api/health`** (indique notamment si Upstash est branché).
+- ⚠️ **`render.yaml` n'est PAS la source de vérité de ce service.** Les logs de build
+  montrent `Running build command 'yarn'`, alors que le fichier indique `npm install` :
+  les réglages réels vivent dans le **dashboard Render**. Modifier `render.yaml` n'a donc
+  aucun effet — inutile d'y toucher pour changer le build.
+- ⚠️ **Un déploiement prend ~10 min** sur le plan gratuit. Ne pas conclure à un blocage
+  avant d'avoir attendu : vérifier plutôt l'onglet Events du dashboard.
 - `ALLOWED_ORIGIN` restreint l'API au domaine de prod — vide = pas de restriction.
 - `kv-local.*` = persistance de dev du serveur PowerShell, hors dépôt.
 - **Ne pas proposer de « Mode Soirée »** : l'utilisateur l'a explicitement refusé.
