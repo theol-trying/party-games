@@ -343,6 +343,11 @@ export function render(container, { game }) {
     let roundTrack = null; // secret DJ
     let lastTotals = null; // pour l'écran final
     let btFxRound = -1; // manche dont les confettis du gagnant ont déjà été joués
+    // Un écran TV a-t-il pris le son en charge ? Purement optionnel : sans lui,
+    // la musique reste sur le téléphone de l'hôte, comme avant.
+    let tvSon = false;
+    let nbExtraits = 10; // longueur de partie (0 = sans fin)
+    let bareme = "degressif"; // degressif | premier
 
     liveStop = liveSession(stage, {
       gameId: "blind-test",
@@ -352,6 +357,36 @@ export function render(container, { game }) {
       revealLabel: "🏁 Terminer la partie",
       newRoundLabel: "Morceau suivant →",
       onExit: modeSelect0,
+      // Réglages de l'hôte : longueur de partie et barème. Tout est optionnel,
+      // les valeurs par défaut reproduisent le comportement d'avant.
+      lobbyExtra: () => {
+        const wrap = el("div", { style: "margin:10px 0" });
+        function build() {
+          const longueurs = [5, 10, 15, 0].map((v) =>
+            el("button.chip" + (nbExtraits === v ? ".is-active" : ""), {
+              text: v ? `${v} extraits` : "Sans fin",
+              onClick: () => { nbExtraits = v; build(); },
+            })
+          );
+          const baremes = [
+            ["degressif", "Dégressif 10/7/5/3"],
+            ["premier", "Seul le 1er marque"],
+          ].map(([v, label]) =>
+            el("button.chip" + (bareme === v ? ".is-active" : ""), {
+              text: label,
+              onClick: () => { bareme = v; build(); },
+            })
+          );
+          wrap.replaceChildren(
+            el("p.screen__subtitle.center", { text: "Longueur de la partie" }),
+            el("div.row", { style: "justify-content:center;margin:6px 0 10px;flex-wrap:wrap" }, longueurs),
+            el("p.screen__subtitle.center", { text: "Points au buzzer" }),
+            el("div.row", { style: "justify-content:center;margin-top:6px;flex-wrap:wrap" }, baremes)
+          );
+        }
+        build();
+        return wrap;
+      },
       assign: (ps) => {
         let t = deck.next();
         if (!t) { deck.reset(); t = deck.next(); }
@@ -360,7 +395,10 @@ export function render(container, { game }) {
         ps.forEach((p) => (base[p.id] = scores[p.id] || 0));
         const roles = {};
         ps.forEach((p) => (roles[p.id] = true));
-        return { roles, meta: { base } };
+        // `src` voyage (l'URL d'extrait est opaque : ni titre ni artiste), pour
+        // qu'un écran TV puisse diffuser le son. Le titre, lui, reste le secret
+        // du DJ et ne transite jamais.
+        return { roles, meta: { base, src: roundTrack.src || "", total: nbExtraits, bareme } };
       },
       renderMine: (mine, ctx) => liveRound(ctx), // ctx porte n (manche)
       renderReveal: (live, { api }) => {
@@ -384,6 +422,17 @@ export function render(container, { game }) {
     const BUZZ_PTS = [10, 7, 5, 3]; // points selon le rang de buzz du gagnant
 
     function liveRound({ api, meta, n }) {
+      // Un écran TV peut prendre le son en charge en cours de partie : on se
+      // réabonne à chaque manche et on re-rend si l'état change.
+      tvSon = api.tvAudio();
+      api.on("tvaudio", (on) => {
+        if (on === tvSon) return;
+        tvSon = on;
+        // La TV prend le relais en cours de partie : on coupe le son local pour
+        // éviter le double écho. L'inverse (TV qui se déconnecte) reprendra à
+        // la manche suivante, sans interrompre celle en cours.
+        if (tvSon && currentAudio) { currentAudio.pause(); currentAudio = null; }
+      });
       let order = [];
       let rejected = [];
       let decided = false;
@@ -392,10 +441,15 @@ export function render(container, { game }) {
       let buzzBtn = null;
       const nameOf = (id) => (api.players().find((p) => p.id === id) || {}).name || "?";
 
+      const total = meta.total || 0;
+      const compteur = total
+        ? el("p.screen__subtitle.center", { text: `Extrait ${Math.min(n, total)} / ${total}` })
+        : null;
+      const bareme1er = meta.bareme === "premier";
       const info = el("p.bt-buzzinfo.center", {
         text: api.isHost()
-          ? "🎧 La musique joue sur TON téléphone — les autres buzzent !"
-          : "Écoute… et BUZZ ! (1er = 10 pts, puis 7, 5, 3)",
+          ? (tvSon ? "🎛️ Tu arbitres — le son est sur la TV" : "🎧 La musique joue sur TON téléphone — les autres buzzent !")
+          : (bareme1er ? "Écoute… et BUZZ ! (le premier qui trouve marque)" : "Écoute… et BUZZ ! (1er = 10 pts, puis 7, 5, 3)"),
         style: "font-weight:700;margin:12px 0",
       });
       const orderBox = el("div.stack");
@@ -414,7 +468,12 @@ export function render(container, { game }) {
       }
       const winPts = (id) => {
         const rank = Math.max(0, order.indexOf(id));
-        return BUZZ_PTS[Math.min(rank, BUZZ_PTS.length - 1)] * (doubleRound ? 2 : 1);
+        // Barème « premier » : le rang ne joue plus, tout le monde vaut 10 —
+        // plus juste à 6 joueurs, où le 4e buzz ne rapportait presque rien.
+        const base = (meta.bareme === "premier")
+          ? BUZZ_PTS[0]
+          : BUZZ_PTS[Math.min(rank, BUZZ_PTS.length - 1)];
+        return base * (doubleRound ? 2 : 1);
       };
       function refreshJudge() {
         if (!api.isHost() || decided) return judgeBox.replaceChildren();
@@ -481,6 +540,16 @@ export function render(container, { game }) {
         judgeBox.replaceChildren();
         if (buzzBtn) buzzBtn.disabled = true;
         if (audioEl && audioEl.pause) audioEl.pause();
+        // Fin de partie : le bouton « Terminer » existait déjà mais rien
+        // n'indiquait quand s'arrêter. On le dit clairement au dernier extrait.
+        if (total && n >= total) {
+          resultBox.appendChild(el("p.screen__subtitle.center", {
+            text: api.isHost()
+              ? `🏁 Dernier extrait (${total}/${total}) — termine la partie pour le classement final.`
+              : `🏁 Dernier extrait (${total}/${total}) !`,
+            style: "margin-top:12px;font-weight:700",
+          }));
+        }
       }
 
       let feltFirstBuzz = false;
@@ -504,12 +573,19 @@ export function render(container, { game }) {
 
       const bits = [];
       if (api.isHost()) {
-        audioEl = roundTrack && roundTrack.src
-          ? el("audio.bt-audio", { src: roundTrack.src, controls: "", autoplay: "", "aria-label": "Extrait à deviner" })
-          : el("div.placeholder", { text: "Pas d'audio pour ce titre — chante-le ou lance-le à la main 🎤" });
-        if (currentAudio) currentAudio.pause();
-        currentAudio = audioEl && audioEl.pause ? audioEl : null;
-        bits.push(el("p.screen__subtitle", { text: "🎧 Tu es le DJ" }), audioEl);
+        if (tvSon) {
+          // Un écran TV diffuse le son : inutile de le jouer ici aussi, ça
+          // ferait un double écho. L'hôte redevient simple arbitre.
+          if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+          bits.push(el("div.placeholder", { text: "🔊 Le son joue sur l'écran TV — tu n'as plus qu'à arbitrer." }));
+        } else {
+          audioEl = roundTrack && roundTrack.src
+            ? el("audio.bt-audio", { src: roundTrack.src, controls: "", autoplay: "", "aria-label": "Extrait à deviner" })
+            : el("div.placeholder", { text: "Pas d'audio pour ce titre — chante-le ou lance-le à la main 🎤" });
+          if (currentAudio) currentAudio.pause();
+          currentAudio = audioEl && audioEl.pause ? audioEl : null;
+          bits.push(el("p.screen__subtitle", { text: "🎧 Tu es le DJ" }), audioEl);
+        }
       } else {
         buzzBtn = el("button.bt-buzzer.bt-buzzer--big", {
           text: "🔔 BUZZ !",
@@ -522,9 +598,9 @@ export function render(container, { game }) {
         });
         bits.push(buzzBtn);
       }
-      bits.push(info, orderBox, judgeBox, resultBox);
+      bits.push(info, compteur, orderBox, judgeBox, resultBox);
       refreshJudge();
-      return bits;
+      return bits.filter(Boolean);
     }
   }
 }

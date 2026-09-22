@@ -194,7 +194,8 @@ export function liveSession(stage, {
   let shownReveal = false;
   let view = "name";
   let status = ""; // ⚡ / 🐢 / reconnexion…
-  let listeners = { progress: [], state: [], timer: [] }; // abonnements de la manche en cours
+  let listeners = { progress: [], state: [], timer: [], tvaudio: [] }; // abonnements de la manche en cours
+  let tvAudio = false; // un ecran TV diffuse-t-il le son ? (Blind Test, optionnel)
 
   function emit(ev, ...args) {
     if (ev === "state") { lastStateData = args[0]; hasLastState = true; } // mémorisé pour les abonnés tardifs
@@ -215,6 +216,7 @@ export function liveSession(stage, {
     reveal: () => net && net.reveal(),
     ceremony: (top) => net && net.ceremony(top), // hôte : cérémonie du Roi jouée partout en même temps
     react: (emoji) => net && net.react && net.react(emoji), // réaction emoji visible par tous
+    tvAudio: () => tvAudio, // un écran TV a-t-il pris le son en charge ? (Blind Test)
     newRound: () => distribute(),
     on: (ev, cb) => {
       (listeners[ev] || (listeners[ev] = [])).push(cb); // progress | state | timer
@@ -590,7 +592,7 @@ export function liveSession(stage, {
       cancelCeremony(); // une manche neuve interrompt un podium encore animé (onglet en arrière-plan)
       shownRound = n;
       shownReveal = false;
-      listeners = { progress: [], state: [], timer: [] }; // nouvelle manche : abonnements frais
+      listeners = { progress: [], state: [], timer: [], tvaudio: [] }; // nouvelle manche : abonnements frais
       lastStateData = null;
       hasLastState = false;
       lastRevealed = null;
@@ -719,6 +721,7 @@ export function liveSession(stage, {
         else if (m.t === "kicked") onKicked();
         else if (m.t === "ceremony") onCeremony(m.top || []);
         else if (m.t === "react") onReact(m.id, m.emoji);
+        else if (m.t === "tvaudio") { tvAudio = m.on === true; emit("tvaudio", tvAudio); }
         else if (m.t === "revealed") onRevealed(m.n, m.roles || {}, m.names || {}, m.meta ?? null, m.inputs, m.order, m.avatars || {});
       };
       sock.onclose = () => {

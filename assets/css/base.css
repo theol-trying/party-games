@@ -735,3 +735,5 @@ select:focus-visible {
 /* Bouton portant une illustration + un libellé (choix de jeu, tournoi). */
 .btn--art { display: flex; align-items: center; justify-content: center; gap: 10px; }
 .btn--art .game-art { flex: 0 0 auto; }
+/* Activation du son sur l'écran TV (Blind Test) — facultatif. */
+.tv-son { align-self: center; font-size: clamp(16px, 2vw, 24px); padding: 14px 26px; }

@@ -17,6 +17,7 @@
      { t:"host", id }                                  (hôte : passe la main à un autre joueur)
      { t:"ceremony", top }                             (hôte : cérémonie du Roi jouée en même temps partout)
      { t:"react", emoji }                              (tout joueur : réaction emoji, cadence bornée)
+     { t:"tvaudio", on }                               (spectateur : cet écran peut diffuser le son)
      { t:"reveal" }                                    (hôte uniquement)
      { t:"leave" }
    Serveur → client :
@@ -216,9 +217,13 @@ function handleSocket(ws) {
     const r = rooms.get(key);
     if (!r) return;
 
-    // Un spectateur (écran TV) est purement passif : seul « leave » est accepté.
+    // Un spectateur (écran TV) est purement passif, à deux exceptions près :
+    // il peut partir, et il peut signaler qu'il est capable de diffuser le son
+    // (les navigateurs exigent un geste de l'utilisateur pour l'autoriser).
+    // Il n'altère ainsi jamais l'état de la partie.
     if (isSpectator) {
       if (msg.t === "leave") { removePlayer(key, myId, null); key = null; myId = null; isSpectator = false; }
+      else if (msg.t === "tvaudio") broadcast(r, JSON.stringify({ t: "tvaudio", on: msg.on === true }));
       return;
     }
 

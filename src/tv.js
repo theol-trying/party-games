@@ -52,6 +52,11 @@ export function render(stage, { code } = {}) {
   // En salon, on alterne « rejoignez la soirée » et le palmarès.
   let panneau = 0;
   let rotationInt = null;
+  // Son du Blind Test — OPTIONNEL. La TV ne joue rien tant que quelqu'un n'a
+  // pas appuyé sur « Activer le son » : les navigateurs exigent un geste, et
+  // surtout le jeu doit rester parfaitement jouable sans aucun écran TV.
+  let sonActive = false;
+  let audioEl = null;
 
   const main = el("div.tv");
   stage.replaceChildren(main);
@@ -83,7 +88,10 @@ export function render(stage, { code } = {}) {
       cancelCeremony();
       shownRound = n; shownReveal = false;
       round = { n, meta }; revealed = null; progress = { n, done: [], total: 0 };
-      timerEndsAt = 0; stopTimer(); phase = "round"; roundCue(); draw();
+      timerEndsAt = 0; stopTimer(); phase = "round"; roundCue();
+      // Blind Test : si le son a été activé sur cet écran, on diffuse l'extrait.
+      if (meta && meta.src) jouerExtrait(meta.src);
+      draw();
     },
     onProgress: (n, done, total) => {
       progress = { n, done: done || [], total: total || 0 };
@@ -99,6 +107,7 @@ export function render(stage, { code } = {}) {
       timerEndsAt = 0; stopTimer(); phase = "reveal"; jingle(); refreshCrown(); draw();
     },
     onCeremony: (top) => playCeremony(top),
+    sonActif: () => sonActive, // pour re-signaler l'état après une reconnexion
     // Les réactions flottent par-dessus la TV : c'est l'écran où elles se
     // voient le mieux, et le spectateur n'a rien d'autre à faire.
     onReact: (id, emoji) => {
@@ -113,6 +122,7 @@ export function render(stage, { code } = {}) {
     clearReactions();
     stopTimer();
     stopRotation();
+    stopAudio();
     net.destroy();
   };
 
@@ -121,6 +131,32 @@ export function render(stage, { code } = {}) {
   function stopTimer() { if (timerInt) { clearInterval(timerInt); timerInt = null; } }
 
   function stopRotation() { if (rotationInt) { clearInterval(rotationInt); rotationInt = null; } }
+
+  /* ---- Son du Blind Test (option) ---- */
+  function stopAudio() {
+    if (audioEl) { try { audioEl.pause(); } catch {} audioEl = null; }
+  }
+  // Le clic qui active le son sert aussi à débloquer l'autoplay du navigateur :
+  // on joue un silence immédiatement, dans le geste de l'utilisateur.
+  async function activerSon() {
+    try {
+      const a = new Audio();
+      a.src = "data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tAAAAAAAAAAAAAAA=";
+      await a.play().catch(() => {});
+      a.pause();
+    } catch {}
+    sonActive = true;
+    net.envoyerTvAudio(true);
+    draw();
+  }
+  function jouerExtrait(src) {
+    stopAudio();
+    if (!sonActive || !src) return;
+    try {
+      audioEl = new Audio(src);
+      audioEl.play().catch(() => {}); // refus éventuel : l'hôte garde son propre son
+    } catch {}
+  }
   // Ne tourne QUE dans le salon, et seulement s'il y a un palmarès à montrer :
   // faire clignoter deux fois le même écran n'apporterait rien.
   function syncRotation() {
@@ -169,6 +205,13 @@ export function render(stage, { code } = {}) {
   }
   function gameMeta() { return (gameId && getGame(gameId)) || null; }
 
+  // Bouton d'activation du son : n'apparaît que pour le Blind Test, et reste
+  // facultatif — sans lui, l'hôte garde la musique sur son téléphone.
+  function boutonSon() {
+    if (gameId !== "blind-test" || sonActive) return null;
+    return el("button.btn.tv-son", { text: "🔊 Diffuser le son sur cet écran", onClick: activerSon });
+  }
+
   function header() {
     const g = gameMeta();
     return el("div.tv-head", {}, [
@@ -214,7 +257,7 @@ export function render(stage, { code } = {}) {
 
   function draw() {
     if (stopped || phase === "ceremony") return; // la cérémonie possède la zone principale
-    const bits = [header()];
+    const bits = [header(), boutonSon()];
 
     if (phase === "waiting") {
       bits.push(el("div.tv-hero", {}, [
@@ -328,7 +371,7 @@ function spectatorSocket(room, tvId, h) {
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
     try { sock = new WebSocket(`${proto}//${location.host}/ws`); }
     catch { return scheduleReconnect(); }
-    sock.onopen = () => { h.onStatus(""); sendJoin(); };
+    sock.onopen = () => { h.onStatus(""); sendJoin(); if (h.sonActif && h.sonActif()) setTimeout(() => { try { sock.send(JSON.stringify({ t: "tvaudio", on: true })); } catch {} }, 300); };
     sock.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch { return; } handle(m); };
     sock.onclose = () => { if (!destroyed) scheduleReconnect(); };
     sock.onerror = () => { try { sock.close(); } catch {} };
@@ -364,6 +407,7 @@ function spectatorSocket(room, tvId, h) {
   }
   open();
   return {
+    envoyerTvAudio(on) { if (sock && sock.readyState === 1) sock.send(JSON.stringify({ t: "tvaudio", on })); },
     destroy() {
       destroyed = true;
       clearTimers();
