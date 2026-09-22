@@ -134,9 +134,33 @@ async function musicSearch(provider, query, limit) {
 }
 
 /* ---------- Utilitaires HTTP ---------- */
+// Politique de sécurité du contenu. Le site n'a aucun script inline (un seul
+// module externe), donc script-src peut rester strict. Les exceptions sont
+// toutes justifiées :
+//   style-src  'unsafe-inline' → les écrans posent des styles en ligne (el({style}))
+//   img-src    https:          → pochettes d'albums renvoyées par iTunes/Deezer
+//   media-src  https: blob:    → extraits audio distants + fichiers du téléphone
+//   connect-src ws: wss:       → le salon temps réel
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: https:",
+  "media-src 'self' https: blob:",
+  "connect-src 'self' ws: wss:",
+  "font-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'none'",
+  "frame-ancestors 'none'", // pas d'intégration dans une iframe tierce
+].join("; ");
+
 const SECURITY_HEADERS = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "same-origin",
+  "Content-Security-Policy": CSP,
+  "X-Frame-Options": "DENY",
+  "Permissions-Policy": "geolocation=(), camera=(), microphone=(), payment=()",
 };
 
 function sendJson(res, status, obj) {
@@ -264,7 +288,9 @@ const server = http.createServer(async (req, res) => {
     const info = {
       ok: true,
       redis: Boolean(REDIS_URL && REDIS_TOKEN), // les variables Upstash sont-elles vues ?
-      node: process.version, // >= v18 requis pour que fetch existe
+      // Majeure seulement : suffisant pour vérifier que .node-version est pris
+      // en compte, sans publier la version exacte (qui pointe les CVE connues).
+      node: process.version.split(".")[0],
       fetch: typeof fetch === "function",
       originRestricted: ALLOWED_ORIGINS.length > 0,
       ws: true, // WebSocket temps réel disponible sur /ws
@@ -322,6 +348,15 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { key, value });
       }
       if (req.method === "PUT" || req.method === "POST") {
+        // On EXIGE application/json. Sans ce contrôle, une page tierce pouvait
+        // écrire dans le salon de quelqu'un via une « requête simple »
+        // (Content-Type: text/plain), qui échappe au préflight CORS et donc au
+        // contrôle d'origine. Avec ce test, l'écriture cross-site impose un
+        // préflight — que ce serveur ne satisfait pas.
+        const ct = String(req.headers["content-type"] || "").split(";")[0].trim().toLowerCase();
+        if (ct !== "application/json") {
+          return sendJson(res, 415, { error: "type de contenu non supporté" });
+        }
         let body;
         try {
           body = await readBody(req, MAX_VALUE_BYTES);
