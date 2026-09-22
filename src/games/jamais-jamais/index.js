@@ -23,7 +23,7 @@ export function render(container, { game }) {
   const seen = makeSeen("jamais-jamais"); // anti-répétition entre soirées
   let deck = createDeck(pool(level), { seen });
 
-  container.append(screenHead(game.title, "Bois si tu l'as déjà fait"));
+  container.append(screenHead(game.title, "Bois si tu l'as déjà fait", game.id));
   const stage = el("div");
   container.append(stage);
   let liveStop = null;

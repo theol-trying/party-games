@@ -24,7 +24,7 @@ export function render(container, { game }) {
   let counts = { a: 0, b: 0 };
   let revealed = false;
 
-  container.append(screenHead(game.title, "Tape ton camp · le camp minoritaire boit"));
+  container.append(screenHead(game.title, "Tape ton camp · le camp minoritaire boit", game.id));
   const stage = el("div");
   container.append(stage);
   let liveStop = null;

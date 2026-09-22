@@ -15,6 +15,7 @@
 import { el } from "./ui.js";
 import { getData, setData } from "./store.js";
 import { GAMES, getGame } from "./registry.js";
+import { gameArt } from "./art.js";
 
 const KEY = "tournoi";
 
@@ -63,9 +64,8 @@ export function bandeauTournoi(t, { isHost, onSuivant, onArreter }) {
       const g = getGame(id);
       const etat = i < t.index ? "fait" : i === t.index ? "encours" : "avenir";
       return el("span.tn-etape.is-" + etat, {
-        text: `${g ? g.icon : "🎮"}`,
         title: `${i + 1}. ${g ? g.title : id}${etat === "fait" ? " — terminé" : etat === "encours" ? " — en cours" : ""}`,
-      });
+      }, [gameArt(id, { size: 22 }) || el("span", { text: g ? g.icon : "🎮" })]);
     })
   );
   const g = getGame(jeuCourant(t));
@@ -99,10 +99,13 @@ export function ecranTournoi({ onLancer, onAnnuler }) {
         style: "margin:8px 0 14px",
       }),
       el("div.stack", {}, dispo.map((g) =>
-        el("button.btn.btn--ghost.btn--full" + (choisis.has(g.id) ? ".is-on" : ""), {
-          text: `${choisis.has(g.id) ? "✅" : "⬜"} ${g.icon} ${g.title}`,
+        el("button.btn.btn--ghost.btn--full.btn--art" + (choisis.has(g.id) ? ".is-on" : ""), {
           onClick: () => { choisis.has(g.id) ? choisis.delete(g.id) : choisis.add(g.id); rendre(); },
-        })
+        }, [
+          el("span", { text: choisis.has(g.id) ? "✅" : "⬜" }),
+          gameArt(g.id, { size: 24 }) || el("span", { text: g.icon }),
+          el("span", { text: g.title }),
+        ])
       )),
       el("button.btn.btn--full", {
         text: `Lancer le tournoi (${choisis.size} jeu${choisis.size > 1 ? "x" : ""})`,

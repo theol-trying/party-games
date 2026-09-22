@@ -5,6 +5,7 @@ import { playersCard } from "../../players.js";
 import { openEditor } from "../../content.js";
 import { passThePhone, contentSource } from "../../game-kit.js";
 import { liveSession, peekAutoLive } from "../../realtime.js";
+import { bumpMany } from "../../stats.js";
 import { celebrate } from "../../fx.js";
 import { MISSIONS } from "./data.js";
 
@@ -20,7 +21,7 @@ export function render(container, { game }) {
   let deck = createDeck(missions(), { seen });
   let liveStop = null;
   let menteurFxRound = -1; // manche dont les confettis du verdict ont déjà été joués
-  container.append(screenHead(game.title, "Une mission secrète à glisser dans la conversation"));
+  container.append(screenHead(game.title, "Une mission secrète à glisser dans la conversation", game.id));
   const stage = el("div");
   container.append(stage);
 
@@ -203,7 +204,16 @@ export function render(container, { game }) {
             verdict = s.menteurVerdict;
             // Payoff une seule fois par manche (n survit aux re-renders et au replay
             // du state via « Revoir la révélation » ; garde au scope render()).
-            if (n != null && n !== menteurFxRound) { menteurFxRound = n; celebrate(); }
+            if (n != null && n !== menteurFxRound) {
+              menteurFxRound = n;
+              celebrate();
+              // Superlatif « meilleur menteur » : verdict « infondé » = la
+              // mission est passée inaperçue. Hôte only, une fois par manche.
+              if (api.isHost() && verdict === "infonde") {
+                const ids = Object.keys(live.names || {});
+                if (ids.length) bumpMany(ids.filter((id) => (live.roles || {})[id]), "impuni");
+              }
+            }
             render();
           }
         });

@@ -19,7 +19,7 @@ export function render(container, { game }) {
   let podiumFxRound = -1; // manche dont les confettis du podium ont déjà été joués
   const src = contentSource("cadavre-exquis", { builtIn: AMORCES });
 
-  container.append(screenHead(game.title, "Chacun écrit sans voir la suite"));
+  container.append(screenHead(game.title, "Chacun écrit sans voir la suite", game.id));
   const stage = el("div");
   container.append(stage);
 

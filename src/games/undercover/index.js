@@ -4,6 +4,7 @@ import { createDeck } from "../../deck.js";
 import { openEditor } from "../../content.js";
 import { passThePhone, contentSource } from "../../game-kit.js";
 import { liveSession, peekAutoLive } from "../../realtime.js";
+import { bumpMany } from "../../stats.js";
 import { flipReveal, celebrate } from "../../fx.js";
 import { makeSeen } from "../../seen.js";
 import { PAIRES } from "./data.js";
@@ -18,7 +19,7 @@ const SCHEMA = {
 };
 
 export function render(container, { game }) {
-  container.append(screenHead(game.title, "Distribution secrète · imposteurs & Mr White"));
+  container.append(screenHead(game.title, "Distribution secrète · imposteurs & Mr White", game.id));
   const stage = el("div");
   container.append(stage);
 
@@ -263,7 +264,18 @@ export function render(container, { game }) {
           const label = cur.winner === "civils" ? "😇 Les civils gagnent !" : cur.winner === "white" ? "🎭 Mr White gagne !" : "🕵️ Les imposteurs gagnent !";
           if (cur.out) bits.push(el("p", { text: `${nameOf(cur.out)} éliminé — c'était ${ROLE_TAG[cur.outRole] || cur.outRole}.`, style: "margin-bottom:8px" }));
           bits.push(el("h2", { text: label }));
-          if (n != null && n !== ucOverRound) { ucOverRound = n; celebrate(); }
+          if (n != null && n !== ucOverRound) {
+            ucOverRound = n;
+            celebrate();
+            // Superlatif « fin limier » : quand les civils l'emportent, ceux qui
+            // ne sont ni imposteur ni Mr White ont démasqué. Les rôles ne sont
+            // connus que de l'hôte (hostGame), ce qui tombe bien : c'est lui
+            // seul qui doit compter, sinon l'événement serait compté N fois.
+            if (api.isHost() && cur.winner === "civils" && hostGame) {
+              const civils = Object.keys(hostGame.roles).filter((id) => hostGame.roles[id].role === "civil");
+              if (civils.length) bumpMany(civils, "demasque");
+            }
+          }
           bits.push(el("p.screen__subtitle", { text: "L'hôte peut révéler tous les rôles.", style: "margin-top:8px" }));
         }
         phaseArea.replaceChildren(...bits.filter(Boolean));

@@ -732,3 +732,6 @@ select:focus-visible {
   border: 1px solid var(--border); border-top: none;
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
 }
+/* Bouton portant une illustration + un libellé (choix de jeu, tournoi). */
+.btn--art { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.btn--art .game-art { flex: 0 0 auto; }

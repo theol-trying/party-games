@@ -3,6 +3,8 @@
    Volontairement minimal (pas de framework) pour rester éditable facilement.
    ========================================================================= */
 
+import { gameArt } from "./art.js";
+
 /** Crée un élément DOM. tag "div.classe#id", props, enfants (string/Node/array). */
 export function el(spec, props = {}, children = []) {
   const [tagAndClasses, id] = spec.split("#");
@@ -37,14 +39,18 @@ function appendChildren(node, children) {
 }
 
 /** En-tête standard d'un écran de jeu, avec bouton retour vers l'accueil. */
-export function screenHead(title, subtitle) {
+export function screenHead(title, subtitle, gameId) {
+  // L'illustration du jeu, quand on nous donne son id : l'en-tête porte la
+  // même identité que la tuile d'accueil sur laquelle on vient de cliquer.
+  const art = gameId ? gameArt(gameId, { size: 30 }) : null;
   return el("header.screen__head", {}, [
     el("a.screen__back", { href: "#/", "aria-label": "Retour", text: "←" }),
+    art ? el("div.screen__art", {}, [art]) : null,
     el("div", {}, [
       el("div.screen__title", { text: title }),
       subtitle ? el("div.screen__subtitle", { text: subtitle }) : null,
     ]),
-  ]);
+  ].filter(Boolean));
 }
 
 /** Mélange un tableau (Fisher-Yates), sans muter l'original. */

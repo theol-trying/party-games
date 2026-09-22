@@ -34,7 +34,7 @@ const THEMES = [
 ];
 
 export function render(container, { game }) {
-  container.append(screenHead(game.title, "Buzzer + scores en temps réel"));
+  container.append(screenHead(game.title, "Buzzer + scores en temps réel", game.id));
   const stage = el("div");
   container.append(stage);
   let currentAudio = null;

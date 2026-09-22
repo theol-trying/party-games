@@ -38,7 +38,7 @@ function toQuestion(e) {
 }
 
 export function render(container, { game }) {
-  container.append(screenHead(game.title, "Bonne réponse = point, sinon gage"));
+  container.append(screenHead(game.title, "Bonne réponse = point, sinon gage", game.id));
   const stage = el("div");
   container.append(stage);
 

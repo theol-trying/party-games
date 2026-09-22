@@ -20,7 +20,7 @@ const SCHEMA = {
 export function render(container, { game }) {
   const src = contentSource("plus-susceptible", { builtIn: AFFIRMATIONS });
   const seen = makeSeen("plus-susceptible"); // anti-répétition entre soirées
-  container.append(screenHead(game.title, "Vote anonyme · roi/reine de la soirée"));
+  container.append(screenHead(game.title, "Vote anonyme · roi/reine de la soirée", game.id));
   const stage = el("div");
   container.append(stage);
 

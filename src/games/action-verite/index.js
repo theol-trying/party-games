@@ -25,7 +25,7 @@ export function render(container, { game }) {
   let config = { onlyCustom: false, disabled: {} };
   const decks = { verite: {}, action: {} };
 
-  container.append(screenHead(game.title, "Niveau réglable · ajoute tes propres cartes"));
+  container.append(screenHead(game.title, "Niveau réglable · ajoute tes propres cartes", game.id));
   const stage = el("div");
   container.append(stage);
 

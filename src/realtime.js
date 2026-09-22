@@ -33,6 +33,7 @@ import { getData, setData } from "./store.js";
 import { currentRoom, setRoom, normalizeCode } from "./room.js";
 import { pop, roundCue, jingle } from "./sound.js";
 import { qrCanvas } from "./qr.js";
+import { gameArt } from "./art.js";
 import { GAMES } from "./registry.js";
 import { openCrown, openCeremony } from "./crown.js";
 import { getTournoi, demarrerTournoi, avancerTournoi, arreterTournoi, jeuCourant, estTermine, bandeauTournoi, ecranTournoi } from "./tournament.js";
@@ -502,7 +503,12 @@ export function liveSession(stage, {
       el("h3", { text: "🎮 Changer de jeu" }),
       el("p.screen__subtitle", { text: "Tous les téléphones du salon suivront automatiquement.", style: "margin:6px 0 12px" }),
       el("div.stack", {}, choices.map((g) =>
-        el("button.btn.btn--ghost.btn--full", { text: `${g.emoji ? g.emoji + " " : ""}${g.title}`, style: "margin-top:8px", onClick: () => net && net.goto(g.id) })
+        // `g.emoji` n'existe pas dans le registre (le champ est `icon`) : aucune
+        // icône n'était donc affichée ici. On passe à l'illustration du jeu.
+        el("button.btn.btn--ghost.btn--full.btn--art", { style: "margin-top:8px", onClick: () => net && net.goto(g.id) }, [
+          gameArt(g.id, { size: 24 }) || el("span", { text: g.icon || "🎮" }),
+          el("span", { text: g.title }),
+        ])
       )),
       el("button.chip", { text: "← Retour au salon", style: "margin-top:14px", onClick: lobbyScreen }),
     ]));

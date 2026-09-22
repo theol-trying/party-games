@@ -17,7 +17,7 @@ export function render(container, { game }) {
   let liveStop = null; // arrêt du salon multi si actif
   const deck = createDeck(LETTRES); // tirage des lettres sans répétition
 
-  container.append(screenHead(game.title, "Une lettre, des catégories, le chrono tourne"));
+  container.append(screenHead(game.title, "Une lettre, des catégories, le chrono tourne", game.id));
   const stage = el("div");
   container.append(stage);
 
