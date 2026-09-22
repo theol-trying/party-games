@@ -1,5 +1,6 @@
 import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { playersCard } from "../../players.js";
+import { modeScreen } from "../../teams.js";
 import { createDeck } from "../../deck.js";
 import { createScores, scoreboard } from "../../scoring.js";
 import { getData, setData } from "../../store.js";
@@ -67,7 +68,14 @@ export function render(container, { game }) {
           style: "margin-top:10px",
           onClick: () => {
             readCats();
-            showPhase(stage, playersCard({ min: 2, cta: "Jouer à la ronde", onReady: (names) => rondeStart(names) }));
+            // En équipes, on cherche les mots ensemble : c'est le mode le plus
+            // vivant du Baccalauréat, et le scoring fonctionne tel quel
+            // (une équipe est une entité de score comme un joueur).
+            showPhase(stage, playersCard({
+              min: 2,
+              cta: "Suite →",
+              onReady: (names) => showPhase(stage, modeScreen(stage, { names, soloLabel: "🙋 Chacun pour soi", onStart: (entites) => rondeStart(entites) })),
+            }));
           },
         }),
         el("button.btn.btn--full.btn--ghost", {

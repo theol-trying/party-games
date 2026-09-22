@@ -1,4 +1,5 @@
 import { el, screenHead, announce, showPhase } from "../../ui.js";
+import { modeScreen } from "../../teams.js";
 import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
 import { makeSeen } from "../../seen.js";
@@ -48,7 +49,13 @@ export function render(container, { game }) {
 
   function introScreen() {
     stage.replaceChildren(
-      playersCard({ min: 3, cta: "Lancer les votes", onReady: (names) => startGame(names) }),
+      // Après la saisie des joueurs, on propose chacun pour soi ou par équipes :
+      // en équipes, on vote pour une équipe et les couronnes lui reviennent.
+      playersCard({
+        min: 3,
+        cta: "Suite →",
+        onReady: (names) => showPhase(stage, modeScreen(stage, { names, soloLabel: "🙋 Chacun pour soi", onStart: (entites) => startGame(entites) })),
+      }),
       el("div.row", { style: "justify-content:center;margin-top:14px" }, [
         el("button.chip", { text: "← Mode", onClick: modeSelect }),
         el("button.chip", { text: "✏️ Mes cartes", onClick: openEd }),

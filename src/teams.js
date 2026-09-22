@@ -8,7 +8,7 @@
      onReady(teams) avec teams = [{ name, members: [...] }]
    ========================================================================= */
 
-import { el, shuffle } from "./ui.js";
+import { el, shuffle, showPhase } from "./ui.js";
 
 const TEAM_META = [
   { name: "Rouge", emoji: "🔴" },
@@ -96,4 +96,30 @@ export function teamBuilder({ players, onReady }) {
 
   refresh();
   return root;
+}
+
+/** Écran « Mode de jeu » : chacun pour soi, ou en équipes.
+    Greffable sur n'importe quel jeu qui démarre à partir d'une liste de noms,
+    puisqu'une équipe est traitée comme un joueur portant le nom de l'équipe.
+
+    modeScreen(stage, { names, onStart, soloLabel? })
+      onStart(noms, { equipes }) — noms = joueurs, ou noms d'équipes */
+export function modeScreen(stage, { names, onStart, soloLabel = "🙋 Chacun pour soi" }) {
+  return el("div.card.center", {}, [
+    el("h3", { text: "Mode de jeu" }),
+    el("p.screen__subtitle", { text: `${names.length} joueurs`, style: "margin:6px 0 14px" }),
+    el("button.btn.btn--full", { text: soloLabel, onClick: () => onStart(names, { equipes: null }) }),
+    el("button.btn.btn--full.btn--ghost", {
+      text: "👥 En équipes",
+      style: "margin-top:10px",
+      onClick: () =>
+        showPhase(
+          stage,
+          teamBuilder({
+            players: names,
+            onReady: (teams) => onStart(teams.map((t) => t.name), { equipes: teams }),
+          })
+        ),
+    }),
+  ]);
 }
