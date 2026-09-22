@@ -22,6 +22,7 @@ import { Q_INVENTIONS } from "./data2-inventions.js";
 import { Q_LANGUE } from "./data2-langue.js";
 import { Q_CITATIONS } from "./data2-citations.js";
 import { Q_INSOLITE } from "./data2-insolite.js";
+import { Q_ACTU } from "./data2-actu.js";
 
 /* Quiz culture générale. correct = index de la bonne réponse (0-based).
    Banque rédigée à la main (90). Les gages sont centralisés dans src/gages.js. */
@@ -228,6 +229,10 @@ const BASE = [
 /* Banques par catégorie : chaque question est taguée avec sa catégorie (cat)
    pour permettre à l'hôte de filtrer les thèmes. BASE = mélange rédigé main. */
 const BANKS = [
+  /* En tête de liste : la déduplication garde la 1re occurrence d'un énoncé,
+     donc une question d'actu l'emporte sur son homologue périmée d'un autre
+     thème (ex. le vainqueur de Roland-Garros). */
+  { cat: "actu", label: "🗞️ Actus 2025-2026", q: Q_ACTU },
   { cat: "melange", label: "🎲 Assorti", q: BASE },
   { cat: "geo", label: "🌍 Géographie", q: Q_GEO },
   { cat: "histoire", label: "🏛️ Histoire", q: Q_HISTOIRE },

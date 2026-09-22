@@ -26,7 +26,7 @@ support hors-ligne, sons et confettis.
 
 | Jeu | Contenu |
 |---|---|
-| Quiz à gages | 2492 questions · 25 catégories · 0 malformée · 0 doublon |
+| Quiz à gages | 2549 questions · 26 catégories · 0 malformée · 0 doublon |
 | Je n'ai jamais | 720 phrases (360 soft / 240 soirée / 120 18+) |
 | Action ou Vérité | 687 cartes (348 actions + 339 vérités) |
 | Qui est le plus susceptible | 245 affirmations |
