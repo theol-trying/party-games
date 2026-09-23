@@ -37,6 +37,18 @@ function toQuestion(e) {
   return { q: e.q, choices, correct: choices.indexOf(e.bonne) };
 }
 
+/* Mélange les réponses à CHAQUE tirage. Sans ça, les questions intégrées
+   s'affichaient dans l'ordre où elles ont été écrites, et la bonne réponse
+   tombait en « B » une fois sur deux (80 % en Sport) : répondre toujours B
+   suffisait à gagner. On mélange des indices plutôt que des libellés, pour
+   rester juste même si deux propositions portaient le même texte. Renvoie une
+   copie : la banque partagée n'est jamais modifiée. */
+function melanger(item) {
+  if (!item || !Array.isArray(item.choices)) return item;
+  const ordre = shuffle(item.choices.map((_, i) => i));
+  return { ...item, choices: ordre.map((i) => item.choices[i]), correct: ordre.indexOf(item.correct) };
+}
+
 export function render(container, { game }) {
   container.append(screenHead(game.title, "Bonne réponse = point, sinon gage", game.id));
   const stage = el("div");
@@ -177,7 +189,9 @@ export function render(container, { game }) {
         ]);
       },
       assign: (ps) => {
-        const item = deck.next() || { q: "?", choices: ["?"], correct: 0 };
+        // Mélangé une seule fois, chez l'hôte : tous les téléphones reçoivent
+        // le même ordre via meta, donc la même lettre gagnante.
+        const item = melanger(deck.next()) || { q: "?", choices: ["?"], correct: 0 };
         const base = {};
         const strk = {};
         ps.forEach((p) => { base[p.id] = scores[p.id] || 0; strk[p.id] = streaks[p.id] || 0; });
@@ -386,7 +400,7 @@ export function render(container, { game }) {
 
     function draw() {
       answered = false;
-      const item = deck.next();
+      const item = melanger(deck.next());
       count++;
       const player = players[turn % players.length];
 
