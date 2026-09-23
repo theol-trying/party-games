@@ -23,10 +23,12 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # v5 : ces actions tournent sous Node 24 (les v4, sous Node 20 en fin de
+      # vie, déclenchaient un avertissement de dépréciation à chaque push).
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24 # même version que la prod (.node-version)
       - name: Tests (on ne déploie pas du code cassé)
         run: npm test
       - name: Déclencher le déploiement Render

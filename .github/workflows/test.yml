@@ -1,6 +1,6 @@
 # Tests automatiques à chaque push (GitHub Actions).
-# On teste DEUX versions : celle figée pour la prod (.node-version) et une
-# récente, celle des machines de dev. `node --test tests/` ne marchait que sur
+# On teste DEUX versions : la plus ancienne acceptée (engines : >= 22) et celle
+# de la prod (.node-version : 24). `node --test tests/` ne marchait que sur
 # Node 20 — sur Node >= 22 le dossier est pris pour un module et tout casse.
 name: tests
 on: [push, pull_request]
@@ -10,11 +10,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [20, 24]
+        node: [22, 24]
     name: node ${{ matrix.node }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
       - run: npm test
