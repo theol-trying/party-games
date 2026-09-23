@@ -292,6 +292,30 @@ test("une reconnexion remplace l'ancien socket sans dupliquer le joueur", () => 
   assert.equal(last(bis, "lobby").players.length, 2);
 });
 
+// Cas réel : quitter par « ← » envoie un « leave », mais le joueur peut revenir
+// aussitôt. Sur Render, le proxy relaie encore l'ancienne connexion ~10 s : son
+// « leave » peut donc arriver APRÈS la reconnexion, et ne doit pas l'éjecter.
+test("un « leave » tardif d'un ancien socket n'éjecte pas la nouvelle connexion", () => {
+  const r = newRoom();
+  const a = join(r, "quiz-gages", "alice", "Alice");
+  const vieux = join(r, "quiz-gages", "bob", "Bob");
+  join(r, "quiz-gages", "bob", "Bob"); // Bob revient (nouveau socket)
+
+  send(vieux, { t: "leave" });
+  assert.equal(last(a, "lobby").players.length, 2, "Bob doit rester dans le salon");
+});
+
+test("même garde pour l'écran TV : un vieux « leave » ne coupe pas le nouvel écran", () => {
+  const r = newRoom();
+  const a = join(r, "quiz-gages", "alice", "Alice");
+  const tv1 = spectate(r, "ecran");
+  const tv2 = spectate(r, "ecran"); // l'écran TV s'est reconnecté
+
+  send(tv1, { t: "leave" });
+  send(a, { t: "start", roles: { alice: "A" } });
+  assert.ok(last(tv2, "round"), "le nouvel écran reçoit toujours la manche");
+});
+
 test("un message mal formé ou une donnée géante ne cassent pas le salon", () => {
   const r = newRoom();
   const a = join(r, "quiz-gages", "alice", "Alice");

@@ -266,7 +266,11 @@ export function liveSession(stage, {
     clearReactions(); // pas de réactions qui continuent de flotter après la sortie
     if (wakeLock) { try { wakeLock.release(); } catch {} wakeLock = null; }
     if (upgradeTimer) clearTimeout(upgradeTimer);
-    if (net) net.destroy();
+    // On prévient le serveur AVANT de couper (retour « ← », changement de jeu,
+    // exclusion…). Sans ça, le proxy de Render met ~10 s à relayer la
+    // fermeture : le joueur restait fantôme dans le salon, et si c'était
+    // l'hôte, personne ne pouvait lancer la manche pendant ce temps.
+    if (net) { try { net.leave(); } catch {} net.destroy(); }
     net = null;
   }
 
@@ -569,7 +573,7 @@ export function liveSession(stage, {
   }
 
   function leave() {
-    if (net) net.leave();
+    // Le « leave » réseau part dans stop().
     forgetSession(); // départ volontaire : plus de bannière « Reprendre » ni d'entrée directe
     stop();
     onExit && onExit();

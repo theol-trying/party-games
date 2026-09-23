@@ -222,7 +222,7 @@ function handleSocket(ws) {
     // (les navigateurs exigent un geste de l'utilisateur pour l'autoriser).
     // Il n'altère ainsi jamais l'état de la partie.
     if (isSpectator) {
-      if (msg.t === "leave") { removePlayer(key, myId, null); key = null; myId = null; isSpectator = false; }
+      if (msg.t === "leave") { removePlayer(key, myId, ws); key = null; myId = null; isSpectator = false; }
       else if (msg.t === "tvaudio") broadcast(r, JSON.stringify({ t: "tvaudio", on: msg.on === true }));
       return;
     }
@@ -318,7 +318,10 @@ function handleSocket(ws) {
       const { n, roles, inputs, order, names, meta, avatars } = r.round;
       broadcast(r, JSON.stringify({ t: "revealed", n, roles, inputs, order, names, meta, avatars }));
     } else if (msg.t === "leave") {
-      removePlayer(key, myId, null);
+      // On passe le socket émetteur : un « leave » tardif venu d'une ANCIENNE
+      // connexion (joueur revenu aussitôt, sa nouvelle connexion ayant déjà
+      // remplacé l'ancienne) ne doit pas éjecter la nouvelle.
+      removePlayer(key, myId, ws);
       key = null;
       myId = null;
     }
