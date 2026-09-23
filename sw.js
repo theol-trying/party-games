@@ -14,13 +14,20 @@ const CACHE = "soiree-v2";
 // La coquille + TOUS les modules transverses : ce sont ceux que le routeur et
 // n'importe quel jeu chargent. Les modules propres à un jeu (index/data/style)
 // restent mis en cache à la volée, à la première visite du jeu.
+// ⚠️ Un module importé au démarrage mais absent d'ici suffit à laisser l'accueil
+// vide hors-ligne. tests/precache.test.mjs vérifie que cette liste suit le code.
 const PRECACHE = [
   "./",
   "index.html",
   "manifest.webmanifest",
   "assets/css/base.css",
   "assets/icon.svg",
+  "src/boot.js",
   "src/main.js",
+  "src/art.js",
+  "src/history.js",
+  "src/stats.js",
+  "src/tournament.js",
   "src/registry.js",
   "src/ui.js",
   "src/room.js",
