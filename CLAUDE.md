@@ -29,6 +29,13 @@ Site **modulaire** : les jeux s'enrichissent un par un. Audit et état : `AUDIT.
   corrigé : il doit déclencher « Manual Deploy » à la main.
   Correctif : Settings → Repository → reconnecter via l'intégration GitHub (installer l'app
   Render et lui donner accès au dépôt), puis vérifier Auto-Deploy = Yes.
+- ⚠️ **Render relaie la fermeture d'un WebSocket vers Node avec ~10 s de retard** (mesuré
+  le 2026-09-23 ; en local c'est instantané). Toute sortie volontaire doit donc envoyer
+  `{ t: "leave" }` AVANT de couper — c'est ce que fait `stop()` dans `src/realtime.js`.
+  Une sonde qui vérifie un départ en prod doit attendre plus de 10 s avant de conclure.
+- **Tester dans le navigateur intégré de Claude : `http://127.0.0.1:5178`, pas `localhost`.**
+  Sur `localhost`, le service worker n'y atteint pas le réseau : il répond « hors-ligne »
+  (503) pour tout module non précaché et l'accueil reste vide — faux bug.
 - `ALLOWED_ORIGIN` restreint l'API au domaine de prod — vide = pas de restriction.
 - `kv-local.*` = persistance de dev du serveur PowerShell, hors dépôt.
 - **Ne pas proposer de « Mode Soirée »** : l'utilisateur l'a explicitement refusé.
