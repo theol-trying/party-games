@@ -112,7 +112,7 @@ export const Q_SCIENCES = [
   { q: "Où se trouve le tympan ?", choices: ["Dans l'oreille", "Dans l'œil", "Dans le nez", "Dans la gorge"], correct: 0 },
   { q: "Quel organe est responsable de l'équilibre, en plus de l'audition ?", choices: ["L'œil", "L'oreille interne", "Le cervelet seul", "Le nez"], correct: 1 },
   { q: "Quel gaz à effet de serre est le plus produit par les activités humaines ?", choices: ["Le méthane", "L'ozone", "Le dioxyde de carbone", "Le protoxyde d'azote"], correct: 2 },
-  { q: "Quelle couche de l'atmosphère nous protège des UV du Soleil ?", choices: ["La troposphère", "La stratosphère seule", "La mésosphère", "La couche d'ozone"], correct: 3 },
+  { q: "Quel gaz, présent en haute altitude, filtre une grande partie des UV du Soleil ?", choices: ["Le méthane", "L'ozone", "L'hélium", "L'argon"], correct: 1 },
   { q: "Quel est le plus grand mammifère terrestre ?", choices: ["L'éléphant d'Afrique", "Le rhinocéros", "L'hippopotame", "La girafe"], correct: 0 },
   { q: "Quel est le plus grand animal ayant jamais existé ?", choices: ["Le tyrannosaure", "La baleine bleue", "Le brachiosaure", "Le cachalot"], correct: 1 },
   { q: "Quel animal peut vivre le plus longtemps (plusieurs siècles) ?", choices: ["L'éléphant", "Le perroquet", "Certaines tortues et mollusques", "Le crocodile"], correct: 2 },

@@ -5,7 +5,7 @@ export const Q_LANGUE = [
   { q: "Que veut dire « poser un lapin » à quelqu'un ?", choices: ["Lui faire un cadeau", "Lui mentir", "Ne pas venir au rendez-vous", "Le déranger"], correct: 2 },
   { q: "Que signifie l'expression « couper la poire en deux » ?", choices: ["Se disputer", "Partager équitablement", "Trancher un débat", "Renoncer"], correct: 1 },
   { q: "Que signifie « donner sa langue au chat » ?", choices: ["Renoncer à deviner", "Se taire", "Trahir un secret", "Parler trop"], correct: 0 },
-  { q: "Quel est le sens de « il pleut des cordes » ?", choices: ["Il fait du vent", "Il pleut très fort", "Il neige", "Il fait orageux"], correct: 1 },
+  { q: "Quel est le sens de « il pleut des cordes » ?", choices: ["Il pleut très fort", "Il pleut à peine", "Il pleut par intermittence", "Il pleut de la grêle"], correct: 0 },
   { q: "Que veut dire « avoir un chat dans la gorge » ?", choices: ["Avoir faim", "Être enroué", "Avoir peur", "Mentir"], correct: 1 },
   { q: "Que signifie « mettre la charrue avant les bœufs » ?", choices: ["Travailler dur", "Faire les choses dans le désordre", "Aller trop lentement", "Économiser"], correct: 1 },
   { q: "Que veut dire l'expression « prendre ses jambes à son cou » ?", choices: ["Se blesser", "S'enfuir rapidement", "Se cacher", "Danser"], correct: 1 },

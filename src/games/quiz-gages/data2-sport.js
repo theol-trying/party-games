@@ -31,7 +31,7 @@ export const Q_SPORT = [
   { q: "Quelle nage n'est PAS l'une des quatre nages olympiques ?", choices: ["Brasse", "Dos", "Papillon", "Nage indienne"], correct: 3 },
   { q: "Quelle épreuve d'athlétisme combine dix disciplines pour les hommes ?", choices: ["Heptathlon", "Pentathlon", "Décathlon", "Triathlon"], correct: 2 },
   { q: "Quelle est la distance officielle d'un marathon ?", choices: ["40 km", "42,195 km", "45 km", "38 km"], correct: 1 },
-  { q: "Quel pays organise traditionnellement le tournoi de tennis de l'Open d'Australie ?", choices: ["Nouvelle-Zélande", "Australie", "Afrique du Sud", "Royaume-Uni"], correct: 1 },
+  { q: "Dans quelle ville se joue l'Open d'Australie de tennis ?", choices: ["Sydney", "Melbourne", "Brisbane", "Perth"], correct: 1 },
   { q: "Quel footballeur français a été capitaine de l'équipe championne du monde en 1998 ?", choices: ["Zinédine Zidane", "Didier Deschamps", "Laurent Blanc", "Marcel Desailly"], correct: 1 },
   { q: "Combien de buts a marqué Zinédine Zidane en finale de la Coupe du monde 1998 ?", choices: ["1", "2", "3", "0"], correct: 1 },
   { q: "Quel pays a remporté la Coupe du monde de football 2014 au Brésil ?", choices: ["Argentine", "Allemagne", "Pays-Bas", "Brésil"], correct: 1 },

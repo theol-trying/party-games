@@ -63,7 +63,7 @@ export const Q_TECHWEB = [
   { q: "Quel est le premier réseau ancêtre d'internet ?", choices: ["Minitel", "Ethernet", "Usenet", "ARPANET"], correct: 3 },
   { q: "Quelle entreprise fabrique les processeurs Ryzen ?", choices: ["AMD", "Intel", "Nvidia", "IBM"], correct: 0 },
   { q: "Que signifie 'app' dans le contexte des smartphones ?", choices: ["Appareil", "Application", "Appel", "Apparence"], correct: 1 },
-  { q: "Quel réseau social favorise les discussions par forums appelés 'subreddits' ?", choices: ["Discord", "Quora", "Reddit", "4chan"], correct: 2 },
+  { q: "Comment appelle-t-on les forums thématiques du réseau Reddit ?", choices: ["Les subreddits", "Les salons", "Les groupes", "Les stories"], correct: 0 },
   { q: "Que signifie 'HTTP' ?", choices: ["High Transfer Text Protocol", "Hyper Tool Transfer Path", "Home Text Transfer Process", "HyperText Transfer Protocol"], correct: 3 },
   { q: "Quel service de messagerie électronique appartient à Google ?", choices: ["Gmail", "Outlook", "Yahoo Mail", "ProtonMail"], correct: 0 },
   { q: "Quelle unité mesure la fréquence d'un processeur ?", choices: ["Le watt", "Le hertz (gigahertz)", "L'octet", "Le pixel"], correct: 1 },

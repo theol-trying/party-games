@@ -33,7 +33,7 @@ export const Q_CINEMA = [
   { q: "Quel réalisateur italien a réalisé Le Bon, la Brute et le Truand ?", choices: ["Federico Fellini", "Sergio Leone", "Dario Argento", "Roberto Benigni"], correct: 1 },
   { q: "Quel film de Bong Joon-ho a remporté l'Oscar du meilleur film en 2020 ?", choices: ["Old Boy", "Parasite", "Memories of Murder", "Snowpiercer"], correct: 1 },
   { q: "Quel acteur incarne Neo dans Matrix ?", choices: ["Keanu Reeves", "Laurence Fishburne", "Hugo Weaving", "Will Smith"], correct: 0 },
-  { q: "Quel film Disney met en scène une princesse aux cheveux magiques nommée Raiponce ?", choices: ["La Reine des neiges", "Raiponce", "La Belle au bois dormant", "Vaiana"], correct: 1 },
+  { q: "Comment s'appelle le caméléon de Raiponce dans le film Disney ?", choices: ["Pascal", "Sébastien", "Abu", "Meeko"], correct: 0 },
   { q: "Qui a réalisé Jurassic Park ?", choices: ["James Cameron", "Steven Spielberg", "Roland Emmerich", "Michael Bay"], correct: 1 },
   { q: "Quel personnage prononce Je suis ton père dans Star Wars ?", choices: ["Yoda", "Dark Vador", "Obi-Wan", "Palpatine"], correct: 1 },
   { q: "Dans quel film Marvel Thanos claque-t-il des doigts avec toutes les pierres de l'infini pour la première fois ?", choices: ["Avengers", "Avengers : L'Ère d'Ultron", "Avengers : Infinity War", "Avengers : Endgame"], correct: 2 },

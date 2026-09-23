@@ -35,7 +35,7 @@ export const Q_ACTU = [
   { q: "Combien de Tours de France Pogačar avait-il gagnés fin 2026 ?", choices: ["3", "4", "5", "6"], correct: 2 },
   { q: "Quel Français de 19 ans a fini 4e du Tour de France 2026 ?", choices: ["Paul Seixas", "Kévin Vauquelin", "Romain Bardet", "David Gaudu"], correct: 0 },
   { q: "Qui a gagné Roland-Garros 2026 en simple messieurs ?", choices: ["Carlos Alcaraz", "Jannik Sinner", "Alexander Zverev", "Novak Djokovic"], correct: 2 },
-  { q: "Pourquoi le sacre de Zverev à Roland-Garros 2026 est-il historique ?", choices: ["1er Allemand sacré dans l'ère Open", "Il avait 40 ans", "Il était non classé", "Il n'a perdu aucun jeu"], correct: 0 },
+  { q: "Pourquoi la victoire de Zverev à Roland-Garros 2026 est-elle historique ?", choices: ["1er Allemand sacré dans l'ère Open", "1er titre d'un gaucher", "Plus long match de l'histoire", "1er vainqueur issu des qualifications"], correct: 0 },
   { q: "Quel Italien Zverev a-t-il battu en finale de Roland-Garros 2026 ?", choices: ["Jannik Sinner", "Lorenzo Musetti", "Flavio Cobolli", "Matteo Berrettini"], correct: 2 },
   { q: "Qui avait gagné Roland-Garros 2025 en simple messieurs ?", choices: ["Jannik Sinner", "Carlos Alcaraz", "Alexander Zverev", "Novak Djokovic"], correct: 1 },
 
@@ -49,7 +49,7 @@ export const Q_ACTU = [
   { q: "Quel pays a remporté l'Eurovision 2026 ?", choices: ["La Bulgarie", "Israël", "La Roumanie", "L'Autriche"], correct: 0 },
   { q: "Quelle chanson a gagné l'Eurovision 2026 ?", choices: ["Wasted Love", "Bangaranga", "Choke Me", "Michelle"], correct: 1 },
   { q: "Dans quelle ville s'est tenue l'Eurovision 2026 ?", choices: ["Bâle", "Vienne", "Malmö", "Liverpool"], correct: 1 },
-  { q: "Qu'avait de spécial la victoire bulgare à l'Eurovision 2026 ?", choices: ["Sa première participation", "Sa première victoire", "Sa première chanson en anglais", "Son premier dernier rang"], correct: 1 },
+  { q: "Qu'a eu d'historique le résultat de la Bulgarie à l'Eurovision 2026 ?", choices: ["Sa première participation", "Sa première victoire", "Sa première chanson en anglais", "Son premier dernier rang"], correct: 1 },
   { q: "Quel pays a fini 2e de l'Eurovision 2026 ?", choices: ["La Roumanie", "Israël", "La Belgique", "La France"], correct: 1 },
 
   /* --- Jeux vidéo --- */
@@ -77,6 +77,6 @@ export const Q_ACTU = [
   { q: "Qui a succédé à François Bayrou à Matignon en septembre 2025 ?", choices: ["Gabriel Attal", "Sébastien Lecornu", "Élisabeth Borne", "Michel Barnier"], correct: 1 },
   { q: "Quelles élections ont eu lieu en France en mars 2026 ?", choices: ["Les municipales", "Les législatives", "La présidentielle", "Les européennes"], correct: 0 },
   { q: "Qui a été investi président des États-Unis en janvier 2025 ?", choices: ["Joe Biden", "Kamala Harris", "Donald Trump", "Barack Obama"], correct: 2 },
-  { q: "Quel monument parisien a rouvert fin 2024, cinq ans après son incendie ?", choices: ["Notre-Dame de Paris", "Le Grand Palais", "La Sainte-Chapelle", "Le Panthéon"], correct: 0 },
+  { q: "Quel monument parisien a rouvert fin 2024, cinq ans après son incendie ?", choices: ["La cathédrale Notre-Dame", "Le Grand Palais", "La Sainte-Chapelle", "Le Panthéon"], correct: 0 },
   { q: "Quelle ville accueillera les Jeux olympiques d'été 2028 ?", choices: ["Brisbane", "Los Angeles", "Paris", "Rome"], correct: 1 },
 ];

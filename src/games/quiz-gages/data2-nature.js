@@ -72,7 +72,7 @@ export const Q_NATURE = [
   { q: "Quel est le plus grand océan par superficie ?", choices: ["L'Atlantique", "Le Pacifique", "L'Indien", "L'Arctique"], correct: 1 },
   { q: "Quel animal possède une langue plus longue que son corps ?", choices: ["Le fourmilier", "Le caméléon", "Le tamandua", "La grenouille"], correct: 1 },
   { q: "Quelle est la plus grande espèce de requin après le requin-baleine ?", choices: ["Le grand requin blanc", "Le requin pèlerin", "Le requin-tigre", "Le requin-marteau"], correct: 1 },
-  { q: "Quel phénomène désigne le cycle de l'eau dans la nature ?", choices: ["La condensation seule", "Le cycle hydrologique", "L'érosion", "La sédimentation"], correct: 1 },
+  { q: "Quelle part de l'eau présente sur Terre est de l'eau douce ?", choices: ["Environ 3 %", "Environ 20 %", "Environ 50 %", "Environ 70 %"], correct: 0 },
   { q: "Quel animal a la gestation la plus longue parmi les mammifères ?", choices: ["La baleine bleue", "L'éléphant", "Le rhinocéros", "La girafe"], correct: 1 },
   { q: "Quel oiseau est célèbre pour imiter les sons et les voix ?", choices: ["Le perroquet", "Le corbeau", "Le merle", "Le rossignol"], correct: 0 },
   { q: "Quel type de nuage annonce généralement les orages ?", choices: ["Le cirrus", "Le cumulonimbus", "Le stratus", "L'altocumulus"], correct: 1 },

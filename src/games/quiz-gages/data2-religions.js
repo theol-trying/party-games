@@ -45,7 +45,7 @@ export const Q_RELIGIONS = [
   { q: "Quel personnage est considéré comme le père des trois religions monothéistes ?", choices: ["Moïse", "David", "Abraham", "Salomon"], correct: 2 },
   { q: "Quel est le jour saint hebdomadaire des chrétiens ?", choices: ["Le samedi", "Le vendredi", "Le lundi", "Le dimanche"], correct: 3 },
   { q: "Comment appelle-t-on le grand jour du pardon dans le judaïsme ?", choices: ["Yom Kippour", "Pessah", "Souccot", "Pourim"], correct: 0 },
-  { q: "Quel symbole en forme d'étoile à six branches représente le judaïsme ?", choices: ["Le croissant", "L'étoile de David", "La croix de Malte", "Le pentacle"], correct: 1 },
+  { q: "Quel symbole à six branches représente le judaïsme ?", choices: ["Le croissant", "L'étoile de David", "La croix de Malte", "Le pentacle"], correct: 1 },
   { q: "Comment appelle-t-on la profession de foi musulmane ?", choices: ["La salat", "La zakat", "La chahada", "Le hajj"], correct: 2 },
   { q: "Quel texte regroupe les enseignements les plus anciens de l'hindouisme ?", choices: ["Le Coran", "La Torah", "Le Tripitaka", "Les Védas"], correct: 3 },
   { q: "Quel apôtre est considéré comme le premier pape par les catholiques ?", choices: ["Pierre", "Paul", "Jean", "Jacques"], correct: 0 },
