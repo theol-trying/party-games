@@ -27,15 +27,15 @@ support hors-ligne, sons et confettis.
 | Jeu | Contenu |
 |---|---|
 | Quiz à gages | 2549 questions · 26 catégories · 0 malformée · 0 doublon |
-| Je n'ai jamais | 720 phrases (360 soft / 240 soirée / 120 18+) |
+| Je n'ai jamais | 743 phrases (374 soft / 247 soirée / 122 18+), dont 23 d'actu 2025-2026 |
 | Action ou Vérité | 687 cartes (348 actions + 339 vérités) |
 | Qui est le plus susceptible | 245 affirmations |
-| Undercover | 213 paires |
-| Tu préfères | 209 dilemmes |
+| Undercover | 239 paires, dont 26 d'actu 2025-2026 |
+| Tu préfères | 232 dilemmes, dont 23 d'actu 2025-2026 |
 | Le Menteur | 189 missions |
 | Cadavre exquis | 27 ouvertures · 95 amorces · 25 clôtures · 6 thèmes |
 | Baccalauréat | 8 catégories · 20 lettres |
-| Blind Test | 8 pistes — **aucune avec audio** (voir §4) |
+| Blind Test | 45 pistes pour « joue-la toi-même » + recherche d'extraits de 30 s (Apple Music / Deezer) |
 
 Gages partagés : 178.
 
@@ -58,11 +58,11 @@ et re-déclenche les effets. C'est la source de la majorité des bugs passés.
 
 | Sujet | État |
 |---|---|
-| **Blind Test** | Les 8 pistes ont un `audioUrl` vide : le jeu n'est pas jouable tel quel. Soit fournir des playlists, soit assumer le « apporte ta musique » et le dire dans l'UI. |
+| **Blind Test** | Jouable via la recherche d'extraits ; la liste manuelle (sans audio) sert au mode « joue-la toi-même », et l'UI le dit. |
 | **Mode équipes** | `teams.js` existe mais n'est branché que sur 2 jeux sur 10. |
 | **Couverture de tests** | `live.js` est du Node pur, donc testable sans navigateur — c'est là qu'ont vécu la plupart des bugs. |
 | **Modèle de confiance** | Le code de soirée (4 caractères) est le seul secret protégeant les données d'un salon. Acceptable pour des prénoms et des votes ; à savoir. |
-| **Durcissement HTTP** | Pas de CSP ni de `X-Frame-Options` ; `/api/health` expose la version de Node. |
+| **Durcissement HTTP** | Fait : CSP, `X-Frame-Options`, contrôle d'origine sur l'API **et** sur `/ws` (`ALLOWED_ORIGIN`) ; `/api/health` n'expose que la version majeure de Node. |
 
 ## 5. Vérifié et sain
 
