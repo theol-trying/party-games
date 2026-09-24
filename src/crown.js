@@ -26,6 +26,7 @@ const RANK_PTS = [5, 3, 2]; // 1er, 2e, 3e ; au-delà = participation (1)
 // Titres décernés au meilleur de chaque jeu.
 const TITLES = {
   "quiz-gages": "🧠 Cerveau",
+  estimations: "🎯 Œil de lynx",
   "blind-test": "🎧 Oreille d'or",
   "plus-susceptible": "👀 Star",
   "tu-preferes": "🔮 Prophète",

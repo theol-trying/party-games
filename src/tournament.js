@@ -23,7 +23,7 @@ const KEY = "tournoi";
     dans un tournoi. Les autres (Undercover, Menteur…) n'ont pas de score.
     Le Blind Test en est exclu — comme dans « Changer de jeu » — parce qu'il
     demande de préparer une playlist et n'entre donc pas en multi tout seul. */
-const JEUX_A_SCORE = ["quiz-gages", "plus-susceptible", "tu-preferes"];
+const JEUX_A_SCORE = ["quiz-gages", "plus-susceptible", "tu-preferes", "estimations"];
 
 export async function getTournoi() {
   const t = await getData(KEY, null);

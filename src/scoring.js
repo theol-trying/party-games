@@ -57,21 +57,22 @@ const reduced = (() => {
   try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; }
 })();
 
-/** Nombre qui défile de `from` à `to` (~0,7 s, ralenti en fin de course). */
-export function compteur(to, from = to) {
-  const node = el("span", { text: String(from) });
-  if (reduced || from === to) { node.textContent = String(to); return node; }
+/** Nombre qui défile de `from` à `to` (ralenti en fin de course).
+    Options : `format(v)` met en forme chaque valeur (par défaut : entier
+    arrondi) ; `duree` en ms (par défaut 700). */
+export function compteur(to, from = to, { format = (v) => String(Math.round(v)), duree = 700 } = {}) {
+  const node = el("span", { text: format(from) });
+  if (reduced || from === to) { node.textContent = format(to); return node; }
   const t0 = performance.now();
-  const DUREE = 700;
   const pas = (t) => {
-    const k = Math.min(1, (t - t0) / DUREE);
-    node.textContent = String(Math.round(from + (to - from) * (1 - Math.pow(1 - k, 3))));
+    const k = Math.min(1, (t - t0) / duree);
+    node.textContent = k < 1 ? format(from + (to - from) * (1 - Math.pow(1 - k, 3))) : format(to);
     if (k < 1) requestAnimationFrame(pas);
   };
   requestAnimationFrame(pas);
   // Filet : si le navigateur ne dessine plus (appli en arrière-plan), les images
-  // d'animation n'arrivent pas — le score final s'affiche quand même.
-  setTimeout(() => { node.textContent = String(to); }, DUREE + 80);
+  // d'animation n'arrivent pas — la valeur finale s'affiche quand même.
+  setTimeout(() => { node.textContent = format(to); }, duree + 80);
   return node;
 }
 

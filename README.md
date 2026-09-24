@@ -1,6 +1,6 @@
 # 🍻 Soirée — Jeux à boire & jeux d'ambiance
 
-Ébauche d'un site regroupant 10 jeux de soirée. **Architecture modulaire** : chaque jeu
+Ébauche d'un site regroupant 11 jeux de soirée. **Architecture modulaire** : chaque jeu
 est isolé dans son dossier et peut être édité, enrichi et re-stylisé indépendamment.
 
 ## Lancer le site en local
@@ -121,6 +121,7 @@ et conservé. La liste de joueurs (`players.js`) l'utilise déjà comme exemple.
 | Le Menteur | ✅ missions secrètes + révélation |
 | Blind Test | ✅ buzzer + scores (⚠️ brancher tes propres audios dans `data.js`) |
 | Quiz à gages | ✅ QCM + gage aléatoire si faux |
+| Estimations | ✅ « combien de… ? » en secret, le plus proche marque, le plus loin boit |
 | Baccalauréat | ✅ lettre + catégories + chrono |
 | Cadavre exquis | ✅ écriture en aveugle + lecture finale |
 

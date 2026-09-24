@@ -51,6 +51,11 @@ const DESSINS = {
   "quiz-gages": `<path d="M24 6a13 13 0 0 0-8 23c1.5 1.5 2 3 2 5h12c0-2 .5-3.5 2-5a13 13 0 0 0-8-23z" ${T}/>
     <path d="M18 40h12M20 44h8" ${T}/><path d="M24 18v6" ${T} opacity=".55"/>`,
 
+  // Règle graduée + repère posé dessus : « à vue de nez, c'est à peu près là ».
+  estimations: `<rect x="4" y="22" width="40" height="13" rx="3" ${T}/>
+    <path d="M11 22v5M18 22v7M25 22v5M32 22v7M39 22v5" ${T} opacity=".55"/>
+    <path d="M28 17l-5-8h10z" ${T}/>`,
+
   // Chronomètre.
   baccalaureat: `<circle cx="24" cy="27" r="16" ${T}/><path d="M24 27V17" ${T}/><path d="M24 27l7 5" ${T}/>
     <path d="M18 6h12" ${T}/><path d="M24 6v5" ${T}/><path d="M38 13l4-4" ${T} opacity=".5"/>`,

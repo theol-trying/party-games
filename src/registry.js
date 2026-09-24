@@ -88,6 +88,15 @@ export const GAMES = [
     load: () => import("./games/quiz-gages/index.js"),
   },
   {
+    id: "estimations",
+    title: "Estimations",
+    icon: "📏",
+    accent: "#a9e34b",
+    category: "quiz",
+    desc: "« Combien de… ? » Chacun estime en secret : le plus proche marque, le plus loin boit.",
+    load: () => import("./games/estimations/index.js"),
+  },
+  {
     id: "baccalaureat",
     title: "Baccalauréat",
     icon: "⏱️",

@@ -1,0 +1,51 @@
+/* Style propre à « Estimations ». */
+.screen[data-game="estimations"] {
+  --accent: #a9e34b;
+  --g1: rgba(169, 227, 75, 0.15);
+  --g2: rgba(77, 208, 225, 0.10);
+  --wm: "📏";
+}
+/* Le vert anis est clair : texte foncé sur les boutons pleins (le blanc par
+   défaut n'atteignait pas un contraste lisible). */
+.screen[data-game="estimations"] .btn:not(.btn--ghost) { color: #16240a; }
+.es-question { font-size: clamp(20px, 5.4vw, 28px); font-weight: 800; line-height: 1.3; }
+.es-rappel { color: var(--text-dim); margin: 6px 0 14px; font-weight: 600; line-height: 1.35; }
+
+/* ---------- Saisie : un gros nombre, clavier numérique ---------- */
+.es-champ { display: flex; align-items: center; gap: 10px; }
+.es-saisie {
+  flex: 1 1 auto; min-width: 0; min-height: 64px;
+  font-size: 28px; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums;
+}
+.es-unite { flex: 0 0 auto; max-width: 40%; font-weight: 800; font-size: 17px; color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.es-envoye { padding: 14px; border-radius: 12px; background: var(--bg-soft); font-weight: 700; }
+.es-chrono { min-height: 22px; font-weight: 800; font-size: 1.2rem; margin-top: 10px; }
+
+/* ---------- Révélation ---------- */
+.es-reponse { margin-bottom: 16px; }
+.es-reponse__valeur {
+  margin-top: 4px; line-height: 1.1;
+  font-size: clamp(34px, 11vw, 56px); font-weight: 900; font-variant-numeric: tabular-nums;
+  color: var(--accent); text-shadow: 0 0 28px color-mix(in srgb, var(--accent) 35%, transparent);
+  overflow-wrap: anywhere;
+}
+.es-reponse__unite { font-size: 0.42em; color: var(--text); font-weight: 800; }
+.es-reponse__info { color: var(--text-dim); font-size: 13px; margin-top: 6px; }
+
+.es-lignes { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; text-align: left; }
+.es-ligne {
+  display: grid; grid-template-columns: 26px minmax(0, 1fr) auto auto; align-items: center; gap: 8px;
+  padding: 9px 12px; border-radius: 10px; background: var(--bg-soft); border: 1px solid transparent;
+  animation: joueur-arrive 0.35s cubic-bezier(.2, .8, .3, 1) backwards;
+}
+.es-ligne:nth-child(2) { animation-delay: 0.08s; }
+.es-ligne:nth-child(3) { animation-delay: 0.16s; }
+.es-ligne:nth-child(n + 4) { animation-delay: 0.24s; }
+.es-ligne.is-gagnant { background: rgba(169, 227, 75, 0.14); border-color: rgba(169, 227, 75, 0.45); }
+.es-ligne.is-perdant { background: rgba(255, 77, 109, 0.10); border-color: rgba(255, 77, 109, 0.35); }
+.es-ligne__rang { text-align: center; font-weight: 800; }
+.es-ligne__nom { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.es-ligne__val { text-align: right; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.es-ligne__val small { display: block; color: var(--text-dim); font-size: 12px; }
+.es-ligne__pts { font-weight: 900; color: var(--accent); }
+.es-verdict { font-weight: 800; margin-top: 14px; line-height: 1.4; }
