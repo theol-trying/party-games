@@ -24,10 +24,14 @@ Site **modulaire** : les jeux s'enrichissent un par un. Audit et état : `AUDIT.
 - ✅ **Déploiement automatique à chaque push sur `main`** (depuis le 2026-09-23), mais PAS
   par l'intégration GitHub de Render : c'est **GitHub Actions** (`.github/workflows/deploy.yml`)
   qui lance les tests puis appelle le Deploy Hook de Render (secret `RENDER_DEPLOY_HOOK`).
-  Un push dont les tests échouent n'est donc **pas** déployé. Compter ~3 à 10 min.
+  Un push dont les tests échouent n'est donc **pas** déployé. Les workflows prennent ~10 s ;
+  la mise en ligne, de **moins d'une minute** (build en cache) à ~10 min.
   - Suivi sans dashboard : l'API publique `api.github.com/repos/theol-trying/party-games/actions/runs`
     donne le résultat des workflows ; l'ETag de `/index.html` change à chaque mise en ligne
-    (Render reclone le dépôt → nouvelles dates de fichiers).
+    (Render reclone le dépôt → nouvelles dates de fichiers). ⚠️ Relever l'ETag de référence
+    **AVANT** le push : relevé après, il peut déjà être le nouveau (le 2026-09-24, une sonde
+    a ainsi attendu en vain un déploiement déjà en ligne). La partie après le tiret de
+    l'ETag est la date de dépôt des fichiers en base 36 : `new Date(parseInt(x, 36))`.
   - La ligne « It looks like we don't have access to your repo » reste dans les logs de
     build : elle est **sans conséquence** (dépôt public, cloné quand même). Ne pas la « corriger ».
 - ⚠️ **Render relaie la fermeture d'un WebSocket vers Node avec ~10 s de retard** (mesuré
