@@ -14,12 +14,18 @@ const MAX_MESSAGE = 32 * 1024;
 const PING_INTERVAL_MS = 30000;
 const DEAD_AFTER_MS = 75000;
 
-/** Attache le support WebSocket au serveur HTTP. onConnection(conn, req). */
-function attachWebSocket(server, { path = "/ws", onConnection }) {
+/** Attache le support WebSocket au serveur HTTP. onConnection(conn, req).
+    verifier(req) facultatif : renvoie false pour refuser la connexion (403),
+    par exemple quand elle vient d'un site tiers (contrôle d'origine). */
+function attachWebSocket(server, { path = "/ws", onConnection, verifier }) {
   server.on("upgrade", (req, socket) => {
     const url = (req.url || "").split("?")[0];
     if (url !== path || (req.headers.upgrade || "").toLowerCase() !== "websocket") {
       socket.destroy();
+      return;
+    }
+    if (verifier && !verifier(req)) {
+      socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
       return;
     }
     const key = req.headers["sec-websocket-key"];

@@ -398,7 +398,9 @@ const server = http.createServer(async (req, res) => {
 });
 
 // Multi-appareils temps réel : WebSocket maison sur /ws (voir ws.js / live.js).
-attachWebSocket(server, { path: "/ws", onConnection: handleSocket });
+// Même contrôle d'origine que l'API : un site tiers ne peut pas ouvrir de salon
+// ni en rejoindre un depuis le navigateur de ses visiteurs.
+attachWebSocket(server, { path: "/ws", onConnection: handleSocket, verifier: originAllowed });
 
 server.listen(PORT, () => {
   const mode = REDIS_URL && REDIS_TOKEN ? "Upstash Redis" : "mémoire (non persistant)";
