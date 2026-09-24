@@ -441,7 +441,7 @@ export function render(container, { game }) {
     });
 
     players.forEach((p) => sc.add(p, roundPts[p]));
-    const scoreWrap = el("div", {}, [scoreboard(sc.scores)]);
+    const scoreWrap = el("div", {}, [scoreboard(sc.scores, { podium: true })]);
 
     showPhase(stage,
       el("div.card", {}, [
@@ -465,7 +465,7 @@ export function render(container, { game }) {
       el("div.card", { style: "margin-top:14px" }, [
         el("div.row", { style: "justify-content:space-between;align-items:center;margin-bottom:10px" }, [
           el("h3", { text: "👑 Classement de la soirée" }),
-          el("button.chip", { text: "↺ Réinitialiser", onClick: () => { sc.reset(); scoreWrap.replaceChildren(scoreboard(sc.scores)); } }),
+          el("button.chip", { text: "↺ Réinitialiser", onClick: () => { sc.reset(); scoreWrap.replaceChildren(scoreboard(sc.scores, { podium: true })); } }),
         ]),
         scoreWrap,
       ]),

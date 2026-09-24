@@ -2,14 +2,14 @@ import { el, screenHead, announce, showPhase, shuffle } from "../../ui.js";
 import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
 import { makeSeen } from "../../seen.js";
-import { createScores, scoreboard } from "../../scoring.js";
+import { createScores, scoreboard, podium, compteur } from "../../scoring.js";
 import { pickGage } from "../../gages.js";
-import { levelSelector } from "../../levels.js";
+import { levelSelector, LEVELS } from "../../levels.js";
 import { teamBuilder } from "../../teams.js";
 import { openEditor } from "../../content.js";
 import { contentSource } from "../../game-kit.js";
 import { liveSession, syncCountdown, peekAutoLive } from "../../realtime.js";
-import { tick, vibrate } from "../../sound.js";
+import { tick, vibrate, vibrateSuccess, vibrateTap } from "../../sound.js";
 import { confettiBurst, celebrate, stampGage } from "../../fx.js";
 import { awardStanding } from "../../crown.js";
 import { bump, bumpMany } from "../../stats.js";
@@ -49,6 +49,17 @@ function melanger(item) {
   return { ...item, choices: ordre.map((i) => item.choices[i]), correct: ordre.indexOf(item.correct) };
 }
 
+const LETTRES = "ABCD";
+/** Bouton de réponse : grosse pastille lettrée + texte. La lettre sert à
+    s'annoncer la réponse à voix haute (« B ! ») ; les lecteurs d'écran ne
+    lisent que le texte. */
+function boutonReponse(texte, idx, props = {}) {
+  return el("button.btn.btn--ghost.btn--full.qz-choice", props, [
+    el("span.qz-lettre", { text: LETTRES[idx] || "?", "aria-hidden": "true" }),
+    el("span.qz-texte", { text: texte }),
+  ]);
+}
+
 export function render(container, { game }) {
   container.append(screenHead(game.title, "Bonne réponse = point, sinon gage", game.id));
   const stage = el("div");
@@ -57,6 +68,7 @@ export function render(container, { game }) {
   const src = contentSource("quiz-gages", { builtIn: QUESTIONS, keyOf: (q) => q.q, toValue: toQuestion });
   let liveStop = null;
   let quizFxRound = -1; // manche dont les FX du reveal ont déjà été joués (anti-refire)
+  let quizScoresRound = -1; // manche dont les scores ont déjà défilé (même logique)
   // Chrono : vit ICI (et pas dans la closure de manche) pour survivre aux re-rendus
   // — sinon un 2e décompte se lance et verrouille les réponses avant l'heure.
   let cdStop = null;
@@ -231,17 +243,15 @@ export function render(container, { game }) {
     });
 
     const btns = meta.choices.map((c, idx) =>
-      el("button.btn.btn--ghost.btn--full.qz-choice", {
-        text: c,
-        style: "margin-top:8px",
+      boutonReponse(c, idx, {
         onClick: () => {
           if (answered) return;
           answered = true;
           api.submit({ choice: idx, x2: myX2 || undefined });
+          vibrateTap(); // accusé de réception tactile (Android)
           btns.forEach((b) => (b.disabled = true));
           x2Btn.disabled = true;
-          btns[idx].style.borderColor = "var(--accent)";
-          btns[idx].style.color = "var(--accent)";
+          btns[idx].classList.add("is-choisi");
           feedback.textContent = (myX2 ? "🔥 Doublé ! " : "✅ ") + "Réponse envoyée — en attente des autres…";
         },
       })
@@ -277,7 +287,7 @@ export function render(container, { game }) {
     return [
       el("p.screen__subtitle", { text: `Question ${n}${myStreak >= 2 ? ` · série ${myStreak} 🔥` : ""}` }),
       el("h2.qz-question", { text: meta.q, style: "margin:8px 0 8px" }),
-      el("div.stack", {}, btns),
+      el("div.stack.qz-choices", {}, btns),
       el("div.row", { style: "justify-content:center" }, [x2Btn]),
       timerLine,
       feedback,
@@ -359,15 +369,28 @@ export function render(container, { game }) {
       }
     }
 
+    // Les totaux défilent depuis le score d'avant la manche — une seule fois par
+    // manche : « Revoir la révélation » réaffiche directement les valeurs finales.
+    const defile = n == null || n !== quizScoresRound;
+    if (n != null) quizScoresRound = n;
+    const depuis = (r) => (defile ? Math.max(0, base[r.id] || 0) : r.total);
+
     return el("div", {}, [
       el("h3", { text: "Résultats", style: "margin-bottom:6px" }),
-      el("p.screen__subtitle", { text: "Bonne réponse :", style: "margin-bottom:4px" }),
-      el("div", { text: choices ? choices[correct] : "?", style: "font-weight:800;font-size:1.15rem;margin-bottom:12px;color:var(--accent)" }),
+      el("p.screen__subtitle", { text: "Bonne réponse :", style: "margin-bottom:6px" }),
+      choices
+        ? el("div.qz-bonne", {}, [el("span.qz-lettre", { text: LETTRES[correct] || "?", "aria-hidden": "true" }), el("span", { text: choices[correct] })])
+        : el("div", { text: "?" }),
       myCallout,
-      el("div.stack", {}, rows.map((r, i) =>
-        el("div.uc-role-row", {}, [
-          el("span", { text: `${i + 1}. ${r.name}${r.id === me ? " (toi)" : ""}` }),
-          el("span", { text: `${r.total} pts${r.d ? ` (${r.d > 0 ? "+" : ""}${r.d})` : ""} ${r.choice === correct ? "✅" : r.choice == null ? "⏳" : "❌"}` }),
+      podium(rows.map((r) => ({ nom: r.name + (r.id === me ? " (toi)" : ""), points: r.total, avant: depuis(r) }))),
+      // Style commun des tableaux de scores (.sb-row) : l'ancienne classe venait
+      // d'Undercover, dont la feuille de style n'est pas chargée ici — le nom
+      // et les points se collaient (« Bob150 pts »).
+      el("div.sb", {}, rows.map((r, i) =>
+        el("div.sb-row" + (i === 0 && r.total > 0 ? ".is-leader" : ""), {}, [
+          el("span.sb-rank", { text: `${i + 1}.` }),
+          el("span.sb-name", { text: `${r.name}${r.id === me ? " (toi)" : ""} ${r.choice === correct ? "✅" : r.choice == null ? "⏳" : "❌"}` }),
+          el("span.sb-pts", {}, [compteur(r.total, depuis(r)), ` pts${r.d ? ` (${r.d > 0 ? "+" : ""}${r.d})` : ""}`]),
         ])
       )),
     ]);
@@ -392,64 +415,115 @@ export function render(container, { game }) {
     const cats = new Set(CATEGORIES.map((c) => c.id));
     const catFilter = (c) => !c.cat || cats.has(c.cat);
     deck.setFilter(catFilter);
-    const catUI = categorySelector(cats, () => deck.setFilter(catFilter));
 
-    const levelUI = levelSelector({ initial: level, onChange: (v) => (level = v) });
+    // ⚙️ Réglages repliables : ouverts avant la 1re question, repliés ensuite
+    // (une seule fois — si le joueur les rouvre, on les laisse ouverts), pour
+    // que question et réponses tiennent à l'écran sans défiler.
+    const resume = el("span.qz-reglages__resume");
+    const majResume = () => {
+      const lv = LEVELS.find((l) => l.id === level);
+      resume.textContent = `${lv ? lv.label : level} · ${cats.size}/${CATEGORIES.length} thèmes`;
+    };
+    const catUI = categorySelector(cats, () => { deck.setFilter(catFilter); majResume(); });
+    const levelUI = levelSelector({ initial: level, onChange: (v) => { level = v; majResume(); } });
+    majResume();
+    const reglages = el("details.card.qz-reglages", { open: "" }, [
+      el("summary", {}, [el("span", { text: "⚙️ Réglages" }), resume]),
+      el("div.qz-reglages__corps", {}, [
+        el("p.screen__subtitle", { text: "Niveau des gages", style: "margin-bottom:8px" }),
+        levelUI.node,
+        catUI,
+      ]),
+    ]);
+
     const qArea = el("div");
-    const scoreWrap = el("div", {}, [scoreboard(sc.scores)]);
+    // Vide tant que les scores de la soirée ne sont pas chargés : un premier
+    // rendu à zéro ferait ensuite « gagner » (+N) des points déjà acquis.
+    const scoreWrap = el("div");
+    const nb = players.length;
+    let debutTour = { ...sc.scores }; // scores au début du tour, pour le podium de fin de tour
+
+    // Tour de table : une case par joueur ; le quiz n'a pas de fin fixe, la
+    // progression qui compte est « chacun a-t-il eu sa question ce tour-ci ? ».
+    function barreTour(pos, fait) {
+      return el("div.qz-tour", { "aria-label": `Tour ${Math.floor(turn / nb) + 1}, question ${pos + 1} sur ${nb}` }, [
+        el("div.qz-tour__label", { text: `Tour ${Math.floor(turn / nb) + 1} · ${pos + 1}/${nb}` }),
+        el("div.qz-tour__cases", {}, players.map((p, i) =>
+          el("span.qz-tour__case" + (i < pos || (i === pos && fait) ? ".is-fait" : i === pos ? ".is-courant" : ""), { title: p })
+        )),
+      ]);
+    }
+
+    // 🏁 Fin de tour : mini-podium, les points défilent depuis le début du tour.
+    function finDeTour() {
+      const classement = Object.keys(sc.scores)
+        .sort((a, b) => sc.scores[b] - sc.scores[a])
+        .map((nom) => ({ nom, points: sc.scores[nom], avant: debutTour[nom] ?? 0 }));
+      debutTour = { ...sc.scores };
+      if (classement[0] && classement[0].points > 0) vibrateSuccess();
+      showPhase(qArea,
+        el("div.card.center.qz-fin-tour", {}, [
+          el("h3", { text: `🏁 Fin du tour ${Math.floor((turn - 1) / nb) + 1}` }),
+          podium(classement) || el("p.screen__subtitle", { text: "Personne n'a encore marqué." }),
+          el("button.btn.btn--full", { text: "Tour suivant →", style: "margin-top:16px", onClick: draw }),
+        ])
+      );
+    }
 
     function draw() {
       answered = false;
       const item = melanger(deck.next());
       count++;
-      const player = players[turn % players.length];
+      if (count === 2) reglages.open = false;
+      const pos = turn % nb;
+      const player = players[pos];
+      const dernierDuTour = nb >= 2 && pos === nb - 1;
+      const tourWrap = el("div", {}, [barreTour(pos, false)]);
 
       const feedback = el("div.qz-feedback", { style: "min-height:26px;margin-top:14px" });
       const nextBtn = el("button.btn.btn--full", {
-        text: "Question suivante →",
+        text: dernierDuTour ? "🏁 Classement du tour →" : "Question suivante →",
         style: "display:none;margin-top:14px",
-        onClick: () => { turn++; draw(); },
+        onClick: () => { turn++; if (dernierDuTour) finDeTour(); else draw(); },
       });
 
-      const choices = el(
-        "div.stack.qz-choices",
-        {},
-        item.choices.map((c, idx) =>
-          el("button.btn.btn--ghost.btn--full.qz-choice", {
-            text: c,
-            onClick: (e) => {
-              if (answered) return;
-              answered = true;
-              const correct = idx === item.correct;
-              choices.querySelectorAll(".qz-choice").forEach((b, bi) => {
-                b.disabled = true;
-                if (bi === item.correct) b.classList.add("is-correct");
-              });
-              if (correct) {
-                sc.add(player);
-                feedback.textContent = `✅ Bien joué, ${player} ! +1`;
-                announce(`Bonne réponse pour ${player}`);
-                const r = e.currentTarget.getBoundingClientRect();
-                confettiBurst(r.left + r.width / 2, r.top + r.height / 2, 70);
-              } else {
-                e.currentTarget.classList.add("is-wrong");
-                const gage = pickGage(level, players.filter((p) => p !== player));
-                feedback.replaceChildren(`❌ Raté, ${player} ! `, el("strong", { text: gage }));
-                announce(`Raté pour ${player}. ${gage}`);
-                stampGage(gage);
-              }
-              scoreWrap.replaceChildren(scoreboard(sc.scores));
-              nextBtn.style.display = "";
-            },
-          })
-        )
+      const boutons = item.choices.map((c, idx) =>
+        boutonReponse(c, idx, {
+          onClick: (e) => {
+            if (answered) return;
+            answered = true;
+            const correct = idx === item.correct;
+            boutons.forEach((b, bi) => {
+              b.disabled = true;
+              if (bi === item.correct) b.classList.add("is-correct");
+            });
+            if (correct) {
+              sc.add(player);
+              feedback.textContent = `✅ Bien joué, ${player} ! +1`;
+              announce(`Bonne réponse pour ${player}`);
+              vibrateSuccess();
+              const r = e.currentTarget.getBoundingClientRect();
+              confettiBurst(r.left + r.width / 2, r.top + r.height / 2, 70);
+            } else {
+              e.currentTarget.classList.add("is-wrong");
+              const gage = pickGage(level, players.filter((p) => p !== player));
+              feedback.replaceChildren(`❌ Raté, ${player} ! `, el("strong", { text: gage }));
+              announce(`Raté pour ${player}. ${gage}`);
+              stampGage(gage); // vibre déjà (buzz)
+            }
+            tourWrap.replaceChildren(barreTour(pos, true));
+            scoreWrap.replaceChildren(scoreboard(sc.scores));
+            nextBtn.style.display = "";
+          },
+        })
       );
 
       showPhase(qArea,
         el("div.card", {}, [
+          nb >= 2 ? tourWrap : null,
           el("p.screen__subtitle", { text: `Question ${count} · 🎯 au tour de ${player}` }),
           el("h2.qz-question", { text: item.q, style: "margin:8px 0 18px" }),
-          choices,
+          el("div.stack.qz-choices", {}, boutons),
           feedback,
           nextBtn,
         ])
@@ -457,11 +531,7 @@ export function render(container, { game }) {
     }
 
     stage.replaceChildren(
-      el("div.card", { style: "margin-bottom:14px" }, [
-        el("p.screen__subtitle", { text: "Niveau des gages", style: "margin-bottom:8px" }),
-        levelUI.node,
-        catUI,
-      ]),
+      reglages,
       qArea,
       el("div.card", { style: "margin-top:14px" }, [
         el("div.row", { style: "justify-content:space-between;align-items:center;margin-bottom:10px" }, [
@@ -470,6 +540,7 @@ export function render(container, { game }) {
             text: "↺ Réinitialiser",
             onClick: () => {
               sc.reset();
+              debutTour = { ...sc.scores };
               scoreWrap.replaceChildren(scoreboard(sc.scores));
             },
           }),
@@ -478,6 +549,12 @@ export function render(container, { game }) {
       ])
     );
 
-    sc.ready.then(draw); // charge les scores persistés avant la 1re question
+    // Scores persistés de la soirée chargés AVANT la 1re question — et avant de
+    // figer le début du tour, sinon le premier podium partirait de zéro.
+    sc.ready.then(() => {
+      debutTour = { ...sc.scores };
+      scoreWrap.replaceChildren(scoreboard(sc.scores));
+      draw();
+    });
   }
 }

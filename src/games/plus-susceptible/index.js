@@ -203,7 +203,7 @@ export function render(container, { game }) {
         winners.forEach((w) => sc.add(w)); // +1 couronne pour le/les plus désigné(s)
 
         const ranking = players.map((p) => ({ p, v: votes[p] || 0 })).sort((a, b) => b.v - a.v);
-        const scoreWrap = el("div", {}, [scoreboard(sc.scores)]);
+        const scoreWrap = el("div", {}, [scoreboard(sc.scores, { podium: true })]);
 
         showPhase(stage,
           el("div.card.center", {}, [
@@ -231,7 +231,7 @@ export function render(container, { game }) {
                 text: "↺ Réinitialiser",
                 onClick: () => {
                   sc.reset();
-                  scoreWrap.replaceChildren(scoreboard(sc.scores));
+                  scoreWrap.replaceChildren(scoreboard(sc.scores, { podium: true }));
                 },
               }),
             ]),

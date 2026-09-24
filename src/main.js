@@ -98,55 +98,90 @@ function roomBanner() {
 }
 
 /* ---------- Accueil ---------- */
+// Préférences de confort, propres à ce téléphone (jamais partagées) : le
+// stockage peut être indisponible (navigation privée…), tout marche sans.
+const CLE_DERNIER_JEU = "soiree.accueil.dernierJeu";
+const CLE_FILTRE = "soiree.accueil.filtre";
+const lireLocal = (cle) => { try { return localStorage.getItem(cle); } catch { return null; } };
+const ecrireLocal = (cle, v) => { try { localStorage.setItem(cle, v); } catch {} };
+
+/** Tuile d'un jeu sur l'accueil. */
+function tuileJeu(g) {
+  // Illustration maison quand elle existe, emoji sinon : les dessins sont
+  // identiques d'un téléphone à l'autre, contrairement aux emoji système.
+  const art = gameArt(g.id, { size: 34 });
+  const icone = art
+    ? el("div.game-card__icon.game-card__icon--art", {}, [art])
+    : el("div.game-card__icon", { text: g.icon });
+  return el("a.game-card", { href: `#/jeu/${g.id}`, style: `--card-accent:${g.accent}` }, [
+    icone,
+    el("div.game-card__title", { text: g.title }),
+    el("div.game-card__desc", { text: g.desc }),
+  ]);
+}
+
 function renderHome() {
   document.title = "Soirée — Jeux à boire & jeux d'ambiance";
-  const frag = el("div.screen", { dataset: { game: "home" } }, [
-    el("section.home-hero", {}, [
-      el("h1", {}, ["La soirée commence ", el("span", { text: "ici" }), "."]),
-      el("p", {
-        text:
-          "Choisis un jeu, pose le téléphone au milieu de la table, et laisse-toi guider. " +
-          "Chaque jeu est indépendant — enrichis-les à ton rythme.",
-      }),
-    ]),
+  const frag = el("div.screen", { dataset: { game: "home" } });
+  const hero = el("section.home-hero", {}, [
+    el("h1", {}, ["La soirée commence ", el("span", { text: "ici" }), "."]),
+    el("p", {
+      text:
+        "Choisis un jeu, pose le téléphone au milieu de la table, et laisse-toi guider. " +
+        "Chaque jeu est indépendant — enrichis-les à ton rythme.",
+    }),
   ]);
 
-  for (const cat of CATEGORIES) {
-    const games = gamesByCategory(cat.id);
-    if (!games.length) continue;
-    const grid = el("div.game-grid");
-    for (const g of games) {
-      // Illustration maison quand elle existe, emoji sinon : les dessins sont
-      // identiques d'un téléphone à l'autre, contrairement aux emoji système.
-      const art = gameArt(g.id, { size: 34 });
-      const icone = art
-        ? el("div.game-card__icon.game-card__icon--art", {}, [art])
-        : el("div.game-card__icon", { text: g.icon });
-      grid.appendChild(
-        el(
-          "a.game-card",
-          { href: `#/jeu/${g.id}`, style: `--card-accent:${g.accent}` },
-          [
-            icone,
-            el("div.game-card__title", { text: g.title }),
-            el("div.game-card__desc", { text: g.desc }),
-          ]
-        )
-      );
-    }
-    frag.appendChild(
-      el("section.category", {}, [
-        el("h2.category__title", { text: cat.label }),
-        grid,
-      ])
-    );
+  // Filtres par ambiance : une seule grille au lieu d'une section par
+  // catégorie — sur téléphone, les 10 jeux tiennent ainsi en un écran et demi.
+  const categories = CATEGORIES.filter((c) => gamesByCategory(c.id).length);
+  const options = [{ id: "tout", chip: "✨ Tous" }, ...categories];
+  let filtre = lireLocal(CLE_FILTRE);
+  if (!options.some((o) => o.id === filtre)) filtre = "tout";
+  const grid = el("div.game-grid");
+  const chips = options.map((o) =>
+    el("button.chip", {
+      text: o.chip,
+      type: "button",
+      onClick: () => { filtre = o.id; ecrireLocal(CLE_FILTRE, filtre); remplir(); },
+    })
+  );
+  function remplir() {
+    chips.forEach((c, i) => {
+      const actif = options[i].id === filtre;
+      c.classList.toggle("is-active", actif);
+      c.setAttribute("aria-pressed", String(actif));
+    });
+    const jeux = filtre === "tout" ? categories.flatMap((c) => gamesByCategory(c.id)) : gamesByCategory(filtre);
+    grid.replaceChildren(...jeux.map(tuileJeu));
   }
+  remplir();
 
-  frag.prepend(roomBanner());
   // Salon multi encore actif cette session ? Retour en un tap (refresh, bouton
   // « retour »… ne coûtent plus une re-saisie complète).
   const resume = resumeInfo();
   const resumeGame = resume && getGame(resume.gameId);
+
+  // ↻ Rejouer au dernier jeu ouvert sur ce téléphone (sauf s'il est déjà
+  // proposé juste au-dessus comme partie en cours).
+  const dernier = getGame(lireLocal(CLE_DERNIER_JEU));
+  const rejouer = dernier && (!resumeGame || resumeGame.id !== dernier.id)
+    ? el("a.home-rejouer", { href: `#/jeu/${dernier.id}`, style: `--card-accent:${dernier.accent}` }, [
+        gameArt(dernier.id, { size: 22 }) || el("span", { text: dernier.icon || "🎮" }),
+        el("span", { text: "Rejouer à " }), // espace : lu « Rejouer à Undercover », pas « àUndercover »
+        el("strong", { text: dernier.title }),
+        el("span.home-rejouer__fleche", { text: "→", "aria-hidden": "true" }),
+      ])
+    : null;
+
+  frag.append(
+    roomBanner(),
+    ...(rejouer ? [rejouer] : []),
+    hero,
+    el("h2.sr-only", { text: "Les jeux" }),
+    el("div.home-filtres", { role: "toolbar", "aria-label": "Filtrer les jeux par ambiance" }, chips),
+    grid
+  );
   if (resumeGame) {
     frag.prepend(
       el("section.card", { style: "display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;border-color:var(--accent)" }, [
@@ -171,6 +206,7 @@ async function renderGame(id, token) {
 
   document.title = `${game.title} — Soirée`;
   ensureGameStyle(game.id);
+  ecrireLocal(CLE_DERNIER_JEU, game.id); // pour le raccourci « Rejouer à … » de l'accueil
 
   mount(el("div.center", {}, [el("p.screen__subtitle", { text: "Chargement…" })]));
 

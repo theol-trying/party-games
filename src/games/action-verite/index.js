@@ -4,7 +4,7 @@ import { levelSelector, LEVELS } from "../../levels.js";
 import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
 import { liveSession, peekAutoLive } from "../../realtime.js";
 import { pickGage } from "../../gages.js";
-import { stampGage } from "../../fx.js";
+import { stampGage, retournerCarte } from "../../fx.js";
 import { VERITES, ACTIONS } from "./data.js";
 
 const LEVEL_LABEL = { soft: "Soft", soiree: "Soirée", x18: "18+" };
@@ -260,14 +260,15 @@ export function render(container, { game }) {
 
     function draw(kind) {
       const card = decks[kind][level].next();
-      promptBox.textContent = card || "Aucune carte à ce niveau — ajoute-en ou active-en via ✏️ Mes cartes.";
       if (card) announce((kind === "verite" ? "Vérité : " : "Action : ") + card);
-      promptBox.classList.remove("av-flash");
-      void promptBox.offsetWidth;
-      promptBox.classList.add("av-flash");
-      tag.textContent = kind === "verite" ? "🗣️ Vérité" : "🔥 Action";
-      tag.dataset.kind = kind;
-      refuseBtn.style.display = card ? "" : "none";
+      // La carte se retourne ; son texte et son étiquette changent quand elle
+      // est de profil, donc jamais visibles à moitié mis à jour.
+      retournerCarte(promptBox, () => {
+        promptBox.textContent = card || "Aucune carte à ce niveau — ajoute-en ou active-en via ✏️ Mes cartes.";
+        tag.textContent = kind === "verite" ? "🗣️ Vérité" : "🔥 Action";
+        tag.dataset.kind = kind;
+        refuseBtn.style.display = card ? "" : "none"; // avec la carte, pas avant
+      });
     }
 
     const levelUI = levelSelector({ initial: level, onChange: (v) => (level = v) });

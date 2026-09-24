@@ -40,6 +40,14 @@ export function vibrate(pattern = 40) {
   } catch {}
 }
 
+/* Motifs de vibration, pour que chaque sensation garde le même sens partout.
+   Android uniquement : Safari sur iPhone n'expose pas navigator.vibrate, les
+   appels y sont simplement ignorés. Les gages vibrent déjà via buzz(). */
+/** Bonne réponse, victoire : deux petites impulsions joyeuses. */
+export function vibrateSuccess() { vibrate([30, 50, 30]); }
+/** Réponse envoyée : un simple accusé de réception, très bref. */
+export function vibrateTap() { vibrate(15); }
+
 /** Son de buzzer (blind test) + vibration. */
 export function buzz() {
   beep(760, 140, "square", 0.06);

@@ -53,19 +53,85 @@ function medal(i) {
   return i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`;
 }
 
-/** Tableau des scores réutilisable (le leader est mis en avant). */
-export function scoreboard(scoresObj) {
-  const ranked = Object.keys(scoresObj).sort((a, b) => scoresObj[b] - scoresObj[a]);
-  const max = Math.max(0, ...Object.values(scoresObj));
-  return el(
-    "div.sb",
-    {},
-    ranked.map((name, i) =>
-      el("div.sb-row" + (i === 0 && max > 0 ? ".is-leader" : ""), {}, [
-        el("span.sb-rank", { text: medal(i) }),
-        el("span.sb-name", { text: name }),
-        el("span.sb-pts", { text: String(scoresObj[name]) }),
+const reduced = (() => {
+  try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; }
+})();
+
+/** Nombre qui défile de `from` à `to` (~0,7 s, ralenti en fin de course). */
+export function compteur(to, from = to) {
+  const node = el("span", { text: String(from) });
+  if (reduced || from === to) { node.textContent = String(to); return node; }
+  const t0 = performance.now();
+  const DUREE = 700;
+  const pas = (t) => {
+    const k = Math.min(1, (t - t0) / DUREE);
+    node.textContent = String(Math.round(from + (to - from) * (1 - Math.pow(1 - k, 3))));
+    if (k < 1) requestAnimationFrame(pas);
+  };
+  requestAnimationFrame(pas);
+  // Filet : si le navigateur ne dessine plus (appli en arrière-plan), les images
+  // d'animation n'arrivent pas — le score final s'affiche quand même.
+  setTimeout(() => { node.textContent = String(to); }, DUREE + 80);
+  return node;
+}
+
+/** « +N » qui monte et s'efface à côté d'un score qui vient d'augmenter. */
+function gain(n) {
+  return n > 0 ? el("span.sb-gain", { text: "+" + n, "aria-hidden": "true" }) : null;
+}
+
+/** Mini-podium des 3 premiers. classement : [{ nom, points, avant?, gain? }]
+    trié décroissant ; `avant` = score d'où partent les points qui défilent,
+    `gain` = « +N » affiché (par défaut points − avant). */
+export function podium(classement) {
+  const top = classement.slice(0, 3);
+  if (top.length < 2) return null;
+  // Disposition classique : 2e à gauche, 1er au centre (plus haut), 3e à droite.
+  const places = [[top[1], 1], [top[0], 0], [top[2], 2]].filter(([r]) => r);
+  return el("div.sb-podium", { role: "list", "aria-label": "Podium" },
+    places.map(([r, i]) =>
+      el(`div.sb-marche.is-${i + 1}`, { role: "listitem" }, [
+        el("div.sb-marche__medaille", { text: medal(i), "aria-hidden": "true" }),
+        el("div.sb-marche__nom", { text: r.nom }),
+        el("div.sb-marche__bloc", {}, [compteur(r.points, r.avant ?? r.points), gain(r.gain ?? r.points - (r.avant ?? r.points))]),
       ])
     )
   );
+}
+
+// Derniers scores AFFICHÉS, par objet de scores : chaque jeu garde le sien
+// (sc.scores), donc deux jeux n'échangent jamais leurs valeurs. Au nouvel
+// affichage, chaque score défile depuis la valeur vue la dernière fois.
+const dejaVus = new WeakMap();
+
+/** Tableau des scores réutilisable (le leader est mis en avant).
+    { podium: true } : les 3 premiers en podium, le reste en liste — à utiliser
+    sur les écrans de résultats, entre deux manches. */
+export function scoreboard(scoresObj, { podium: avecPodium = false } = {}) {
+  const ranked = Object.keys(scoresObj).sort((a, b) => scoresObj[b] - scoresObj[a]);
+  const max = Math.max(0, ...Object.values(scoresObj));
+  const vus = dejaVus.get(scoresObj) || {};
+  dejaVus.set(scoresObj, { ...scoresObj });
+  const connu = (name) => typeof vus[name] === "number";
+  // Premier affichage : les points défilent depuis 0, mais sans « +N » — ce
+  // serait faire croire que des points déjà acquis viennent d'être gagnés.
+  const avant = (name) => (connu(name) ? vus[name] : 0);
+  const gagne = (name) => (connu(name) ? scoresObj[name] - vus[name] : 0);
+
+  const tete = avecPodium && max > 0
+    ? podium(ranked.map((name) => ({ nom: name, points: scoresObj[name], avant: avant(name), gain: gagne(name) })))
+    : null;
+  const reste = tete ? ranked.slice(3) : ranked;
+  const debut = tete ? 3 : 0;
+  return el("div.sb", {}, [
+    tete,
+    ...reste.map((name, j) => {
+      const i = debut + j;
+      return el("div.sb-row" + (i === 0 && max > 0 ? ".is-leader" : ""), {}, [
+        el("span.sb-rank", { text: medal(i) }),
+        el("span.sb-name", { text: name }),
+        el("span.sb-pts", {}, [compteur(scoresObj[name], avant(name)), gain(gagne(name))]),
+      ]);
+    }),
+  ]);
 }

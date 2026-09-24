@@ -4,6 +4,7 @@ import { makeSeen } from "../../seen.js";
 import { levelSelector } from "../../levels.js";
 import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
 import { liveSession, peekAutoLive } from "../../realtime.js";
+import { retournerCarte } from "../../fx.js";
 import { PHRASES } from "./data.js";
 
 const LEVEL_LABEL = { soft: "Soft", soiree: "Soirée", x18: "18+" };
@@ -293,12 +294,9 @@ export function render(container, { game }) {
         counter.textContent = "";
         return;
       }
-      promptBox.textContent = "Je n'ai jamais… " + p;
       announce("Je n'ai jamais " + p);
       counter.textContent = `${deck.size() - deck.remaining()} / ${deck.size()}`;
-      promptBox.classList.remove("jj-flash");
-      void promptBox.offsetWidth;
-      promptBox.classList.add("jj-flash");
+      retournerCarte(promptBox, () => { promptBox.textContent = "Je n'ai jamais… " + p; });
     }
 
     const levelUI = levelSelector({

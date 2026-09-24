@@ -6,11 +6,12 @@
    Le module est chargé à la demande (import dynamique) pour rester léger.
    ========================================================================= */
 
+// `chip` : libellé court des filtres de l'accueil (doit tenir sur un téléphone).
 export const CATEGORIES = [
-  { id: "questions", label: "Questions / Prompts" },
-  { id: "deduction", label: "Déduction sociale" },
-  { id: "quiz", label: "Rapidité / Quiz" },
-  { id: "creatif", label: "Créatif" },
+  { id: "questions", label: "Questions / Prompts", chip: "💬 Questions" },
+  { id: "deduction", label: "Déduction sociale", chip: "🕵️ Déduction" },
+  { id: "quiz", label: "Rapidité / Quiz", chip: "⚡ Rapidité" },
+  { id: "creatif", label: "Créatif", chip: "🎨 Créatif" },
 ];
 
 export const GAMES = [

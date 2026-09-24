@@ -151,8 +151,15 @@ body::after {
 .room-banner__actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .room-banner__input { width: 120px; text-transform: uppercase; letter-spacing: 3px; font-weight: 700; }
 @media (max-width: 480px) {
-  .room-banner { flex-direction: column; align-items: stretch; }
-  .room-banner__actions { justify-content: flex-start; }
+  .room-banner { flex-direction: column; align-items: stretch; gap: 10px; padding: 12px 14px; margin-bottom: 18px; }
+  /* Une seule rangée qui défile (comme les filtres de l'accueil) au lieu de
+     renvoyer « Nouvelle » seule sur une deuxième ligne. */
+  .room-banner__actions {
+    justify-content: flex-start; gap: 6px; flex-wrap: nowrap;
+    overflow-x: auto; scrollbar-width: none; margin: 0 -14px; padding: 0 14px;
+  }
+  .room-banner__actions::-webkit-scrollbar { display: none; }
+  .room-banner__actions .chip { flex: 0 0 auto; white-space: nowrap; min-height: 40px; padding: 8px 12px; font-size: 13px; }
 }
 
 /* ---------- Accueil ---------- */
@@ -229,6 +236,43 @@ body::after {
 }
 .game-card__title { font-weight: 800; font-size: 18px; line-height: 1.2; }
 .game-card__desc { color: var(--text-dim); font-size: 13px; line-height: 1.45; }
+
+/* Filtres par ambiance. Sur téléphone, la rangée défile horizontalement
+   (jusqu'aux bords de l'écran) plutôt que de passer sur deux lignes. */
+.home-filtres {
+  display: flex; gap: 8px; margin: 0 0 16px;
+  overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.home-filtres::-webkit-scrollbar { display: none; }
+.home-filtres .chip { flex: 0 0 auto; white-space: nowrap; }
+
+/* ↻ Rejouer au dernier jeu : une pastille, pas une carte de plus. */
+.home-rejouer {
+  display: flex; align-items: center; gap: 8px;
+  width: fit-content; max-width: 100%; margin: 0 0 18px;
+  padding: 8px 14px 8px 10px; min-height: 44px; border-radius: 999px;
+  text-decoration: none; color: var(--text-dim); font-size: 14px;
+  background: color-mix(in srgb, var(--card-accent, var(--accent)) 14%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--card-accent, var(--accent)) 40%, var(--border));
+}
+.home-rejouer > span { flex: 0 0 auto; white-space: nowrap; } /* « Rejouer à » ne se coupe jamais */
+.home-rejouer strong { min-width: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-rejouer .game-art { flex: 0 0 auto; }
+.home-rejouer__fleche { color: var(--card-accent, var(--accent)); font-weight: 900; }
+
+@media (max-width: 560px) {
+  .home-hero { margin-bottom: 18px; }
+  .home-hero p { font-size: 15px; margin-top: 8px; }
+  .home-filtres { margin: 0 -16px 14px; padding: 0 16px; } /* défile jusqu'aux bords */
+  .home-filtres .chip { min-height: 40px; padding: 8px 14px; }
+  /* Deux colonnes, tuiles resserrées : icône + titre, la description reste
+     lisible sur l'écran du jeu (sous-titre). */
+  .game-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .game-card { padding: 14px; min-height: 0; gap: 8px; }
+  .game-card__icon { width: 44px; height: 44px; font-size: 24px; border-radius: 13px; }
+  .game-card__title { font-size: 15px; }
+  .game-card__desc { display: none; }
+}
 
 /* ---------- Identité visuelle par jeu ----------
    Chaque style.css définit : --g1/--g2 (halos d'ambiance) et --wm (filigrane emoji).
@@ -356,7 +400,48 @@ body::after {
 .sb-row.is-leader { background: rgba(255, 215, 0, 0.12); border: 1px solid rgba(255, 215, 0, 0.35); }
 .sb-rank { text-align: center; font-weight: 700; }
 .sb-name { font-weight: 600; }
-.sb-pts { font-weight: 800; color: var(--accent-2); }
+.sb-pts { font-weight: 800; color: var(--accent-2); position: relative; font-variant-numeric: tabular-nums; }
+/* « +N » : monte au-dessus du score qui vient d'augmenter, puis s'efface. */
+.sb-gain {
+  position: absolute; right: 0; bottom: 100%;
+  font-size: 13px; font-weight: 900; color: #69db7c; white-space: nowrap; pointer-events: none;
+  animation: sb-gain 1.4s ease-out forwards;
+}
+@keyframes sb-gain {
+  from { opacity: 0; transform: translateY(8px); }
+  15%  { opacity: 1; transform: translateY(0); }
+  70%  { opacity: 1; }
+  to   { opacity: 0; transform: translateY(-14px); }
+}
+
+/* Mini-podium entre les manches : 2e | 1er | 3e, marches de hauteurs décroissantes. */
+.sb-podium {
+  display: grid; grid-template-columns: repeat(3, 1fr); align-items: end; gap: 8px;
+  margin: 18px 0 10px; text-align: center;
+}
+.sb-podium:has(> :nth-child(2):last-child) { grid-template-columns: repeat(2, 1fr); } /* 2 joueurs */
+.sb-marche { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.sb-marche__medaille { font-size: 26px; line-height: 1; }
+.sb-marche__nom {
+  font-weight: 800; font-size: 14px; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sb-marche__bloc {
+  position: relative; width: 100%;
+  display: flex; align-items: flex-start; justify-content: center; padding-top: 10px;
+  border-radius: 12px 12px 4px 4px;
+  font-weight: 900; font-size: 18px; font-variant-numeric: tabular-nums;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 30%, var(--bg-soft)), var(--bg-soft));
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  transform-origin: bottom;
+  animation: sb-marche 0.55s cubic-bezier(.2, .9, .3, 1.2) backwards;
+}
+.sb-marche.is-1 .sb-marche__bloc { height: 84px; animation-delay: 0.25s;
+  background: linear-gradient(180deg, rgba(255, 215, 0, 0.35), var(--bg-soft)); border-color: rgba(255, 215, 0, 0.5); }
+.sb-marche.is-2 .sb-marche__bloc { height: 62px; animation-delay: 0.1s; }
+.sb-marche.is-3 .sb-marche__bloc { height: 46px; }
+.sb-marche .sb-gain { right: auto; left: 50%; bottom: calc(100% + 2px); translate: -50% 0; }
+@keyframes sb-marche { from { transform: scaleY(0.1); opacity: 0; } to { transform: none; opacity: 1; } }
 
 /* Composant joueurs (players.js) */
 .pl-row { display: flex; gap: 8px; align-items: center; }
@@ -750,6 +835,23 @@ select:focus-visible {
   border: 1px solid var(--border); border-top: none;
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
 }
+/* ============ 🔄 Cartes qui se retournent ============ */
+/* Action ou Vérité, Je n'ai jamais, Tu préfères : la carte arrive de profil et
+   pivote face au joueur, comme une carte qu'on retourne sur la table. Ici, les
+   cartes CRÉÉES à chaque manche (multi-appareils, dilemmes) ; la carte réutilisée
+   du mode solo passe par retournerCarte() (src/fx.js). `backwards` et non `both` :
+   une fois l'animation finie, :active peut de nouveau enfoncer le bouton. */
+.av-prompt, .jj-prompt, .tp-option {
+  animation: carte-retournee 0.45s cubic-bezier(.2, .8, .3, 1) backwards;
+}
+.tp-option[data-side="b"] { animation-delay: 0.08s; } /* les deux options en cascade */
+@keyframes carte-retournee {
+  from { opacity: 0; transform: perspective(900px) rotateY(-90deg) scale(0.96); }
+  1%   { opacity: 1; }
+  70%  { transform: perspective(900px) rotateY(10deg); }
+  to   { transform: perspective(900px) rotateY(0deg); }
+}
+
 /* Bouton portant une illustration + un libellé (choix de jeu, tournoi). */
 .btn--art { display: flex; align-items: center; justify-content: center; gap: 10px; }
 .btn--art .game-art { flex: 0 0 auto; }

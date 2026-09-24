@@ -8,7 +8,7 @@
    ========================================================================= */
 
 import { el } from "./ui.js";
-import { buzz } from "./sound.js";
+import { buzz, vibrateSuccess } from "./sound.js";
 
 const reduced = (() => {
   try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
@@ -141,6 +141,9 @@ export function confettiRain(ms = 1200) {
 
 /** Célébration standard : gerbe depuis le bas-centre + courte pluie. */
 export function celebrate() {
+  // La vibration n'est pas une animation : elle reste active même quand
+  // l'utilisateur a demandé moins de mouvements à l'écran.
+  vibrateSuccess();
   if (reduced) return;
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -179,6 +182,47 @@ export function stampGage(text, { onDone } = {}) {
   }
   const timer = setTimeout(close, 7000);
   return close;
+}
+
+/** Retourne une carte comme au jeu : elle pivote jusqu'à être vue de profil
+    (donc invisible), `changer()` y pose le nouveau contenu, puis elle finit de
+    pivoter face au joueur. Sert aux jeux qui réutilisent la même carte d'un
+    tirage à l'autre (une animation CSS d'apparition ne s'y rejouerait pas).
+    Un nouvel appel pendant un retournement l'interrompt proprement. */
+export function retournerCarte(node, changer) {
+  if (node.__retournement) { node.__retournement(); node.__retournement = null; }
+  if (reduced || typeof node.animate !== "function") { changer(); return; }
+  const P = "perspective(900px) ";
+  let bascule = false;
+  let entree = null;
+  const sortie = node.animate(
+    [{ transform: P + "rotateY(0deg)" }, { transform: P + "rotateY(90deg) scale(0.96)" }],
+    { duration: 150, easing: "ease-in", fill: "forwards" }
+  );
+  const basculer = () => {
+    if (bascule) return;
+    bascule = true;
+    clearTimeout(filet);
+    changer();
+    // La face d'arrivée est créée AVANT d'annuler la sortie : aucune image
+    // intermédiaire où la carte réapparaîtrait à plat avec le nouveau texte.
+    entree = node.animate(
+      [
+        { transform: P + "rotateY(-90deg) scale(0.96)" },
+        { transform: P + "rotateY(10deg)", offset: 0.7 },
+        { transform: P + "rotateY(0deg)" },
+      ],
+      { duration: 300, easing: "cubic-bezier(.2,.8,.3,1)" }
+    );
+    sortie.cancel();
+  };
+  sortie.onfinish = basculer;
+  // Filet : le CONTENU ne dépend jamais de l'affichage. Si le navigateur cesse
+  // de dessiner (appli en arrière-plan, économie d'énergie), l'animation se fige
+  // mais ce minuteur pose quand même la nouvelle carte ; l'animation reprend
+  // d'elle-même au retour.
+  const filet = setTimeout(basculer, 220);
+  node.__retournement = () => { clearTimeout(filet); sortie.cancel(); if (entree) entree.cancel(); };
 }
 
 /** Carte 3D qui se retourne pour révéler `backContent`.
