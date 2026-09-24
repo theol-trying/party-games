@@ -83,5 +83,7 @@ git branch -M main
 git push -u origin main
 ```
 
-Ensuite, chaque correctif = `git add . && git commit -m "..." && git push` → Render
-redéploie automatiquement. Plus aucun risque d'imbrication.
+Ensuite, chaque correctif = `git add . && git commit -m "..." && git push` → GitHub Actions
+lance les tests puis déclenche le déploiement Render via son Deploy Hook (secret
+`RENDER_DEPLOY_HOOK`, voir `.github/workflows/deploy.yml`). Un push qui casse les tests
+n'est pas déployé. Plus aucun risque d'imbrication.

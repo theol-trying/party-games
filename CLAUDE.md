@@ -21,14 +21,15 @@ Site **modulaire** : les jeux s'enrichissent un par un. Audit et état : `AUDIT.
   aucun effet — inutile d'y toucher pour changer le build.
 - ⚠️ **Un déploiement prend ~10 min** sur le plan gratuit. Ne pas conclure à un blocage
   avant d'avoir attendu : vérifier plutôt l'onglet Events du dashboard.
-- 🚨 **L'auto-déploiement NE FONCTIONNE PAS** (constaté le 2026-09-22). Les logs de build
-  affichent « It looks like we don't have access to your repo » : Render n'a pas accès au
-  dépôt GitHub, donc aucun webhook n'y a été installé et il n'est jamais prévenu des push.
-  Il clone quand même, le dépôt étant public — d'où l'illusion que tout va bien.
-  **Ne pas dire à l'utilisateur que « Render redéploie tout seul »** tant que ce n'est pas
-  corrigé : il doit déclencher « Manual Deploy » à la main.
-  Correctif : Settings → Repository → reconnecter via l'intégration GitHub (installer l'app
-  Render et lui donner accès au dépôt), puis vérifier Auto-Deploy = Yes.
+- ✅ **Déploiement automatique à chaque push sur `main`** (depuis le 2026-09-23), mais PAS
+  par l'intégration GitHub de Render : c'est **GitHub Actions** (`.github/workflows/deploy.yml`)
+  qui lance les tests puis appelle le Deploy Hook de Render (secret `RENDER_DEPLOY_HOOK`).
+  Un push dont les tests échouent n'est donc **pas** déployé. Compter ~3 à 10 min.
+  - Suivi sans dashboard : l'API publique `api.github.com/repos/theol-trying/party-games/actions/runs`
+    donne le résultat des workflows ; l'ETag de `/index.html` change à chaque mise en ligne
+    (Render reclone le dépôt → nouvelles dates de fichiers).
+  - La ligne « It looks like we don't have access to your repo » reste dans les logs de
+    build : elle est **sans conséquence** (dépôt public, cloné quand même). Ne pas la « corriger ».
 - ⚠️ **Render relaie la fermeture d'un WebSocket vers Node avec ~10 s de retard** (mesuré
   le 2026-09-23 ; en local c'est instantané). Toute sortie volontaire doit donc envoyer
   `{ t: "leave" }` AVANT de couper — c'est ce que fait `stop()` dans `src/realtime.js`.
