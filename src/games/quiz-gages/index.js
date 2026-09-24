@@ -175,6 +175,10 @@ export function render(container, { game }) {
       return;
     }
     if (liveStop) liveStop();
+    // Nouvelle partie : si le salon a été recréé, les manches repartent de 1 —
+    // les repères de la partie précédente feraient sauter ses effets.
+    stopCountdown();
+    cdRound = quizFxRound = quizScoresRound = -1;
     const deck = createDeck(questions(), { seen, keyOf: qKey });
     const scores = {}; // deviceId -> total cumulé (converge sur tous les clients)
     const streaks = {}; // deviceId -> série de bonnes réponses consécutives (autorité meta)
