@@ -34,7 +34,7 @@ support hors-ligne, sons et confettis.
 | Tu préfères | 232 dilemmes, dont 23 d'actu 2025-2026 |
 | Le Menteur | 189 missions |
 | Cadavre exquis | 27 ouvertures · 95 amorces · 25 clôtures · 6 thèmes |
-| Estimations | 64 questions « combien de… ? » (réponses numériques, testées) |
+| Estimations | 212 questions « combien de… ? » sur 18 thèmes (réponses numériques et positives, testées) |
 | Baccalauréat | 8 catégories · 20 lettres |
 | Blind Test | 45 pistes pour « joue-la toi-même » + recherche d'extraits de 30 s (Apple Music / Deezer) |
 

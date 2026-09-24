@@ -67,11 +67,14 @@ test("sans réponse = absent, qui boit aussi ; seul à répondre = gagnant", () 
 });
 
 test("banque de questions : réponses numériques, énoncés uniques", () => {
-  assert.ok(QUESTIONS.length >= 50);
+  assert.ok(QUESTIONS.length >= 200, `seulement ${QUESTIONS.length} questions`);
   const vus = new Set();
   for (const q of QUESTIONS) {
     assert.ok(q.q && q.q.endsWith("?"), `énoncé mal formé : ${q.q}`);
     assert.ok(Number.isFinite(q.reponse), `réponse non numérique : ${q.q}`);
+    // Le clavier numérique de l'iPhone n'a pas de touche « − » : une réponse
+    // négative serait impossible à taper. On reformule (« combien SOUS… »).
+    assert.ok(q.reponse >= 0, `réponse négative, intapable sur iPhone : ${q.q}`);
     assert.equal(typeof q.unite, "string", `unité manquante : ${q.q}`);
     assert.ok(!vus.has(q.q), `doublon : ${q.q}`);
     vus.add(q.q);

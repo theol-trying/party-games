@@ -7,7 +7,8 @@
 }
 /* Le vert anis est clair : texte foncé sur les boutons pleins (le blanc par
    défaut n'atteignait pas un contraste lisible). */
-.screen[data-game="estimations"] .btn:not(.btn--ghost) { color: #16240a; }
+.screen[data-game="estimations"] .btn:not(.btn--ghost),
+.screen[data-game="estimations"] .chip.is-active { color: #16240a; }
 .es-question { font-size: clamp(20px, 5.4vw, 28px); font-weight: 800; line-height: 1.3; }
 .es-rappel { color: var(--text-dim); margin: 6px 0 14px; font-weight: 600; line-height: 1.35; }
 
