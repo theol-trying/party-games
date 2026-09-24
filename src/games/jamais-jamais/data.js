@@ -364,6 +364,21 @@ export const PHRASES = {
     "regardé un épisode déjà vu en pensant découvrir la suite.",
     "porté un t-shirt à l'envers toute une réunion sans que personne ne le dise.",
     "fait semblant de connaître un jeu vidéo pour ne pas passer pour largué.",
+    // --- Actus 2025-2026 ---
+    "demandé à une IA d'écrire un message à ma place.",
+    "utilisé ChatGPT pour un devoir, un dossier ou un mail pro.",
+    "cru à une fausse image générée par IA.",
+    "suivi un match du Mondial 2026 en pleine nuit.",
+    "joué à Mario Kart World sur Switch 2.",
+    "regardé l'Eurovision en entier.",
+    "fait un selfie devant Notre-Dame depuis sa réouverture.",
+    "précommandé un jeu qui a ensuite été repoussé.",
+    "regardé une vidéo en vitesse ×2 pour gagner du temps.",
+    "abandonné une série après un seul épisode.",
+    "parlé à un assistant vocal devant des inconnus.",
+    "fait la queue pour une figurine Labubu.",
+    "goûté au chocolat de Dubaï.",
+    "joué au padel.",
   ],
   soiree: [
     "embrassé quelqu'un dans cette pièce.",
@@ -606,6 +621,14 @@ export const PHRASES = {
     "profité de l'ambiance d'une fête pour dire un « je t'aime bien » maladroit.",
     "fait exprès de rater mon chemin retour pour prolonger une conversation.",
     "menti sur le nombre de fois où j'ai recroisé un ex « par hasard ».",
+    // --- Actus 2025-2026 ---
+    "menti en disant que je n'avais pas utilisé d'IA.",
+    "demandé à une IA de m'aider à draguer.",
+    "fêté une victoire du PSG dans la rue.",
+    "fait semblant d'avoir vu la série dont tout le monde parle.",
+    "raté un rendez-vous pour finir une série.",
+    "changé trois fois de photo de profil dans la même semaine.",
+    "demandé à une IA de trancher une dispute de couple.",
   ],
   x18: [
     "fait des choses dans un lieu public.",
@@ -728,5 +751,8 @@ export const PHRASES = {
     "ressenti le besoin de tout raconter à un·e ami·e le lendemain, dans les moindres détails.",
     "eu un coup de foudre purement physique qui ne s'est jamais reproduit avec la même intensité.",
     "improvisé une excuse bancale pour disparaître discrètement le matin.",
+    // --- Actus 2025-2026 ---
+    "envoyé un message coquin écrit par une IA.",
+    "demandé à une IA des conseils pour une première nuit.",
   ],
 };
