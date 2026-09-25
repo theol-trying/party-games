@@ -117,6 +117,12 @@ export const VERITES = {
     "Quelle célébrité es-tu secrètement convaincu·e de pouvoir séduire ?",
     "Quel plat adores-tu alors que tout le monde le trouve dégoûtant ?",
     "Quel est le tout dernier mensonge que tu as dit — et à qui ?",
+    // --- Actus 2025-2026 ---
+    "Quelle est la dernière chose que tu as demandée à une IA ?",
+    "Quelle est la tendance TikTok la plus gênante que tu as déjà essayée ?",
+    "Quelle série as-tu commencée en 2025 sans jamais la finir ?",
+    "Quel achat de 2025 regrettes-tu le plus ?",
+    "Quel moment du Mondial 2026 t'a le plus marqué ?",
   ],
   soiree: [
     "Qui de la table draguerais-tu si tu étais célibataire, et pourquoi cette personne ?",
@@ -234,6 +240,10 @@ export const VERITES = {
     "Quel crush totalement improbable as-tu eu, que personne ici ne soupçonne ?",
     "Quelle soirée voudrais-tu revivre — ou effacer à jamais — et pourquoi ?",
     "Si tu devais matcher deux personnes de cette pièce sur une appli de rencontre, qui — et pourquoi ?",
+    // --- Actus 2025-2026 ---
+    "As-tu déjà utilisé une IA pour écrire un message de drague ?",
+    "Quelle appli de rencontre as-tu déjà téléchargée en cachette ?",
+    "As-tu déjà fait semblant d'avoir vu la série dont tout le monde parle ?",
   ],
   x18: [
     "Douche à deux : logistique de génie ou piège inconfortable ? Argumente avec vécu.",
@@ -348,6 +358,9 @@ export const VERITES = {
     "Quelle expérience aimerais-tu tenter sans jamais avoir osé la proposer ?",
     "Quelle est la panne ou le fail le plus gênant que tu aies vécu au lit ?",
     "Quelle célébrité rejoindrait ta liste « permis de tromper » sans la moindre hésitation ?",
+    // --- Actus 2025-2026 ---
+    "As-tu déjà demandé à une IA un conseil très intime ? Lequel ?",
+    "Quelle est la recherche la plus osée que tu aies déjà faite sur ton téléphone ?",
   ],
 };
 
@@ -472,6 +485,12 @@ export const ACTIONS = {
     "Laisse la table choisir un mot que tu devras placer discrètement trois fois avant ton prochain tour.",
     "Bois ta prochaine gorgée en portant un toast solennel à un objet de la pièce.",
     "Imite chaque personne de la table à tour de rôle jusqu'à ce que quelqu'un se reconnaisse.",
+    // --- Actus 2025-2026 ---
+    "Demande à une IA un compliment pour la personne à ta gauche et lis-le à voix haute.",
+    "Imite un commentateur du Tour de France pendant 30 secondes.",
+    "Montre la dernière vidéo que tu as likée sur les réseaux.",
+    "Chante le refrain d'un tube de 2025 choisi par le groupe.",
+    "Fais deviner un film ou une série sorti en 2025 ou 2026, uniquement en mimant.",
   ],
   soiree: [
     "Trinque les yeux dans les yeux avec chaque personne, sans jamais rompre le regard.",
@@ -592,6 +611,10 @@ export const ACTIONS = {
     "Appelle un ami, annonce-lui que tu as un énorme secret à lui avouer… puis raccroche.",
     "Fais une déclaration théâtrale enflammée à la personne de la pièce que tu connais le moins.",
     "Improvise 20 secondes de stand-up sur la personne de ton choix (gentiment… ou pas).",
+    // --- Actus 2025-2026 ---
+    "Laisse le groupe écrire ta prochaine story : tu la publies ou tu bois deux gorgées.",
+    "Laisse ta voisine ou ton voisin lire tes trois dernières recherches internet.",
+    "Fais la danse TikTok de ton choix, jusqu'au bout.",
   ],
   x18: [
     "Masse les mains d'un volontaire avec une application déconcertante, 30 secondes.",
@@ -705,6 +728,9 @@ export const ACTIONS = {
     "Fais un body shot sur la personne volontaire de ton choix.",
     "Masse lentement les cuisses d'un·e volontaire pendant 30 secondes, regard assumé.",
     "Colle-toi dos à dos contre un·e volontaire et ondulez en rythme pendant 15 secondes de musique.",
+    // --- Actus 2025-2026 ---
+    "Demande à une IA de décrire la personne de ton choix de façon séduisante, et lis le résultat à voix haute.",
+    "Fais une déclaration enflammée à la personne de ton choix… rédigée par une IA.",
   ],
 };
 
