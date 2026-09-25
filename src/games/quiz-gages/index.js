@@ -3,11 +3,11 @@ import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
 import { makeSeen } from "../../seen.js";
 import { createScores, scoreboard, podium, compteur } from "../../scoring.js";
-import { pickGage } from "../../gages.js";
+import { pickGage, chargerGages, ouvrirMesGages } from "../../gages.js";
 import { levelSelector, LEVELS } from "../../levels.js";
 import { teamBuilder } from "../../teams.js";
 import { openEditor } from "../../content.js";
-import { contentSource } from "../../game-kit.js";
+import { contentSource, themeSelector } from "../../game-kit.js";
 import { liveSession, syncCountdown, peekAutoLive } from "../../realtime.js";
 import { tick, vibrate, vibrateSuccess, vibrateTap } from "../../sound.js";
 import { confettiBurst, celebrate, stampGage } from "../../fx.js";
@@ -77,6 +77,7 @@ export function render(container, { game }) {
   const qKey = (q) => q.q; // identité d'une question
   if (peekAutoLive()) startLive(); else modeSelect(); // « suivre l'hôte » : salon direct
   src.reload();
+  chargerGages(); // gages du groupe (🎭 Mes gages), partagés par la soirée
 
   // Cleanup routeur : stoppe les timers/socket du mode multi si actif.
   return () => { stopCountdown(); if (liveStop) liveStop(); };
@@ -92,28 +93,7 @@ export function render(container, { game }) {
      place ; onChange() rappelé après chaque changement (au moins 1 catégorie
      reste toujours active). Les cartes perso (sans cat) sont toujours incluses. */
   function categorySelector(selected, onChange) {
-    const chips = {};
-    const summary = el("summary");
-    const row = el("div.row", { style: "flex-wrap:wrap;justify-content:center;gap:6px;margin-top:8px" });
-    function refreshSummary() { summary.textContent = `🗂️ Catégories (${selected.size}/${CATEGORIES.length})`; }
-    function paint() { for (const c of CATEGORIES) chips[c.id].classList.toggle("is-active", selected.has(c.id)); refreshSummary(); }
-    CATEGORIES.forEach((c) => {
-      const chip = el("button.chip", { text: c.label });
-      chip.addEventListener("click", () => {
-        if (selected.has(c.id)) { if (selected.size <= 1) return; selected.delete(c.id); } // garder ≥1
-        else selected.add(c.id);
-        paint();
-        onChange();
-      });
-      chips[c.id] = chip;
-      row.appendChild(chip);
-    });
-    const quick = el("div.row", { style: "justify-content:center;gap:8px;margin-top:8px" }, [
-      el("button.chip", { text: "Tout", onClick: () => { CATEGORIES.forEach((c) => selected.add(c.id)); paint(); onChange(); } }),
-      el("button.chip", { text: "Rien sauf 1", onClick: () => { selected.clear(); selected.add(CATEGORIES[0].id); paint(); onChange(); } }),
-    ]);
-    paint();
-    return el("details.ed-bulk", { style: "margin-top:10px" }, [summary, row, quick]);
+    return themeSelector(CATEGORIES, selected, onChange); // brique commune (game-kit.js)
   }
 
   // Choix du mode : sur ce téléphone (passe-le) ou chacun sur le sien.
@@ -125,7 +105,10 @@ export function render(container, { game }) {
         el("button.btn.btn--full", { text: "📱 Sur ce téléphone", onClick: introScreen }),
         el("button.btn.btn--full.btn--ghost", { text: "🌐 Multi-appareils", style: "margin-top:10px", onClick: startLive }),
       ]),
-      el("div.row", { style: "justify-content:center;margin-top:14px" }, [el("button.chip", { text: "✏️ Mes cartes", onClick: openEd })])
+      el("div.row", { style: "justify-content:center;gap:8px;margin-top:14px" }, [
+        el("button.chip", { text: "✏️ Mes cartes", onClick: openEd }),
+        el("button.chip", { text: "🎭 Mes gages", onClick: () => ouvrirMesGages(stage, modeSelect) }),
+      ])
     );
   }
 
@@ -423,7 +406,7 @@ export function render(container, { game }) {
     // ⚙️ Réglages repliables : ouverts avant la 1re question, repliés ensuite
     // (une seule fois — si le joueur les rouvre, on les laisse ouverts), pour
     // que question et réponses tiennent à l'écran sans défiler.
-    const resume = el("span.qz-reglages__resume");
+    const resume = el("span.reglages__resume");
     const majResume = () => {
       const lv = LEVELS.find((l) => l.id === level);
       resume.textContent = `${lv ? lv.label : level} · ${cats.size}/${CATEGORIES.length} thèmes`;
@@ -431,9 +414,9 @@ export function render(container, { game }) {
     const catUI = categorySelector(cats, () => { deck.setFilter(catFilter); majResume(); });
     const levelUI = levelSelector({ initial: level, onChange: (v) => { level = v; majResume(); } });
     majResume();
-    const reglages = el("details.card.qz-reglages", { open: "" }, [
+    const reglages = el("details.card.reglages", { open: "" }, [
       el("summary", {}, [el("span", { text: "⚙️ Réglages" }), resume]),
-      el("div.qz-reglages__corps", {}, [
+      el("div.reglages__corps", {}, [
         el("p.screen__subtitle", { text: "Niveau des gages", style: "margin-bottom:8px" }),
         levelUI.node,
         catUI,

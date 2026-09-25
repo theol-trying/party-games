@@ -1,14 +1,11 @@
 /* Style propre à « Estimations ». */
 .screen[data-game="estimations"] {
   --accent: #a9e34b;
+  --on-accent: #16240a; /* foncé teinté de vert, sur les boutons et pastilles actives */
   --g1: rgba(169, 227, 75, 0.15);
   --g2: rgba(77, 208, 225, 0.10);
   --wm: "📏";
 }
-/* Le vert anis est clair : texte foncé sur les boutons pleins (le blanc par
-   défaut n'atteignait pas un contraste lisible). */
-.screen[data-game="estimations"] .btn:not(.btn--ghost),
-.screen[data-game="estimations"] .chip.is-active { color: #16240a; }
 .es-question { font-size: clamp(20px, 5.4vw, 28px); font-weight: 800; line-height: 1.3; }
 .es-rappel { color: var(--text-dim); margin: 6px 0 14px; font-weight: 600; line-height: 1.35; }
 
@@ -48,5 +45,6 @@
 .es-ligne__nom { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .es-ligne__val { text-align: right; font-variant-numeric: tabular-nums; line-height: 1.2; }
 .es-ligne__val small { display: block; color: var(--text-dim); font-size: 12px; }
-.es-ligne__pts { font-weight: 900; color: var(--accent); }
+.es-ligne__pts { font-weight: 900; color: var(--accent); white-space: nowrap; }
+.es-ligne__pts.is-boit { color: #ff8fa3; } /* gorgées à boire (option « selon l'écart ») */
 .es-verdict { font-weight: 800; margin-top: 14px; line-height: 1.4; }

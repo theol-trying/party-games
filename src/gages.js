@@ -7,6 +7,8 @@
 
 import { pick } from "./ui.js";
 import { resolveNames } from "./names.js";
+import { loadContent, loadConfig, activeCards, openEditor } from "./content.js";
+import { LEVELS } from "./levels.js";
 
 export const GAGES = [
   // --- soft : bon enfant, tout public ---
@@ -206,11 +208,61 @@ export const GAGES = [
   { text: "Mordille l'oreille de {joueur} 5 secondes (si consentant·e)", niveau: "x18" },
 ];
 
+/* ---------- 🎭 Mes gages : les gages du groupe ----------
+   Même mécanique que les cartes perso des jeux (content.js) : stockés par
+   soirée, donc partagés par tous les téléphones du salon ; chaque gage intégré
+   peut être désactivé, et l'on peut ne garder QUE les siens. */
+const ID_CONTENU = "gages";
+const LIBELLE_NIVEAU = Object.fromEntries(LEVELS.map((l) => [l.id, l.label]));
+
+// Gages actifs de la soirée. Tant que chargerGages() n'a pas répondu (ou hors
+// ligne), la banque intégrée : pickGage() reste synchrone et ne manque jamais.
+let actifs = GAGES;
+
+/** Recharge les gages actifs (banque + gages perso − désactivés). À appeler à
+    l'ouverture d'un jeu qui distribue des gages, et après l'éditeur. */
+export async function chargerGages() {
+  try {
+    const [custom, config] = await Promise.all([loadContent(ID_CONTENU), loadConfig(ID_CONTENU)]);
+    const liste = activeCards({
+      builtIn: GAGES,
+      custom,
+      config,
+      keyOf: (g) => g.text,
+      customToValue: (e) => ({ text: e.text, niveau: LIBELLE_NIVEAU[e.niveau] ? e.niveau : "soft" }),
+    });
+    actifs = liste.length ? liste : GAGES; // tout désactivé : la banque plutôt qu'aucun gage
+  } catch {
+    actifs = GAGES;
+  }
+  return actifs;
+}
+
+const SCHEMA_GAGES = {
+  title: "Mes gages", // l'éditeur ajoute lui-même « ✏️ » devant
+  fields: [
+    { key: "text", label: "Gage — {joueur} désigne un autre joueur au hasard", type: "text" },
+    { key: "niveau", label: "Niveau", type: "select", options: LEVELS.map((l) => ({ v: l.id, l: l.label })) },
+  ],
+  summary: (e) => `${LIBELLE_NIVEAU[e.niveau] || ""} · ${e.text}`,
+};
+
+/** Ouvre l'éditeur des gages du groupe dans `stage` ; onDone() au retour. */
+export function ouvrirMesGages(stage, onDone) {
+  openEditor(stage, {
+    gameId: ID_CONTENU,
+    schema: SCHEMA_GAGES,
+    builtInList: GAGES.map((g) => ({ key: g.text, label: `${LIBELLE_NIVEAU[g.niveau]} · ${g.text}` })),
+    onDone: async () => { await chargerGages(); if (onDone) onDone(); },
+  });
+}
+
 /** Pioche un texte de gage du niveau demandé ; repli soft si le niveau est vide.
     `names` (prénoms du salon) résout les gages nominatifs {joueur} ; sans noms,
     ils retombent sur des tournures génériques (« la personne à ta gauche »…). */
 export function pickGage(level = "soft", names = null) {
-  let pool = GAGES.filter((g) => g.niveau === level);
-  if (!pool.length) pool = GAGES.filter((g) => g.niveau === "soft");
+  let pool = actifs.filter((g) => g.niveau === level);
+  if (!pool.length) pool = actifs.filter((g) => g.niveau === "soft");
+  if (!pool.length) pool = GAGES.filter((g) => g.niveau === level); // les siens ne couvrent pas ce niveau
   return resolveNames(pick(pool).text, names || []);
 }

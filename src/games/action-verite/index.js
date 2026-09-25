@@ -3,7 +3,7 @@ import { createDeck } from "../../deck.js";
 import { levelSelector, LEVELS } from "../../levels.js";
 import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
 import { liveSession, peekAutoLive } from "../../realtime.js";
-import { pickGage } from "../../gages.js";
+import { pickGage, chargerGages, ouvrirMesGages } from "../../gages.js";
 import { stampGage, retournerCarte } from "../../fx.js";
 import { VERITES, ACTIONS } from "./data.js";
 
@@ -33,6 +33,7 @@ export function render(container, { game }) {
   buildDecks();
   if (peekAutoLive()) startLive(); else modeSelect(); // « suivre l'hôte » : salon direct
   reload();
+  chargerGages(); // gages du groupe (🎭 Mes gages), partagés par la soirée
 
   // Cleanup routeur : stoppe le salon multi si actif (déclarations suivantes hissées).
   return () => { if (liveStop) liveStop(); };
@@ -45,7 +46,10 @@ export function render(container, { game }) {
         el("button.btn.btn--full", { text: "📱 Sur ce téléphone", onClick: mainScreen }),
         el("button.btn.btn--full.btn--ghost", { text: "🌐 Multi-appareils (la roue désigne)", style: "margin-top:10px", onClick: startLive }),
       ]),
-      el("div.row", { style: "justify-content:center;margin-top:14px" }, [el("button.chip", { text: "✏️ Mes cartes", onClick: openEd })])
+      el("div.row", { style: "justify-content:center;gap:8px;margin-top:14px" }, [
+        el("button.chip", { text: "✏️ Mes cartes", onClick: openEd }),
+        el("button.chip", { text: "🎭 Mes gages", onClick: () => ouvrirMesGages(stage, modeSelect) }),
+      ])
     );
   }
 
@@ -285,6 +289,7 @@ export function render(container, { game }) {
         el("div.row", { style: "justify-content:center;margin-top:14px" }, [
           refuseBtn,
           el("button.chip", { text: "✏️ Mes cartes", onClick: openEd }),
+          el("button.chip", { text: "🎭 Mes gages", onClick: () => ouvrirMesGages(stage, mainScreen) }),
         ]),
       ])
     );

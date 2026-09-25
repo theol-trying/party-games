@@ -3,8 +3,32 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { lireNombre, estPile, classer } from "../src/games/estimations/regles.js";
-import { QUESTIONS } from "../src/games/estimations/data.js";
+import { lireNombre, estPile, classer, facteur, gorgees } from "../src/games/estimations/regles.js";
+import { QUESTIONS, THEMES } from "../src/games/estimations/data.js";
+
+test("gorgées selon l'écart : un facteur, pas une différence", () => {
+  assert.equal(facteur(100, 200), 2);
+  assert.equal(facteur(100, 50), 2); // deux fois trop peu = deux fois trop
+  assert.equal(facteur(1000000, 10000), 100);
+  assert.equal(facteur(0, 5), Infinity);
+  assert.equal(gorgees(100, 140), 1);  // ×1,4
+  assert.equal(gorgees(100, 150), 1);  // ×1,5 : limite incluse
+  assert.equal(gorgees(100, 40), 2);   // ÷2,5
+  assert.equal(gorgees(100, 300), 2);  // ×3 : limite incluse
+  assert.equal(gorgees(100, 301), 3);
+  assert.equal(gorgees(1000000, 10000), 3);
+  assert.equal(gorgees(100, null), 3); // pas de réponse = le pire
+});
+
+test("chaque question porte un thème connu, chaque thème a des questions", () => {
+  const ids = new Set(THEMES.map((t) => t.id));
+  const parTheme = {};
+  for (const q of QUESTIONS) {
+    assert.ok(ids.has(q.cat), `thème inconnu « ${q.cat} » : ${q.q}`);
+    parTheme[q.cat] = (parTheme[q.cat] || 0) + 1;
+  }
+  for (const t of THEMES) assert.ok(parTheme[t.id] >= 10, `thème ${t.id} trop maigre : ${parTheme[t.id] || 0}`);
+});
 
 test("lireNombre comprend les saisies à la française", () => {
   assert.equal(lireNombre("1 500"), 1500);

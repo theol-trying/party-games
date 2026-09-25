@@ -25,6 +25,25 @@ export function estPile(reponse, estimation) {
   return ecart <= EPS || ecart <= Math.abs(reponse) * 0.01 + EPS;
 }
 
+/** Facteur d'erreur d'une estimation : 1 = juste, 2 = deux fois trop (ou deux
+    fois trop peu). Un rapport et non une différence : se tromper de 100 000 sur
+    un million est moins grave que de 100 sur 50. Infinity si l'un vaut 0 et
+    pas l'autre (ou si une valeur est négative : pas de rapport qui ait du sens). */
+export function facteur(reponse, v) {
+  if (reponse === v) return 1;
+  if (!(reponse > 0) || !(v > 0)) return Infinity;
+  return Math.max(v / reponse, reponse / v);
+}
+
+/** Option « gorgées selon l'écart » : combien boit un perdant. 1 gorgée si on
+    reste à moins d'une fois et demie la réponse, 2 jusqu'à trois fois, 3 au-delà.
+    Pas de réponse = 3 (le pire écart possible). */
+export function gorgees(reponse, v) {
+  if (v == null) return 3;
+  const f = facteur(reponse, v);
+  return f <= 1.5 ? 1 : f <= 3 ? 2 : 3;
+}
+
 /**
  * Classe une manche.
  * @param {number} reponse

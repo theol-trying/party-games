@@ -13,6 +13,11 @@
   --text: #f2f2f7;
   --text-dim: #a0a0c0;
   --accent: #ff4d6d;
+  /* Texte posé SUR la couleur d'accent (boutons pleins, pastilles actives).
+     Foncé et non blanc : mesuré, le blanc n'atteint le contraste recommandé
+     (4,5:1) sur AUCUNE des 11 couleurs de jeu (1,4 à 3,7), le foncé si (4,7
+     à 12). Un jeu peut le teinter en redéfinissant --on-accent. */
+  --on-accent: #1a1a24;
   --accent-2: #4dd0e1;
   --border: rgba(255, 255, 255, 0.08);
   --radius: 18px;
@@ -237,6 +242,24 @@ body::after {
 .game-card__title { font-weight: 800; font-size: 18px; line-height: 1.2; }
 .game-card__desc { color: var(--text-dim); font-size: 13px; line-height: 1.45; }
 
+/* ⚙️ Réglages repliables d'un jeu (quiz, Estimations) : ouverts au début,
+   repliés ensuite sur une ligne avec leur résumé, pour laisser l'écran au jeu. */
+.reglages { margin-bottom: 14px; padding: 0; }
+.reglages > summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 14px 18px; min-height: 48px; cursor: pointer; list-style: none;
+  font-weight: 800;
+}
+.reglages > summary::-webkit-details-marker { display: none; }
+.reglages > summary::after { content: "▾"; color: var(--text-dim); transition: transform 0.2s ease; }
+.reglages[open] > summary::after { transform: rotate(180deg); }
+.reglages__resume {
+  flex: 1 1 auto; text-align: right; min-width: 0;
+  color: var(--text-dim); font-weight: 600; font-size: 13px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.reglages__corps { padding: 0 18px 16px; }
+
 /* Filtres par ambiance. Sur téléphone, la rangée défile horizontalement
    (jusqu'aux bords de l'écran) plutôt que de passer sur deux lignes. */
 .home-filtres {
@@ -316,7 +339,7 @@ body::after {
   appearance: none; border: none; cursor: pointer;
   font-family: inherit; font-size: 16px; font-weight: 700;
   padding: 14px 22px; border-radius: 14px;
-  background: var(--accent); color: #fff;
+  background: var(--accent); color: var(--on-accent);
   transition: transform 0.1s ease, filter 0.15s ease;
 }
 .btn:hover { filter: brightness(1.08); }
@@ -351,7 +374,7 @@ body::after {
   background: var(--bg-soft); border: 1px solid var(--border);
   font-family: inherit; font-size: 14px; cursor: pointer; color: var(--text-dim);
 }
-.chip.is-active { background: var(--accent); color: #fff; border-color: transparent; }
+.chip.is-active { background: var(--accent); color: var(--on-accent); border-color: transparent; }
 
 /* Le contenu d'une manche est LA carte qu'on se passe : on lui donne une
    matière (relief, liseré à la couleur du jeu, ombre portée) au lieu d'un

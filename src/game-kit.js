@@ -26,6 +26,42 @@ export function contentSource(gameId, { builtIn, keyOf = (x) => x, toValue = (e)
 }
 
 /**
+ * Sélecteur de thèmes repliable (multi-sélection), partagé par le quiz et
+ * Estimations. `selected` est un Set d'ids muté en place ; onChange() est
+ * rappelé après chaque changement. Au moins un thème reste toujours actif.
+ * Les cartes perso (sans thème) restent incluses : c'est au filtre du jeu d'y veiller.
+ *
+ * @param {Array<{id:string,label:string}>} themes
+ * @param {Set<string>} selected
+ * @param {()=>void} onChange
+ * @param {object} [opts]  { titre } — libellé du résumé (déf. « 🗂️ Catégories »)
+ */
+export function themeSelector(themes, selected, onChange, { titre = "🗂️ Catégories" } = {}) {
+  const chips = {};
+  const summary = el("summary");
+  const row = el("div.row", { style: "flex-wrap:wrap;justify-content:center;gap:6px;margin-top:8px" });
+  const refreshSummary = () => { summary.textContent = `${titre} (${selected.size}/${themes.length})`; };
+  const paint = () => { for (const t of themes) chips[t.id].classList.toggle("is-active", selected.has(t.id)); refreshSummary(); };
+  themes.forEach((t) => {
+    const chip = el("button.chip", { text: t.label, type: "button" });
+    chip.addEventListener("click", () => {
+      if (selected.has(t.id)) { if (selected.size <= 1) return; selected.delete(t.id); } // garder ≥ 1
+      else selected.add(t.id);
+      paint();
+      onChange();
+    });
+    chips[t.id] = chip;
+    row.appendChild(chip);
+  });
+  const quick = el("div.row", { style: "justify-content:center;gap:8px;margin-top:8px" }, [
+    el("button.chip", { text: "Tout", type: "button", onClick: () => { themes.forEach((t) => selected.add(t.id)); paint(); onChange(); } }),
+    el("button.chip", { text: "Rien sauf 1", type: "button", onClick: () => { selected.clear(); selected.add(themes[0].id); paint(); onChange(); } }),
+  ]);
+  paint();
+  return el("details.ed-bulk", { style: "margin-top:10px" }, [summary, row, quick]);
+}
+
+/**
  * Boucle « passe le téléphone » : pour chaque joueur, un écran tampon
  * « Passe le téléphone à X », puis SON écran privé rendu par onPlayer.
  *

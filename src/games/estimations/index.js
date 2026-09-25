@@ -16,13 +16,13 @@ import { createDeck } from "../../deck.js";
 import { makeSeen } from "../../seen.js";
 import { createScores, scoreboard, podium, compteur } from "../../scoring.js";
 import { openEditor } from "../../content.js";
-import { contentSource, passThePhone } from "../../game-kit.js";
+import { contentSource, passThePhone, themeSelector } from "../../game-kit.js";
 import { liveSession, syncCountdown, peekAutoLive } from "../../realtime.js";
 import { tick, vibrate, vibrateTap } from "../../sound.js";
 import { celebrate, stampGage } from "../../fx.js";
 import { awardStanding } from "../../crown.js";
-import { lireNombre, classer } from "./regles.js";
-import { QUESTIONS } from "./data.js";
+import { lireNombre, classer, facteur, gorgees } from "./regles.js";
+import { QUESTIONS, THEMES } from "./data.js";
 
 const SCHEMA = {
   title: "Estimations",
@@ -48,6 +48,37 @@ const formater = (v, unite) => (!unite && Math.abs(v) < 10000 ? nfSansEspace : n
 const nombre = (v, unite) => formater(v, unite) + (unite ? " " + unite : "");
 /** Nombre de décimales à montrer pendant que la réponse défile (9,58 → 2). */
 const decimales = (v) => (String(v).split(".")[1] || "").length;
+const nf1 = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 });
+/** « ×5,7 » (trop haut) ou « ÷4 » (trop bas), à partir d'une fois et demie. */
+function ecartEnFois(reponse, v) {
+  const f = facteur(reponse, v);
+  if (!Number.isFinite(f) || f < 1.5) return "";
+  return (v > reponse ? " · ×" : " · ÷") + nf1.format(f);
+}
+const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? "s" : ""}`;
+
+/** Réglages communs aux deux modes : thèmes + gorgées selon l'écart.
+    `etat` = { cats:Set, gorgees:bool } est muté en place ; onChange() après chaque
+    modification (le deck refiltre, le résumé se met à jour). */
+function blocReglages(etat, onChange) {
+  const toggle = el("button.chip", { type: "button" });
+  const peindre = () => {
+    toggle.textContent = etat.gorgees ? "🍺 Gorgées selon l'écart : oui" : "🍺 Gorgées selon l'écart : non";
+    toggle.classList.toggle("is-active", etat.gorgees);
+    toggle.setAttribute("aria-pressed", String(etat.gorgees));
+  };
+  toggle.addEventListener("click", () => { etat.gorgees = !etat.gorgees; peindre(); onChange(); });
+  peindre();
+  return el("div", {}, [
+    themeSelector(THEMES, etat.cats, onChange, { titre: "🗂️ Thèmes" }),
+    el("div.row", { style: "justify-content:center;margin-top:10px" }, [toggle]),
+    el("p.screen__subtitle", {
+      text: "Option gorgées : le plus loin boit 1 gorgée s'il reste à moins d'une fois et demie la réponse, 2 jusqu'à trois fois, 3 au-delà.",
+      style: "margin-top:8px;font-size:12px;text-align:center",
+    }),
+  ]);
+}
+const resumeReglages = (etat) => `${etat.cats.size}/${THEMES.length} thèmes${etat.gorgees ? " · 🍺 selon l'écart" : ""}`;
 
 export function render(container, { game }) {
   container.append(screenHead(game.title, "Le plus proche marque, le plus loin boit", game.id));
@@ -127,12 +158,26 @@ export function render(container, { game }) {
     const deck = createDeck(questions(), { seen, keyOf: qKey });
     const sc = createScores("estimations", players);
     let manche = 0;
+    // Réglages de la partie : tous les thèmes, gorgées fixes (1) par défaut.
+    const etat = { cats: new Set(THEMES.map((t) => t.id)), gorgees: false };
+    const filtre = (q) => !q.cat || etat.cats.has(q.cat); // cartes perso (sans thème) toujours incluses
+    deck.setFilter(filtre);
 
     function question() {
       const item = deck.next();
       manche++;
       const estimations = {};
+      // ⚙️ Ouverts à la 1re manche, repliés ensuite (comme le quiz) ; l'état vit
+      // dans `etat`, donc le bloc recréé à chaque manche garde les choix faits.
+      const resume = el("span.reglages__resume", { text: resumeReglages(etat) });
+      const reglages = el("details.card.reglages", manche === 1 ? { open: "" } : {}, [
+        el("summary", {}, [el("span", { text: "⚙️ Réglages" }), resume]),
+        el("div.reglages__corps", {}, [
+          blocReglages(etat, () => { deck.setFilter(filtre); resume.textContent = resumeReglages(etat); }),
+        ]),
+      ]);
       showPhase(stage,
+        reglages,
         el("div.card.center", {}, [
           el("p.screen__subtitle", { text: `Manche ${manche} · à lire à voix haute` }),
           el("h2.big-prompt.es-question", { text: item.q }),
@@ -150,26 +195,28 @@ export function render(container, { game }) {
                   champEstimation(item.unite, (v) => { estimations[p] = v; vibrateTap(); next(); }),
                 ])
               ),
-              onDone: () => revelationSolo(item, estimations),
+              onDone: () => revelationSolo(item, estimations, etat.gorgees),
             }),
           }),
         ])
       );
     }
 
-    function revelationSolo(item, estimations) {
+    function revelationSolo(item, estimations, avecGorgees) {
       const r = classer(item.reponse, players.map((p) => ({ id: p, v: estimations[p] })));
       Object.entries(r.points).forEach(([p, n]) => sc.add(p, n));
-      const bilan = verdict(r, (id) => id);
+      const boire = aBoire(r, item.reponse, avecGorgees);
+      const nom = (id) => id;
+      const bilan = verdict(r, nom, boire, avecGorgees);
       announce(`Réponse : ${nombre(item.reponse, item.unite)}. ${bilan.texte}`);
       if (r.gagnants.length) celebrate();
-      if (r.perdants.length) setTimeout(() => stampGage(`${r.perdants.join(" et ")} ${r.perdants.length > 1 ? "boivent" : "boit"} une gorgée 🍺`), 900);
+      if (Object.keys(boire).length) setTimeout(() => stampGage(texteBoire(boire, nom, avecGorgees)), 900);
 
       const scoreWrap = el("div", {}, [scoreboard(sc.scores, { podium: true })]);
       showPhase(stage,
         el("div.card.center", {}, [
           blocReponse(item, true),
-          lignesEstimations(r, item.unite, (id) => id, {}),
+          lignesEstimations(r, item, nom, { boire, avecGorgees }),
           bilan.noeud,
         ]),
         el("div.card", { style: "margin-top:14px" }, [
@@ -196,6 +243,11 @@ export function render(container, { game }) {
     cdRound = fxRound = defileRound = envoye.n = -1;
     const deck = createDeck(questions(), { seen, keyOf: qKey });
     const scores = {}; // deviceId → total (converge sur tous les téléphones via meta.base)
+    // Réglages de l'hôte : c'est lui qui tire les questions (deck filtré chez lui)
+    // et l'option gorgées part avec chaque manche, pour un verdict identique partout.
+    const etat = { cats: new Set(THEMES.map((t) => t.id)), gorgees: false };
+    const filtre = (q) => !q.cat || etat.cats.has(q.cat);
+    deck.setFilter(filtre);
 
     liveStop = liveSession(stage, {
       gameId: "estimations",
@@ -205,6 +257,7 @@ export function render(container, { game }) {
       revealLabel: "Révéler les estimations",
       newRoundLabel: "Question suivante →",
       onExit: modeSelect,
+      lobbyExtra: () => el("div", { style: "margin:10px 0" }, [blocReglages(etat, () => deck.setFilter(filtre))]),
       assign: (ps) => {
         const item = deck.next() || { q: "?", reponse: 0, unite: "" };
         const base = {};
@@ -212,7 +265,7 @@ export function render(container, { game }) {
         ps.forEach((p) => { base[p.id] = scores[p.id] || 0; roles[p.id] = true; });
         // La réponse voyage avec la manche (comme la bonne réponse du quiz) ;
         // l'interface ne l'affiche jamais avant la révélation.
-        return { roles, meta: { q: item.q, reponse: item.reponse, unite: item.unite || "", info: item.info || "", base } };
+        return { roles, meta: { q: item.q, reponse: item.reponse, unite: item.unite || "", info: item.info || "", base, gorgees: etat.gorgees } };
       },
       renderMine: (mine, ctx) => liveRound(ctx),
       renderReveal: (live, ctx) => liveReveal(live, scores, ctx),
@@ -275,13 +328,16 @@ export function render(container, { game }) {
     ids.forEach((id) => { scores[id] = (base[id] || 0) + (r.points[id] || 0); });
     const nom = (id) => names[id] || "?";
     const me = api.me;
+    const avecGorgees = meta.gorgees === true; // réglage de l'hôte, transmis avec la manche
+    const boire = aBoire(r, meta.reponse, avecGorgees);
 
     // Effets personnels, une seule fois par manche (pas à « Revoir la révélation »).
     if (n != null && n !== fxRound) {
       fxRound = n;
       if (r.gagnants.includes(me)) celebrate();
-      else if (r.perdants.includes(me) || r.absents.includes(me)) {
-        setTimeout(() => stampGage(r.absents.includes(me) ? "Pas de réponse : tu bois une gorgée 🍺" : "Le plus loin : tu bois une gorgée 🍺"), 900);
+      else if (boire[me]) {
+        const combien = pluriel(boire[me], "gorgée");
+        setTimeout(() => stampGage(r.absents.includes(me) ? `Pas de réponse : tu bois ${combien} 🍺` : `Le plus loin : tu bois ${combien} 🍺`), 900);
       }
       // 👑 Roi de la soirée : l'hôte seul contribue (sinon compté une fois par téléphone).
       if (api.isHost()) awardStanding("estimations", [...ids].sort((a, b) => scores[b] - scores[a]), names, live.avatars || {});
@@ -289,10 +345,10 @@ export function render(container, { game }) {
     const defile = n == null || n !== defileRound;
     if (n != null) defileRound = n;
 
-    const bilan = verdict(r, nom);
+    const bilan = verdict(r, nom, boire, avecGorgees);
     return el("div.center", {}, [
       blocReponse(meta, defile),
-      lignesEstimations(r, meta.unite, nom, { moi: me }),
+      lignesEstimations(r, meta, nom, { moi: me, boire, avecGorgees }),
       bilan.noeud,
       el("h3", { text: "Classement", style: "margin-top:18px" }),
       podium([...ids].sort((a, b) => scores[b] - scores[a]).map((id) => ({
@@ -318,19 +374,38 @@ export function render(container, { game }) {
     ]);
   }
 
+  /** Qui boit, et combien : id → gorgées. Le(s) plus loin(s) et les absents ;
+      1 gorgée chacun, ou selon l'écart si l'option est active (absent = 3). */
+  function aBoire(r, reponse, avecGorgees) {
+    const m = {};
+    for (const l of r.lignes) if (r.perdants.includes(l.id)) m[l.id] = avecGorgees ? gorgees(reponse, l.v) : 1;
+    for (const id of r.absents) m[id] = avecGorgees ? gorgees(reponse, null) : 1;
+    return m;
+  }
+
+  /** « Chloé boit 3 gorgées 🍺 », « Bob et Chloé boivent une gorgée 🍺 »… */
+  function texteBoire(boire, nom, avecGorgees) {
+    const ids = Object.keys(boire);
+    if (!avecGorgees) return `${ids.map(nom).join(" et ")} ${ids.length > 1 ? "boivent" : "boit"} une gorgée 🍺`;
+    return ids.map((id) => `${nom(id)} boit ${pluriel(boire[id], "gorgée")}`).join(", ") + " 🍺";
+  }
+
   /** Les estimations, de la plus proche à la plus lointaine. */
-  function lignesEstimations(r, unite, nom, { moi } = {}) {
+  function lignesEstimations(r, item, nom, { moi, boire = {}, avecGorgees = false } = {}) {
+    const { unite, reponse } = item;
     const lignes = r.lignes.map((l) => {
       const gagne = r.points[l.id];
-      const boit = r.perdants.includes(l.id);
+      const boit = boire[l.id];
       return el("div.es-ligne" + (gagne ? ".is-gagnant" : boit ? ".is-perdant" : ""), {}, [
         el("span.es-ligne__rang", { text: gagne ? "🎯" : boit ? "🍺" : `${l.rang}.` }),
         el("span.es-ligne__nom", { text: nom(l.id) + (l.id === moi ? " (toi)" : "") }),
         el("span.es-ligne__val", {}, [
           el("strong", { text: nombre(l.v, unite) }),
-          el("small", { text: l.ecart <= 1e-9 ? "pile !" : `à ${nombre(l.ecart, unite)}` }),
+          // L'écart en « fois » parle mieux que la différence brute sur les gros nombres.
+          el("small", { text: l.ecart <= 1e-9 ? "pile !" : `à ${nombre(l.ecart, unite)}${ecartEnFois(reponse, l.v)}` }),
         ]),
-        gagne ? el("span.es-ligne__pts", { text: `+${gagne}` }) : null,
+        gagne ? el("span.es-ligne__pts", { text: `+${gagne}` })
+          : boit && avecGorgees ? el("span.es-ligne__pts.is-boit", { text: `${boit} 🍺` }) : null,
       ]);
     });
     const absents = r.absents.map((id) =>
@@ -338,19 +413,24 @@ export function render(container, { game }) {
         el("span.es-ligne__rang", { text: "⏳" }),
         el("span.es-ligne__nom", { text: nom(id) + (id === moi ? " (toi)" : "") }),
         el("span.es-ligne__val", {}, [el("small", { text: "pas de réponse" })]),
+        avecGorgees ? el("span.es-ligne__pts.is-boit", { text: `${boire[id]} 🍺` }) : null,
       ])
     );
     return el("div.es-lignes", {}, [...lignes, ...absents]);
   }
 
-  /** Phrase de bilan : qui marque, qui boit. */
-  function verdict(r, nom) {
+  /** Phrase de bilan : qui marque, qui boit (et combien, avec l'option). */
+  function verdict(r, nom, boire, avecGorgees) {
     const liste = (ids) => ids.map(nom).join(" et ");
     const morceaux = [];
     const plusieurs = r.gagnants.length > 1;
     if (r.gagnants.length) morceaux.push(`🎯 ${liste(r.gagnants)} ${r.pile ? (plusieurs ? "tombent pile : +2 !" : "tombe pile : +2 !") : (plusieurs ? "marquent +1" : "marque +1")}`);
-    const boivent = [...r.perdants, ...r.absents];
-    if (boivent.length) morceaux.push(`🍺 ${liste(boivent)} ${boivent.length > 1 ? "boivent" : "boit"}`);
+    const boivent = Object.keys(boire);
+    if (boivent.length) {
+      morceaux.push(avecGorgees
+        ? "🍺 " + boivent.map((id) => `${nom(id)} : ${pluriel(boire[id], "gorgée")}`).join(", ")
+        : `🍺 ${liste(boivent)} ${boivent.length > 1 ? "boivent" : "boit"}`);
+    }
     if (!morceaux.length) morceaux.push("Personne n'a répondu…");
     const texte = morceaux.join(" · ");
     return { texte, noeud: el("p.es-verdict", { text: texte }) };

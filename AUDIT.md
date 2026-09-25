@@ -28,17 +28,17 @@ support hors-ligne, sons et confettis.
 |---|---|
 | Quiz à gages | 2549 questions · 26 catégories · 0 malformée · 0 doublon |
 | Je n'ai jamais | 743 phrases (374 soft / 247 soirée / 122 18+), dont 23 d'actu 2025-2026 |
-| Action ou Vérité | 687 cartes (348 actions + 339 vérités) |
-| Qui est le plus susceptible | 245 affirmations |
+| Action ou Vérité | 707 cartes (358 actions + 349 vérités), dont 20 d'actu 2025-2026 |
+| Qui est le plus susceptible | 266 affirmations, dont 21 d'actu 2025-2026 |
 | Undercover | 239 paires, dont 26 d'actu 2025-2026 |
 | Tu préfères | 232 dilemmes, dont 23 d'actu 2025-2026 |
-| Le Menteur | 189 missions |
+| Le Menteur | 207 missions, dont 18 d'actu 2025-2026 |
 | Cadavre exquis | 27 ouvertures · 95 amorces · 25 clôtures · 6 thèmes |
-| Estimations | 212 questions « combien de… ? » sur 18 thèmes (réponses numériques et positives, testées) |
+| Estimations | 212 questions « combien de… ? » en 8 thèmes au choix (réponses numériques et positives, testées) |
 | Baccalauréat | 8 catégories · 20 lettres |
 | Blind Test | 45 pistes pour « joue-la toi-même » + recherche d'extraits de 30 s (Apple Music / Deezer) |
 
-Gages partagés : 178.
+Gages partagés : 178, plus les gages du groupe (🎭 Mes gages : ajout, désactivation, « seulement les nôtres »).
 
 ## 3. Architecture
 
