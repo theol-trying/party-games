@@ -13,7 +13,7 @@ import { tick, vibrate, vibrateSuccess, vibrateTap } from "../../sound.js";
 import { confettiBurst, celebrate, stampGage } from "../../fx.js";
 import { awardStanding } from "../../crown.js";
 import { bump, bumpMany } from "../../stats.js";
-import { QUESTIONS, CATEGORIES } from "./data.js";
+import { CATEGORIES } from "./categories.js";
 import { de } from "../../names.js";
 
 // Points d'une bonne réponse : base + bonus de rapidité selon le rang d'arrivée.
@@ -66,7 +66,20 @@ export function render(container, { game }) {
   const stage = el("div");
   container.append(stage);
 
-  const src = contentSource("quiz-gages", { builtIn: QUESTIONS, keyOf: (q) => q.q, toValue: toQuestion });
+  // Les ~2 500 questions (27 fichiers) arrivent en arrière-plan : le menu
+  // s'affiche tout de suite, et tout ce qui a besoin des questions les attend.
+  let QUESTIONS = [];
+  let questionsPretes = false;
+  const donnees = import("./data.js").then((m) => { QUESTIONS = m.QUESTIONS; questionsPretes = true; }, (e) => {
+    // Réseau coupé pendant le chargement : on le dit, au lieu d'attendre en silence.
+    console.error(e);
+    showPhase(stage, el("div.card.center", {}, [
+      el("p", { text: "😵 Les questions n'ont pas pu se charger — la connexion a sans doute sauté." }),
+      el("button.btn", { text: "🔄 Réessayer", style: "margin-top:12px", onClick: () => location.reload() }),
+    ]));
+    return new Promise(() => {}); // ceux qui attendent les questions restent en attente
+  });
+  const src = contentSource("quiz-gages", { builtIn: () => QUESTIONS, keyOf: (q) => q.q, toValue: toQuestion });
   let liveStop = null;
   let quizFxRound = -1; // manche dont les FX du reveal ont déjà été joués (anti-refire)
   let quizScoresRound = -1; // manche dont les scores ont déjà défilé (même logique)
@@ -77,7 +90,7 @@ export function render(container, { game }) {
   const seen = makeSeen("quiz-gages"); // anti-répétition entre soirées
   const qKey = (q) => q.q; // identité d'une question
   if (peekAutoLive()) startLive(); else modeSelect(); // « suivre l'hôte » : salon direct
-  src.reload();
+  donnees.then(() => src.reload()); // recharge APRÈS les questions : le paquet multi se reconstruit (paquetSuivi)
   chargerGages(); // gages du groupe (🎭 Mes gages), partagés par la soirée
 
   // Cleanup routeur : stoppe les timers/socket du mode multi si actif.
@@ -123,7 +136,8 @@ export function render(container, { game }) {
       ])
     );
   }
-  function openEd() {
+  async function openEd() {
+    if (!questionsPretes) await donnees;
     openEditor(stage, { gameId: "quiz-gages", schema: SCHEMA, builtInList: builtInList(), onDone: async () => { await src.reload(); modeSelect(); }, onReshuffle: () => seen.clear() });
   }
 
@@ -151,6 +165,7 @@ export function render(container, { game }) {
      la manche : l'UI ne l'affiche jamais avant la révélation — acceptable pour un
      jeu de soirée.) */
   function startLive() {
+    if (!questionsPretes) return void donnees.then(startLive); // (le salon attend les questions, une fraction de seconde)
     if (!questions().length) {
       showPhase(stage, el("div.card.center", {}, [
         el("p", { text: "Aucune question active — ajoute-en ou change la source via ✏️ Mes cartes." }),
@@ -181,6 +196,13 @@ export function render(container, { game }) {
       revealLabel: "Révéler les réponses",
       newRoundLabel: "Question suivante →",
       onExit: modeSelect,
+      reglages: {
+        lire: () => ({ level, cats: [...cats] }),
+        ecrire: (r) => {
+          if (r.level) level = r.level;
+          if (Array.isArray(r.cats) && r.cats.length) { cats.clear(); r.cats.forEach((c) => cats.add(c)); deck.setFilter(catFilter); }
+        },
+      },
       lobbyExtra: () => {
         const ui = levelSelector({ initial: level, onChange: (v) => (level = v) });
         return el("div", { style: "margin:10px 0" }, [
@@ -411,6 +433,7 @@ export function render(container, { game }) {
   }
 
   function startGame(players, scoreKey = "quiz-gages") {
+    if (!questionsPretes) return void donnees.then(() => startGame(players, scoreKey));
     if (!questions().length) {
       showPhase(stage, el("div.card.center", {}, [
         el("p", { text: "Aucune question active — ajoute-en ou change la source via ✏️ Mes cartes." }),

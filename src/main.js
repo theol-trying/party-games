@@ -10,6 +10,7 @@ import { currentRoom, newRoom, setRoom, normalizeCode } from "./room.js";
 import { qrCanvas } from "./qr.js";
 import { gameArt } from "./art.js";
 import { resumeInfo, requestAutoLive } from "./realtime.js";
+import { chargerReglagesSoiree, changerSansAlcool, estSansAlcool } from "./gorgees.js";
 
 const app = document.getElementById("app");
 
@@ -77,7 +78,10 @@ function roomBanner() {
     renderHome();
   });
 
-  const actions = el("div.room-banner__actions", {}, [shareBtn, qrBtn, joinBtn, newBtn]);
+  // 👑 Palmarès (Roi de la soirée + compteur de gorgées), aussi pour les
+  // parties sur un seul téléphone — avant, il n'était accessible que depuis un salon.
+  const palmaresBtn = el("a.chip", { text: "👑 Palmarès", href: "#/palmares" });
+  const actions = el("div.room-banner__actions", {}, [shareBtn, qrBtn, palmaresBtn, joinBtn, newBtn]);
 
   joinBtn.addEventListener("click", () => {
     const input = el("input.input.room-banner__input", { placeholder: "CODE", maxlength: "8", "aria-label": "Code de la soirée à rejoindre" });
@@ -176,6 +180,19 @@ function renderHome() {
       ])
     : null;
 
+  // 🥤 Soirée sans alcool : réglage partagé par tous les téléphones de la soirée.
+  const soft = el("button.chip.home-soft", { type: "button" });
+  const peindreSoft = () => {
+    soft.textContent = estSansAlcool() ? "🥤 Soirée sans alcool : oui" : "🥤 Soirée sans alcool : non";
+    soft.classList.toggle("is-active", estSansAlcool());
+    soft.setAttribute("aria-pressed", String(estSansAlcool()));
+  };
+  soft.addEventListener("click", async () => { await changerSansAlcool(!estSansAlcool()); renderHome(); });
+  peindreSoft();
+  chargerReglagesSoiree().then((v) => { if (v !== soft.classList.contains("is-active")) renderHome(); });
+  hero.append(el("div", { style: "margin-top:12px" }, [soft]));
+  if (estSansAlcool()) hero.append(el("p.screen__subtitle", { text: "Mêmes jeux, mêmes règles : chaque gorgée se boit en soft (eau, jus, soda…).", style: "margin-top:6px" }));
+
   frag.append(
     roomBanner(),
     ...(rejouer ? [rejouer] : []),
@@ -208,6 +225,7 @@ async function renderGame(id, token) {
 
   document.title = `${game.title} — Soirée`;
   ensureGameStyle(game.id);
+  chargerReglagesSoiree(); // (invité arrivé par lien : il n'est pas passé par l'accueil)
   ecrireLocal(CLE_DERNIER_JEU, game.id); // pour le raccourci « Rejouer à … » de l'accueil
 
   mount(el("div.center", {}, [el("p.screen__subtitle", { text: "Chargement…" })]));
@@ -301,6 +319,21 @@ function renderTVEntry() {
   ])]));
 }
 
+/* ---------- Palmarès hors salon ---------- */
+async function renderPalmares(token) {
+  document.title = "👑 Palmarès — Soirée";
+  const container = el("div.screen", { dataset: { game: "home" } });
+  mount(container);
+  try {
+    const { openCrown } = await import("./crown.js");
+    if (token !== routeToken) return;
+    await openCrown(container, { onBack: () => { location.hash = "#/"; }, isHost: true, me: null });
+  } catch (err) {
+    console.error(err);
+    container.replaceChildren(el("div.placeholder", {}, [el("p", { text: "Palmarès indisponible." })]));
+  }
+}
+
 /* ---------- Écran « jeu introuvable » ---------- */
 function renderNotFound() {
   document.title = "Introuvable — Soirée";
@@ -338,6 +371,8 @@ function router() {
   // Écran TV / spectateur : #/tv (saisie du code) ou #/tv/CODE.
   const tvm = hash.match(/^#\/tv(?:\/([A-Za-z0-9]{1,8}))?/);
   if (tvm) return renderTV(tvm[1] ? tvm[1].toUpperCase() : null, token);
+
+  if (/^#\/palmares/.test(hash)) return renderPalmares(token);
 
   const m = hash.match(/^#\/jeu\/([\w-]+)/);
   if (m) renderGame(m[1], token);

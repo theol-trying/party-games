@@ -901,3 +901,11 @@ select:focus-visible {
 /* iPhone : réserve sous le contenu de jeu pour que le dernier bouton ne passe
    jamais sous la barre de navigation de Safari (signalé sur iPhone 13). */
 .app-main { padding-bottom: calc(clamp(20px, 5vw, 40px) + env(safe-area-inset-bottom, 0px)); }
+
+/* À qui le tour (Action ou Vérité, Je n'ai jamais — sur un seul téléphone). */
+.av-tour, .jj-lecteur { font-weight: 800; color: var(--accent); margin: 0 0 8px; text-align: center; }
+.jj-coupables .chip.is-active { font-weight: 800; }
+
+/* L'attribut hidden doit gagner sur les display des composants (.chip,
+   .btn…) : sans cette règle, un bouton « caché » restait affiché. */
+[hidden] { display: none !important; }

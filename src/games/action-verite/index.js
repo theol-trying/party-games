@@ -7,6 +7,9 @@ import { liveSession, peekAutoLive } from "../../realtime.js";
 import { pickGage, chargerGages, ouvrirMesGages } from "../../gages.js";
 import { stampGage, retournerCarte } from "../../fx.js";
 import { VERITES, ACTIONS } from "./data.js";
+import { playersCard } from "../../players.js";
+import { de } from "../../names.js";
+import { compterGorgees } from "../../gorgees.js";
 
 const LEVEL_LABEL = { soft: "Soft", soiree: "Soirée", x18: "18+" };
 
@@ -25,6 +28,8 @@ export function render(container, { game }) {
   let custom = [];
   let config = { onlyCustom: false, disabled: {} };
   const decks = { verite: {}, action: {} };
+  let joueursSolo = null; // prénoms du mode « sur ce téléphone » (facultatifs)
+  let tourSolo = 0; // à qui le tour
   // Anti-répétition entre soirées, comme les autres jeux : les cartes déjà
   // tirées reviennent en dernier (et « Tout remélanger » dans ✏️ Mes cartes).
   const seen = makeSeen("action-verite");
@@ -47,7 +52,7 @@ export function render(container, { game }) {
     showPhase(stage,
       el("div.card.center", {}, [
         el("h3", { text: "Comment jouer ?" }),
-        el("button.btn.btn--full", { text: "📱 Sur ce téléphone", onClick: mainScreen }),
+        el("button.btn.btn--full", { text: "📱 Sur ce téléphone", onClick: choixJoueurs }),
         el("button.btn.btn--full.btn--ghost", { text: "🌐 Multi-appareils (la roue désigne)", style: "margin-top:10px", onClick: startLive }),
       ]),
       el("div.row", { style: "justify-content:center;gap:8px;margin-top:14px" }, [
@@ -73,6 +78,11 @@ export function render(container, { game }) {
       revealLabel: "Récap de la manche",
       newRoundLabel: "🎯 Joueur suivant",
       onExit: modeSelect,
+      // La rotation voyage aussi : un nouvel hôte continue avec le joueur suivant.
+      reglages: {
+        lire: () => ({ level, turn }),
+        ecrire: (r) => { if (r.level) level = r.level; if (Number.isInteger(r.turn)) turn = r.turn; },
+      },
       lobbyExtra: () => {
         const ui = levelSelector({ initial: level, onChange: (v) => (level = v) });
         return el("div", { style: "margin:10px 0" }, [
@@ -187,7 +197,7 @@ export function render(container, { game }) {
 
         return [head, zone];
       },
-      renderReveal: (live) => {
+      renderReveal: (live, { api, n }) => {
         const meta = live.meta || {};
         const inputs = live.inputs || {};
         const names = live.names || {};
@@ -197,6 +207,7 @@ export function render(container, { game }) {
         const bettors = Object.keys(names).filter((id) => id !== meta.target && inputs[id] && inputs[id].bet);
         const right = ch ? bettors.filter((id) => inputs[id].bet === ch) : [];
         const wrong = ch ? bettors.filter((id) => inputs[id].bet !== ch) : [];
+        if (api.isHost()) compterGorgees(wrong.map((id) => ({ id, nom: names[id], avatar: (live.avatars || {})[id], n: 1 })), { manche: "action-verite:" + n });
         return el("div", {}, [
           el("h3", { text: `Récap — ${meta.targetName || "?"}` }),
           ch
@@ -254,15 +265,45 @@ export function render(container, { game }) {
     return out;
   }
 
+  // Prénoms facultatifs : avec eux, le téléphone désigne qui joue, tour après
+  // tour, et les gages nominatifs visent les autres joueurs.
+  function choixJoueurs() {
+    showPhase(stage,
+      playersCard({ min: 2, cta: "C'est parti →", onReady: (noms) => { joueursSolo = noms; tourSolo = 0; mainScreen(); } }),
+      el("div.row", { style: "justify-content:center;margin-top:14px" }, [
+        el("button.chip", { text: "Jouer sans prénoms", onClick: () => { joueursSolo = null; mainScreen(); } }),
+        el("button.chip", { text: "← Mode", onClick: modeSelect }),
+      ])
+    );
+  }
+
   function mainScreen() {
-    const promptBox = el("div.big-prompt.av-prompt", { text: "Prêt·e ? Choisis Action ou Vérité." });
+    const noms = joueursSolo;
+    const courant = () => (noms ? noms[tourSolo % noms.length] : null);
+    const invite = () => (noms ? `${courant()}, Action ou Vérité ?` : "Prêt·e ? Choisis Action ou Vérité.");
+    const promptBox = el("div.big-prompt.av-prompt", { text: invite() });
     const tag = el("div.av-tag");
+    const tourLigne = el("p.av-tour", { text: noms ? `🎯 Au tour ${de(courant())}` : "" });
+    const suivantBtn = el("button.btn.btn--full.btn--ghost", {
+      text: "👉 Joueur suivant",
+      style: "margin-top:12px;display:none",
+      onClick: () => {
+        tourSolo++;
+        tourLigne.textContent = `🎯 Au tour ${de(courant())}`;
+        tag.textContent = "";
+        delete tag.dataset.kind;
+        refuseBtn.style.display = "none";
+        suivantBtn.style.display = "none";
+        retournerCarte(promptBox, () => { promptBox.textContent = typo(invite()); });
+      },
+    });
     // Refuser sa carte coûte un gage tiré au sort (même niveau).
     const refuseBtn = el("button.chip", {
       text: "🙅 Je refuse → gage",
       style: "display:none",
       onClick: () => {
-        const g = pickGage(level);
+        // Gage nominatif : il vise un AUTRE joueur que celui qui refuse.
+        const g = pickGage(level, noms ? noms.filter((n) => n !== courant()) : null);
         tag.textContent = "⚡ Gage";
         tag.dataset.kind = "gage"; // sinon il gardait la couleur de la carte refusée
         promptBox.textContent = typo(g);
@@ -282,6 +323,7 @@ export function render(container, { game }) {
         tag.textContent = kind === "verite" ? "🗣️ Vérité" : "🔥 Action";
         tag.dataset.kind = kind;
         refuseBtn.style.display = card ? "" : "none"; // avec la carte, pas avant
+        if (noms) suivantBtn.style.display = "";
       });
     }
 
@@ -290,12 +332,14 @@ export function render(container, { game }) {
     stage.replaceChildren(
       el("div.card.av-card", {}, [
         el("div", { style: "margin-bottom:18px" }, [levelUI.node]),
+        noms ? tourLigne : null,
         tag,
         promptBox,
         el("div.row", { style: "justify-content:center;margin-top:22px" }, [
           el("button.btn.av-btn-verite", { text: "Vérité", onClick: () => draw("verite") }),
           el("button.btn.av-btn-action", { text: "Action", onClick: () => draw("action") }),
         ]),
+        suivantBtn,
         el("div.row", { style: "justify-content:center;margin-top:14px" }, [
           refuseBtn,
           el("button.chip", { text: "✏️ Mes cartes", onClick: openEd }),

@@ -10,7 +10,14 @@ import { gameArt } from "./art.js";
     de ligne. Appliquée au rendu (et non dans les données) : le texte d'une carte
     reste sa clé — anti-répétition, cartes désactivées, paquets exportés. */
 export function typo(texte) {
-  return String(texte).replace(/ ([?!:;»])/g, "\u00a0$1").replace(/« /g, "«\u00a0");
+  const t = String(texte).replace(/ ([?!:;»])/g, "\u00a0$1").replace(/« /g, "«\u00a0");
+  // Soirée « sans alcool » (voir gorgees.js) : les mêmes gorgées, en soft.
+  return SANS_ALCOOL ? t.replace(/🍺|🍻|🍷|🥃|🍸|🍹|🍾/gu, "🥤") : t;
+}
+let SANS_ALCOOL = false;
+/** Réglé par gorgees.js selon le réglage partagé de la soirée. */
+export function reglerSansAlcool(v) {
+  SANS_ALCOOL = v === true;
 }
 
 /** Crée un élément DOM. tag "div.classe#id", props, enfants (string/Node/array). */

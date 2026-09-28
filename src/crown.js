@@ -9,7 +9,9 @@
    jeu ne pèse qu'une seule contribution, remplacée à chaque mise à jour.
 
    Stockage : clé KV « crown » room-scopée (store.js) → partagée par tout le salon.
-   { [deviceId]: { name, avatar, byGame:{gameId:pts} } }
+   { [deviceId | "nom:<prénom>"]: { name, avatar, byGame:{gameId:pts} } }
+   Les parties sur un seul téléphone contribuent aussi (clé « nom:… », voir
+   scoring.js) ; à l'affichage, les entrées d'un même prénom sont fusionnées.
    ========================================================================= */
 
 import { el } from "./ui.js";
@@ -19,6 +21,7 @@ import { enregistrerSoiree, palmaresCumule, chargerHistorique, effacerHistorique
 import { getStats, superlatifs } from "./stats.js";
 import { celebrate, confettiRain, confettiBurst } from "./fx.js";
 import { jingle, roundCue, pop } from "./sound.js";
+import { lireGorgees, remettreGorgees, estSansAlcool } from "./gorgees.js";
 
 const KEY = "crown";
 const RANK_PTS = [5, 3, 2]; // 1er, 2e, 3e ; au-delà = participation (1)
@@ -59,6 +62,17 @@ export async function awardStanding(gameId, rankedIds, names = {}, avatars = {},
   await setData(KEY, crown);
 }
 
+/** Retire la contribution d'un jeu pour ces joueurs (scores remis à zéro). */
+export async function effacerContribution(gameId, ids) {
+  const crown = (await getData(KEY, {})) || {};
+  let change = false;
+  for (const id of ids) {
+    const e = crown[id];
+    if (e && e.byGame && gameId in e.byGame) { delete e.byGame[gameId]; change = true; }
+  }
+  if (change) await setData(KEY, crown);
+}
+
 export async function getCrown() {
   return (await getData(KEY, {})) || {};
 }
@@ -68,12 +82,23 @@ export async function resetCrown() {
 
 /** Classement agrégé trié + titres par jeu. */
 export function crownTotals(crown) {
-  const rows = Object.keys(crown || {}).map((id) => {
+  // Un même prénom = un même joueur, qu'il ait joué sur son téléphone (clé =
+  // appareil) ou sur un téléphone partagé (clé « nom:… »). Pour chaque jeu, on
+  // garde sa meilleure contribution : un jeu ne compte qu'une fois.
+  const parNom = new Map();
+  for (const id of Object.keys(crown || {})) {
     const e = crown[id] || {};
-    const byGame = e.byGame || {};
-    const pts = Object.values(byGame).reduce((a, b) => a + (b || 0), 0);
-    return { id, name: e.name || "?", avatar: e.avatar || "🎲", pts, byGame, titles: [] };
-  });
+    const cle = String(e.name || "?").trim().toLowerCase();
+    const r = parNom.get(cle) || { id, name: e.name || "?", avatar: "", byGame: {}, titles: [] };
+    if (!id.startsWith("nom:")) { r.id = id; if (e.avatar) r.avatar = e.avatar; } // l'appareil prime (repère « toi »)
+    for (const [g, p] of Object.entries(e.byGame || {})) r.byGame[g] = Math.max(r.byGame[g] || 0, p || 0);
+    parNom.set(cle, r);
+  }
+  const rows = [...parNom.values()].map((r) => ({
+    ...r,
+    avatar: r.avatar || "🎲",
+    pts: Object.values(r.byGame).reduce((a, b) => a + (b || 0), 0),
+  })).filter((r) => r.pts > 0);
   // Titre du jeu : au joueur qui y a le plus de points (≥ points d'un podium).
   for (const gameId of Object.keys(TITLES)) {
     let best = null;
@@ -272,6 +297,38 @@ export async function openCrown(stage, { onBack, isHost, me, onStartCeremony }) 
   const noms = {}, avs = {};
   totals.forEach((r) => { noms[r.id] = r.name; avs[r.id] = r.avatar; });
   const palmes = superlatifs(await getStats(), noms, avs);
+  let gorgees = await lireGorgees().catch(() => ({ lignes: [], total: 0 }));
+
+  // 🍺 Compteur de gorgées de la soirée (tous jeux). Un petit mot de prudence :
+  // c'est un jeu, pas un concours.
+  function blocGorgees() {
+    const soft = estSansAlcool();
+    const titre = soft ? "🥤 Gorgées de soft de la soirée" : "🍺 Compteur de gorgées";
+    if (!gorgees.total) {
+      return el("div", { style: "margin-top:18px" }, [
+        el("h3.center", { text: titre, style: "margin-bottom:6px" }),
+        el("p.screen__subtitle.center", { text: "Rien de compté pour l'instant : Estimations, Je n'ai jamais, Tu préfères, Plus susceptible, Action ou Vérité et le Menteur les comptent." }),
+      ]);
+    }
+    return el("div", { style: "margin-top:18px" }, [
+      el("h3.center", { text: `${titre} · ${gorgees.total}`, style: "margin-bottom:10px" }),
+      el("div.stack", {}, gorgees.lignes.slice(0, 10).map((r, i) =>
+        el("div.cr-row", {}, [
+          el("span.cr-rank", { text: `${i + 1}.` }),
+          el("span.av-badge", { text: r.avatar || "🎲", style: `background:${colorOf(r.nom)}` }),
+          el("span.cr-name", { text: r.nom }),
+          el("span.cr-pts", { text: `${r.n} ${soft ? "🥤" : "🍺"}` }),
+        ])
+      )),
+      el("p.screen__subtitle.center", { text: soft ? "Hydratation exemplaire 💧" : "À consommer avec modération : un verre d'eau entre deux jeux 💧", style: "margin-top:8px" }),
+      isHost || !onStartCeremony
+        ? el("button.chip", {
+            text: "🔄 Remettre le compteur à zéro", style: "margin-top:8px",
+            onClick: async () => { if (!window.confirm("Remettre le compteur de gorgées à zéro pour toute la soirée ?")) return; await remettreGorgees(); gorgees = { lignes: [], total: 0 }; renderList(); },
+          })
+        : null,
+    ]);
+  }
 
   function blocSuperlatifs() {
     if (!palmes.length) return null;
@@ -348,7 +405,7 @@ export async function openCrown(stage, { onBack, isHost, me, onStartCeremony }) 
     if (vue === "cumul") return renderCumul();
     const bits = [el("h3.center", { text: "👑 Roi de la soirée", style: "margin-bottom:4px" })];
     if (!totals.length) {
-      bits.push(el("p.screen__subtitle.center", { text: "Aucun score pour l'instant — jouez quelques manches à score (Quiz, Blind Test, Plus susceptible, Tu préfères) !", style: "margin:10px 0" }));
+      bits.push(el("p.screen__subtitle.center", { text: "Aucun score pour l'instant — jouez quelques manches à score (Quiz, Estimations, Blind Test, Plus susceptible, Tu préfères), sur un seul téléphone ou chacun le sien !", style: "margin:10px 0" }));
     } else {
       const onglets = ongletsHistorique();
       if (onglets) bits.push(onglets);
@@ -384,8 +441,9 @@ export async function openCrown(stage, { onBack, isHost, me, onStartCeremony }) 
       const sup = blocSuperlatifs();
       if (sup) bits.push(sup);
     }
+    bits.push(blocGorgees());
     const row = el("div.row", { style: "justify-content:center;margin-top:14px;flex-wrap:wrap" }, [
-      el("button.chip", { text: "← Retour au salon", onClick: () => onBack && onBack() }),
+      el("button.chip", { text: onStartCeremony ? "← Retour au salon" : "← Retour", onClick: () => onBack && onBack() }),
       isHost && totals.length ? el("button.chip", { text: "🔄 Remettre à zéro", onClick: async () => { if (window.confirm("Effacer le classement de la soirée ?")) { await resetCrown(); totals.length = 0; renderList(); } } }) : null,
     ]);
     bits.push(row);

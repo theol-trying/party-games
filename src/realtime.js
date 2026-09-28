@@ -37,6 +37,7 @@ import { gameArt } from "./art.js";
 import { GAMES } from "./registry.js";
 import { openCrown, openCeremony } from "./crown.js";
 import { getTournoi, demarrerTournoi, avancerTournoi, arreterTournoi, jeuCourant, estTermine, bandeauTournoi, ecranTournoi } from "./tournament.js";
+import { estSansAlcool } from "./gorgees.js";
 
 const DEV_KEY = "soiree.device";
 const NAME_KEY = "soiree.name";
@@ -194,6 +195,11 @@ export function liveSession(stage, {
   // bouton de révélation, AVANT de révéler ; le jeu appelle reveler() quand il
   // est prêt (ex. Bac : ramasser d'abord les réponses de ceux qui écrivent encore).
   beforeReveal,
+  // reglages : { lire() -> objet JSON, ecrire(objet) }, facultatif. Les réglages
+  // de l'hôte (niveau, thèmes, options…) partent avec chaque manche ; chaque
+  // téléphone les recopie, si bien qu'un invité promu hôte garde ceux de la
+  // partie en cours au lieu de repartir des valeurs par défaut.
+  reglages,
   revealLabel = "Révéler les rôles", // libellé du bouton hôte (jeux interactifs : « Révéler les réponses »)
   newRoundLabel = "Nouvelle manche", // libellé « manche suivante » (ex : « Question suivante »)
   startLabel, // libellé du bouton de lancement dans le lobby (défaut : « Distribuer les rôles »)
@@ -483,6 +489,7 @@ export function liveSession(stage, {
         el("p.screen__subtitle", { text: "Scanne ou entre ce code pour rejoindre" }),
       ]),
       el("button.chip", { text: "🔗 Partager le lien", onClick: share, style: "margin-bottom:10px" }),
+      estSansAlcool() ? el("p.screen__subtitle", { text: "🥤 Soirée sans alcool : chaque gorgée se boit en soft.", style: "margin-bottom:10px" }) : null,
       list,
       extra,
       el("div", { style: "margin-top:14px" }, [action, backToRound]),
@@ -637,7 +644,9 @@ export function liveSession(stage, {
   function distribute() {
     if (!net || players.length < minPlayers) return;
     const { roles, meta, open } = assign(players.map((p) => ({ id: p.id, name: p.name })));
-    net.start(roles, meta, open === true);
+    let m = meta;
+    if (reglages) { try { m = { ...(meta || {}), __reglages: reglages.lire() }; } catch {} }
+    net.start(roles, m, open === true);
   }
 
   function leave() {
@@ -671,6 +680,7 @@ export function liveSession(stage, {
   // l'hôte rechargé relançait le chrono de tout le monde à sa durée complète.
   function onRound(n, you, names, meta, avs, endsAt = null) {
     if (avs) avatars = avs;
+    if (reglages && meta && meta.__reglages && host !== me) { try { reglages.ecrire(meta.__reglages); } catch {} }
     round = { n, you, names, meta };
     if (endsAt != null) lastTimer = endsAt;
     if (n !== shownRound) {

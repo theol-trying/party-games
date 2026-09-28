@@ -62,6 +62,10 @@ export function render(container, { game }) {
       revealLabel: "Révéler tous les rôles",
       newRoundLabel: "Nouvelle partie (nouveaux mots)",
       onExit: modeSelect,
+      reglages: {
+        lire: () => ({ liveImp, liveWhite }),
+        ecrire: (r) => { if (Number.isInteger(r.liveImp)) liveImp = r.liveImp; if (Number.isInteger(r.liveWhite)) liveWhite = r.liveWhite; },
+      },
       lobbyExtra: (ps) => {
         const n = ps.length;
         const wrap = el("div.stack", { style: "margin:10px 0" });

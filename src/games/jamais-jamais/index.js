@@ -6,6 +6,9 @@ import { openEditor, loadContent, loadConfig, activeCards } from "../../content.
 import { liveSession, peekAutoLive } from "../../realtime.js";
 import { retournerCarte } from "../../fx.js";
 import { PHRASES } from "./data.js";
+import { playersCard } from "../../players.js";
+import { de } from "../../names.js";
+import { compterGorgees } from "../../gorgees.js";
 
 const LEVEL_LABEL = { soft: "Soft", soiree: "Soirée", x18: "18+" };
 const SCHEMA = {
@@ -22,6 +25,8 @@ export function render(container, { game }) {
   let custom = [];
   let config = { onlyCustom: false, disabled: {} };
   const seen = makeSeen("jamais-jamais"); // anti-répétition entre soirées
+  let joueursSolo = null; // prénoms du mode « sur ce téléphone » (facultatifs)
+  let tourSolo = 0; // qui lit la prochaine phrase
   let deck = createDeck(pool(level), { seen });
 
   container.append(screenHead(game.title, "Bois si tu l'as déjà fait", game.id));
@@ -40,7 +45,7 @@ export function render(container, { game }) {
     showPhase(stage,
       el("div.card.center", {}, [
         el("h3", { text: "Comment jouer ?" }),
-        el("button.btn.btn--full", { text: "📱 Sur ce téléphone", onClick: mainScreen }),
+        el("button.btn.btn--full", { text: "📱 Sur ce téléphone", onClick: choixJoueurs }),
         el("button.btn.btn--full.btn--ghost", { text: "🌐 Multi-appareils (aveux secrets)", style: "margin-top:10px", onClick: startLive }),
       ]),
       el("div.row", { style: "justify-content:center;margin-top:14px" }, [el("button.chip", { text: "✏️ Mes cartes", onClick: openEd })])
@@ -66,6 +71,10 @@ export function render(container, { game }) {
       revealLabel: "🔎 Révéler",
       newRoundLabel: "Manche suivante →",
       onExit: modeSelect,
+      reglages: {
+        lire: () => ({ level, liveMode, grillTurn }),
+        ecrire: (r) => { if (r.level) level = r.level; if (r.liveMode) liveMode = r.liveMode; if (Number.isInteger(r.grillTurn)) grillTurn = r.grillTurn; },
+      },
       lobbyExtra: (ps = []) => {
         const ui = levelSelector({ initial: level, onChange: (v) => (level = v) });
         const mkMode = (id, label) => {
@@ -165,7 +174,7 @@ export function render(container, { game }) {
           bYes, bNo, status, guessRow,
         ];
       },
-      renderReveal: (live, { api }) => {
+      renderReveal: (live, { api, n }) => {
         if (live.meta && live.meta.mode === "grill") return grillReveal(live, api);
         const names = live.names || {};
         const inputs = live.inputs || {};
@@ -191,6 +200,8 @@ export function render(container, { game }) {
           if (maxD > minD) wrongest = guessers.filter((id) => dist(id) === maxD);
         }
 
+        // 🍺 Compteur de la soirée : coupables + le plus loin du pari (hôte, une fois par manche).
+        if (api.isHost()) compterGorgees([...did.map((id) => ({ id, nom: names[id], avatar: (live.avatars || {})[id], n: 1 })), ...wrongest.map((id) => ({ id, nom: names[id], avatar: (live.avatars || {})[id], n: 1 }))], { manche: "jamais-jamais:" + n });
         const row = (id, tag) =>
           el("div.uc-role-row", {}, [
             el("span", { text: names[id] + (id === api.me ? " (toi)" : "") }),
@@ -298,11 +309,54 @@ export function render(container, { game }) {
     return out;
   }
 
+  // Prénoms facultatifs : la lecture tourne, et l'on peut toucher les
+  // coupables (ils boivent, et c'est compté dans le compteur de la soirée).
+  function choixJoueurs() {
+    showPhase(stage,
+      playersCard({ min: 2, cta: "C'est parti →", onReady: (noms) => { joueursSolo = noms; tourSolo = 0; mainScreen(); } }),
+      el("div.row", { style: "justify-content:center;margin-top:14px" }, [
+        el("button.chip", { text: "Jouer sans prénoms", onClick: () => { joueursSolo = null; mainScreen(); } }),
+        el("button.chip", { text: "← Mode", onClick: modeSelect }),
+      ])
+    );
+  }
+
   function mainScreen() {
+    const noms = joueursSolo;
     const promptBox = el("div.big-prompt.jj-prompt", { text: "Appuie sur « Suivant ». Bois si tu l'as déjà fait !" });
     const counter = el("div.jj-counter", { text: "" });
+    const lecteur = el("p.jj-lecteur");
+    const coupablesZone = el("div.jj-coupables");
+    let coupables = new Set();
+    let phraseAffichee = false;
+
+    // Les coupables de la phrase précédente boivent (comptés une fois, au passage).
+    function solderCoupables() {
+      if (noms && coupables.size) compterGorgees([...coupables].map((nom) => ({ nom, n: 1 })));
+      coupables = new Set();
+    }
+    function peindreCoupables() {
+      if (!noms || !phraseAffichee) return coupablesZone.replaceChildren();
+      coupablesZone.replaceChildren(
+        el("p.screen__subtitle", { text: "🙋 Qui l'a fait ? (touche les coupables)", style: "margin:14px 0 6px" }),
+        el("div.row", { style: "justify-content:center;flex-wrap:wrap;gap:6px" }, noms.map((nom) =>
+          el("button.chip" + (coupables.has(nom) ? ".is-active" : ""), {
+            text: nom,
+            "aria-pressed": String(coupables.has(nom)),
+            onClick: () => { coupables.has(nom) ? coupables.delete(nom) : coupables.add(nom); peindreCoupables(); },
+          })
+        )),
+        coupables.size
+          ? el("p", { text: `🍺 ${[...coupables].join(", ")} ${coupables.size > 1 ? "boivent" : "boit"} !`, style: "font-weight:700;margin-top:8px" })
+          : null
+      );
+    }
 
     function next() {
+      solderCoupables();
+      if (noms) { lecteur.textContent = `📖 Au tour ${de(noms[tourSolo % noms.length])} de lire`; tourSolo++; }
+      phraseAffichee = true;
+      peindreCoupables();
       const p = deck.next();
       if (p == null) {
         promptBox.textContent = "Aucune phrase à ce niveau — ajoute-en via ✏️ Mes cartes.";
@@ -328,7 +382,9 @@ export function render(container, { game }) {
       el("div.card.jj-card", {}, [
         el("div", { style: "margin-bottom:18px" }, [levelUI.node]),
         counter,
+        noms ? lecteur : null,
         promptBox,
+        coupablesZone,
         el("button.btn.btn--full.jj-btn", { text: "Suivant →", style: "margin-top:22px", onClick: next }),
         el("div.row", { style: "justify-content:center;margin-top:14px" }, [el("button.chip", { text: "✏️ Mes cartes", onClick: openEd })]),
       ])

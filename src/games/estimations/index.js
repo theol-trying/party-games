@@ -22,6 +22,7 @@ import { tick, vibrate, vibrateTap } from "../../sound.js";
 import { celebrate, stampGage } from "../../fx.js";
 import { awardStanding } from "../../crown.js";
 import { lireNombre, classer, facteur, gorgees, estAnnee } from "./regles.js";
+import { compterGorgees } from "../../gorgees.js";
 import { QUESTIONS, THEMES } from "./data.js";
 
 const SCHEMA = {
@@ -234,6 +235,7 @@ export function render(container, { game }) {
       announce(`Réponse : ${nombre(item.reponse, item.unite)}. ${bilan.texte}`);
       if (r.gagnants.length) celebrate();
       if (Object.keys(boire).length) tamponDiffere(texteBoire(boire, nom, avecGorgees));
+      compterGorgees(Object.entries(boire).map(([p, g]) => ({ nom: p, n: g }))); // (un seul téléphone : par prénom)
 
       const scoreWrap = el("div", {}, [scoreboard(sc.scores, { podium: true })]);
       showPhase(stage,
@@ -282,6 +284,13 @@ export function render(container, { game }) {
       revealLabel: "Révéler les estimations",
       newRoundLabel: "Question suivante →",
       onExit: modeSelect,
+      reglages: {
+        lire: () => ({ cats: [...etat.cats], gorgees: etat.gorgees }),
+        ecrire: (r) => {
+          if (Array.isArray(r.cats) && r.cats.length) { etat.cats.clear(); r.cats.forEach((c) => etat.cats.add(c)); deck.setFilter(filtre); }
+          etat.gorgees = r.gorgees === true;
+        },
+      },
       lobbyExtra: () => el("div", { style: "margin:10px 0" }, [blocReglages(etat, () => deck.setFilter(filtre))]),
       assign: (ps) => {
         const item = deck.next() || { q: "?", reponse: 0, unite: "" };
@@ -369,6 +378,8 @@ export function render(container, { game }) {
       }
       // 👑 Roi de la soirée : l'hôte seul contribue (sinon compté une fois par téléphone).
       if (api.isHost()) awardStanding("estimations", [...ids].sort((a, b) => scores[b] - scores[a]), names, live.avatars || {});
+      // 🍺 Compteur de la soirée : l'hôte, une fois par manche.
+      if (api.isHost()) compterGorgees(Object.entries(boire).map(([id, g]) => ({ id, nom: names[id], avatar: (live.avatars || {})[id], n: g })), { manche: "estimations:" + n });
     }
     const defile = n == null || n !== defileRound;
     if (n != null) defileRound = n;

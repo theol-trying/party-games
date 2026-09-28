@@ -1,3 +1,4 @@
+import { CATEGORIES as CATS } from "./categories.js";
 import { Q_GEO } from "./data2-geo.js";
 import { Q_HISTOIRE } from "./data2-histoire.js";
 import { Q_SCIENCES } from "./data2-sciences.js";
@@ -226,36 +227,37 @@ const BASE = [
 
 /* Banques par catégorie : chaque question est taguée avec sa catégorie (cat)
    pour permettre à l'hôte de filtrer les thèmes. BASE = mélange rédigé main. */
+const LIBELLES = Object.fromEntries(CATS.map((c) => [c.id, c.label]));
 const BANKS = [
   /* En tête de liste : la déduplication garde la 1re occurrence d'un énoncé,
      donc une question d'actu l'emporte sur son homologue périmée d'un autre
      thème (ex. le vainqueur de Roland-Garros). */
-  { cat: "actu", label: "🗞️ Actus 2025-2026", q: Q_ACTU },
-  { cat: "melange", label: "🎲 Assorti", q: BASE },
-  { cat: "geo", label: "🌍 Géographie", q: Q_GEO },
-  { cat: "histoire", label: "🏛️ Histoire", q: Q_HISTOIRE },
-  { cat: "sciences", label: "🔬 Sciences", q: Q_SCIENCES },
-  { cat: "culture", label: "🎨 Arts & Culture", q: Q_CULTURE },
-  { cat: "sport", label: "⚽ Sport", q: Q_SPORT },
-  { cat: "nature", label: "🦁 Nature & Animaux", q: Q_NATURE },
-  { cat: "gastro", label: "🍽️ Gastronomie", q: Q_GASTRO },
-  { cat: "cinema", label: "🎬 Cinéma", q: Q_CINEMA },
-  { cat: "series", label: "📺 Séries", q: Q_SERIES },
-  { cat: "musique", label: "🎵 Musique", q: Q_MUSIQUE },
-  { cat: "jeuxvideo", label: "🎮 Jeux vidéo", q: Q_JEUXVIDEO },
-  { cat: "bdmanga", label: "💥 BD & Manga", q: Q_BDMANGA },
-  { cat: "techweb", label: "💻 Tech & Web", q: Q_TECHWEB },
-  { cat: "marques", label: "🏷️ Marques", q: Q_MARQUES },
-  { cat: "france", label: "🇫🇷 France", q: Q_FRANCE },
-  { cat: "institutions", label: "⚖️ Institutions", q: Q_INSTITUTIONS },
-  { cat: "economie", label: "💰 Économie", q: Q_ECONOMIE },
-  { cat: "religions", label: "☯️ Religions", q: Q_RELIGIONS },
-  { cat: "sante", label: "🩺 Santé", q: Q_SANTE },
-  { cat: "records", label: "🏆 Records", q: Q_RECORDS },
-  { cat: "inventions", label: "💡 Inventions", q: Q_INVENTIONS },
-  { cat: "langue", label: "🔤 Langue", q: Q_LANGUE },
-  { cat: "citations", label: "💬 Citations", q: Q_CITATIONS },
-  { cat: "insolite", label: "🤯 Insolite", q: Q_INSOLITE },
+  { cat: "actu", q: Q_ACTU },
+  { cat: "melange", q: BASE },
+  { cat: "geo", q: Q_GEO },
+  { cat: "histoire", q: Q_HISTOIRE },
+  { cat: "sciences", q: Q_SCIENCES },
+  { cat: "culture", q: Q_CULTURE },
+  { cat: "sport", q: Q_SPORT },
+  { cat: "nature", q: Q_NATURE },
+  { cat: "gastro", q: Q_GASTRO },
+  { cat: "cinema", q: Q_CINEMA },
+  { cat: "series", q: Q_SERIES },
+  { cat: "musique", q: Q_MUSIQUE },
+  { cat: "jeuxvideo", q: Q_JEUXVIDEO },
+  { cat: "bdmanga", q: Q_BDMANGA },
+  { cat: "techweb", q: Q_TECHWEB },
+  { cat: "marques", q: Q_MARQUES },
+  { cat: "france", q: Q_FRANCE },
+  { cat: "institutions", q: Q_INSTITUTIONS },
+  { cat: "economie", q: Q_ECONOMIE },
+  { cat: "religions", q: Q_RELIGIONS },
+  { cat: "sante", q: Q_SANTE },
+  { cat: "records", q: Q_RECORDS },
+  { cat: "inventions", q: Q_INVENTIONS },
+  { cat: "langue", q: Q_LANGUE },
+  { cat: "citations", q: Q_CITATIONS },
+  { cat: "insolite", q: Q_INSOLITE },
 ];
 
 /* Agrégation + déduplication par énoncé (insensible casse/espaces) ; chaque
@@ -278,4 +280,4 @@ for (const b of BANKS) {
 /* Catégories réellement disponibles (au moins 1 question), pour le sélecteur hôte. */
 export const CATEGORIES = BANKS
   .filter((b) => _catCount[b.cat] > 0)
-  .map((b) => ({ id: b.cat, label: b.label, count: _catCount[b.cat] }));
+  .map((b) => ({ id: b.cat, label: LIBELLES[b.cat], count: _catCount[b.cat] }));

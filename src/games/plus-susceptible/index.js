@@ -10,6 +10,7 @@ import { openEditor } from "../../content.js";
 import { passThePhone, contentSource, paquetSuivi } from "../../game-kit.js";
 import { liveSession, peekAutoLive, dedupeNames } from "../../realtime.js";
 import { de } from "../../names.js";
+import { compterGorgees } from "../../gorgees.js";
 import { AFFIRMATIONS } from "./data.js";
 
 const SCHEMA = {
@@ -154,6 +155,7 @@ export function render(container, { game }) {
           if (cranked.length) awardStanding("plus-susceptible", cranked, names, live.avatars || {}, { scores: crowns });
           // Superlatif « le plus désigné » : une fois par manche.
           if (winners.length && n !== statsManche) { statsManche = n; bumpMany(winners, "designe"); }
+          compterGorgees(winners.map((id) => ({ id, nom: names[id], avatar: (live.avatars || {})[id], n: 1 })), { manche: "plus-susceptible:" + n }); // le plus désigné boit
         }
         const ranking = ids.map((id) => ({ id, v: tally[id] })).sort((a, b) => b.v - a.v);
         const wNames = winners.map((id) => names[id]);
@@ -220,6 +222,7 @@ export function render(container, { game }) {
         const winners = Object.keys(votes).filter((p) => votes[p] === max);
         announce(winners.length > 1 ? winners.join(" et ") + " boivent" : winners[0] + " boit");
         winners.forEach((w) => sc.add(w)); // +1 couronne pour le/les plus désigné(s)
+        compterGorgees(winners.map((nom) => ({ nom, n: 1 }))); // … et il boit
 
         const ranking = players.map((p) => ({ p, v: votes[p] || 0 })).sort((a, b) => b.v - a.v);
         const scoreWrap = el("div", {}, [scoreboard(sc.scores, { podium: true })]);

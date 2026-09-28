@@ -157,22 +157,39 @@ export function openEditor(container, { gameId, schema, builtInList = [], onDone
       )
     );
   }
+  /* Cartes intégrées : jusqu'à ~2 500 pour le quiz. Les construire toutes (et
+     les reconstruire à chaque 👁/🚫) figeait le téléphone et refermait la liste.
+     On n'affiche donc qu'une page, à la demande (bloc déplié), avec une
+     recherche ; un 👁/🚫 ne redessine que la page courante. */
+  const PAGE_INTEGREES = 60;
+  const sansAccent = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const integreesResume = el("summary");
+  const integreesRecherche = el("input.input", { placeholder: "🔎 Chercher une carte…", "aria-label": "Chercher une carte intégrée", style: "margin:10px 0" });
+  const integreesListe = el("div.stack.ed-list");
+  const integreesBloc = el("details.ed-bulk", {}, [integreesResume, integreesRecherche, integreesListe]);
+  integreesBloc.addEventListener("toggle", () => { if (integreesBloc.open) peindreIntegrees(); });
+  integreesRecherche.addEventListener("input", () => peindreIntegrees());
+  function peindreIntegrees() {
+    const q = sansAccent(integreesRecherche.value.trim());
+    const trouvees = q ? builtInList.filter((b) => sansAccent(b.label).includes(q)) : builtInList;
+    integreesListe.replaceChildren(
+      ...trouvees.slice(0, PAGE_INTEGREES).map((b) =>
+        el("div.ed-row" + (isOff(b.key) ? ".is-off" : ""), {}, [
+          el("span.ed-sum", { text: b.label }),
+          el("div.row.ed-actions", {}, [offBtn(b.key)]),
+        ])
+      ),
+      trouvees.length > PAGE_INTEGREES
+        ? el("p.screen__subtitle", { text: `… et ${trouvees.length - PAGE_INTEGREES} autres : affine la recherche.` })
+        : trouvees.length ? null : el("p.screen__subtitle", { text: "Aucune carte ne correspond." })
+    );
+  }
   function renderBuiltin() {
     if (!builtInList.length) { builtinWrap.replaceChildren(); return; }
     const activeN = builtInList.filter((b) => !isOff(b.key)).length;
-    builtinWrap.replaceChildren(
-      el("details.ed-bulk", {}, [
-        el("summary", { text: `Cartes intégrées (${activeN}/${builtInList.length} actives)` }),
-        el("div.stack.ed-list", {},
-          builtInList.map((b) =>
-            el("div.ed-row" + (isOff(b.key) ? ".is-off" : ""), {}, [
-              el("span.ed-sum", { text: b.label }),
-              el("div.row.ed-actions", {}, [offBtn(b.key)]),
-            ])
-          )
-        ),
-      ])
-    );
+    integreesResume.textContent = `Cartes intégrées (${activeN}/${builtInList.length} actives)`;
+    if (!builtinWrap.contains(integreesBloc)) builtinWrap.replaceChildren(integreesBloc);
+    if (integreesBloc.open) peindreIntegrees();
   }
   function startEdit(e) {
     editingId = e.id;

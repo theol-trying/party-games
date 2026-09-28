@@ -18,8 +18,10 @@ Dernière vérification complète : **2026-09-28** (audit : serveur, moteur mult
 Autour des jeux : salon avec code de soirée + QR d'invitation, avatars, hôte transférable,
 exclusion d'un joueur, changement de jeu pour tout le groupe, chrono synchronisé, buzzer avec
 ordre d'arrivée, reconnexion automatique, anti-répétition du contenu entre soirées, cartes
-personnalisables, **Roi de la soirée** (classement agrégé multi-jeux + cérémonie podium jouée
-en même temps sur tous les appareils), **écran TV / spectateur** (`#/tv`), PWA installable,
+personnalisables, **Roi de la soirée** (classement agrégé multi-jeux, parties sur un seul
+téléphone comprises, + cérémonie podium jouée en même temps sur tous les appareils ; accessible
+depuis l'accueil : 👑 Palmarès), **compteur de gorgées** de la soirée et option **sans alcool**
+(mêmes jeux, gorgées de soft), **écran TV / spectateur** (`#/tv`), PWA installable,
 support hors-ligne, sons et confettis.
 
 ## 2. Contenu (mesuré, pas estimé)
@@ -70,7 +72,7 @@ En multi, deux outils du moteur (`src/realtime.js`) servent précisément à cel
 |---|---|
 | **Blind Test** | Jouable via la recherche d'extraits ; la liste manuelle (sans audio) sert au mode « joue-la toi-même », et l'UI le dit. |
 | **Mode équipes** | `teams.js` est branché sur 4 jeux sur 11 (Quiz, Bac, Blind Test, Plus susceptible), en mode un seul téléphone. |
-| **Couverture de tests** | `live.js` est du Node pur, donc testable sans navigateur — c'est là qu'ont vécu la plupart des bugs. |
+| **Couverture de tests** | 63 tests : protocole des salons (`live.js`), vrai serveur (`serveur.test.mjs`), et le moteur multi des téléphones lui-même, sous un DOM simulé contre le vrai serveur (`moteur.test.mjs` : re-rendus, nouvel hôte, réglages, envois périmés). |
 | **Modèle de confiance** | Le code de soirée (4 caractères) est le seul secret protégeant les données d'un salon. Acceptable pour des prénoms et des votes ; à savoir. |
 | **Durcissement HTTP** | Fait : CSP, `X-Frame-Options`, contrôle d'origine sur l'API **et** sur `/ws` (`ALLOWED_ORIGIN`) ; `/api/health` n'expose que la version majeure de Node. |
 

@@ -382,6 +382,10 @@ export function render(container, { game }) {
       revealLabel: "🏁 Terminer la partie",
       newRoundLabel: "Morceau suivant →",
       onExit: modeSelect0,
+      reglages: {
+        lire: () => ({ nbExtraits, bareme }),
+        ecrire: (r) => { if (Number.isInteger(r.nbExtraits)) nbExtraits = r.nbExtraits; if (r.bareme) bareme = r.bareme; },
+      },
       // Réglages de l'hôte : longueur de partie et barème. Tout est optionnel,
       // les valeurs par défaut reproduisent le comportement d'avant.
       lobbyExtra: () => {

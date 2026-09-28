@@ -2,6 +2,7 @@ import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { openEditor } from "../../content.js";
 import { contentSource, paquetSuivi } from "../../game-kit.js";
+import { compterGorgees } from "../../gorgees.js";
 import { liveSession, peekAutoLive } from "../../realtime.js";
 import { makeSeen } from "../../seen.js";
 import { awardStanding } from "../../crown.js";
@@ -219,6 +220,10 @@ export function render(container, { game }) {
           verdict = `Camp minoritaire : « ${na < nb ? live.meta.a : live.meta.b} » → ${nbMin > 1 ? "ils boivent" : "il boit"} ! 🍻`;
         }
 
+        // 🍺 Qui boit : le camp minoritaire, ou tout le monde à égalité (pas à
+        // l'unanimité). Compté par l'hôte, une fois par manche.
+        const buveurs = na && nb ? (na === nb ? [...campA, ...campB] : na < nb ? campA : campB) : [];
+        if (api.isHost()) compterGorgees(buveurs.map((id) => ({ id, nom: names[id], avatar: (live.avatars || {})[id], n: 1 })), { manche: "tu-preferes:" + n });
         // 🔮 Prophètes : bonne prédiction du camp majoritaire (égalité = personne).
         const majority = na === nb ? null : na > nb ? "a" : "b";
         const prophets = majority ? ids.filter((id) => inputs[id] && inputs[id].predict === majority) : [];

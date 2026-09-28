@@ -23,11 +23,25 @@ export function render(container, { game }) {
   const stage = el("div");
   container.append(stage);
 
-  if (peekAutoLive()) startLive(); else setup(); // « suivre l'hôte » : salon direct
+  if (peekAutoLive()) startLive(); else modeSelect(); // « suivre l'hôte » : salon direct
   src.reload();
 
   const amorces = () => src.cards();
   const builtInList = () => AMORCES.map((t) => ({ key: t, label: t }));
+
+  /* Choix du support, comme dans les autres jeux. */
+  function modeSelect() {
+    if (liveStop) { liveStop(); liveStop = null; }
+    showPhase(stage,
+      el("div.card.center", {}, [
+        el("h3", { text: "Comment jouer ?" }),
+        el("button.btn.btn--full", { text: "📱 Sur ce téléphone (on se le passe)", onClick: setup }),
+        // Le thème se choisit dans le salon.
+        el("button.btn.btn--full.btn--ghost", { text: "🌐 Multi — chacun écrit en même temps", style: "margin-top:10px", onClick: startLive }),
+      ]),
+      el("div.row", { style: "justify-content:center;margin-top:14px" }, [el("button.chip", { text: "✏️ Mes amorces", onClick: openEd })])
+    );
+  }
 
   function setup() {
     const stepChips = el("div.row", { style: "margin-top:8px" });
@@ -65,9 +79,11 @@ export function render(container, { game }) {
         themeChips,
         el("h3", { text: "Mode", style: "margin-top:16px" }),
         modeChips,
-        el("button.btn.btn--full", { text: "Écrire l'histoire (ce téléphone)", style: "margin-top:18px", onClick: play }),
-        el("button.btn.btn--full.btn--ghost", { text: "🌐 Multi — chacun écrit en même temps", style: "margin-top:10px", onClick: startLive }),
-        el("div.row", { style: "justify-content:center;margin-top:12px" }, [el("button.chip", { text: "✏️ Mes amorces", onClick: openEd })]),
+        el("button.btn.btn--full", { text: "✍️ Écrire l'histoire", style: "margin-top:18px", onClick: play }),
+      ]),
+      el("div.row", { style: "justify-content:center;margin-top:14px" }, [
+        el("button.chip", { text: "← Mode", onClick: modeSelect }),
+        el("button.chip", { text: "✏️ Mes amorces", onClick: openEd }),
       ])
     );
   }
@@ -94,7 +110,11 @@ export function render(container, { game }) {
       startLabel: "✍️ Écrire une histoire",
       revealLabel: "🏆 Podium de la meilleure ligne",
       newRoundLabel: "Nouvelle histoire",
-      onExit: setup,
+      onExit: modeSelect,
+      reglages: {
+        lire: () => ({ liveTheme }),
+        ecrire: (r) => { if (r.liveTheme) liveTheme = r.liveTheme; },
+      },
       lobbyExtra: () => {
         const row = el("div.row", { style: "justify-content:center;flex-wrap:wrap" });
         THEMES.forEach((t) => {
@@ -295,7 +315,7 @@ export function render(container, { game }) {
       gameId: "cadavre-exquis",
       schema: SCHEMA,
       builtInList: builtInList(),
-      onDone: async () => { await src.reload(); setup(); },
+      onDone: async () => { await src.reload(); modeSelect(); },
     });
   }
 

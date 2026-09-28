@@ -12,7 +12,8 @@ import { createDeck } from "./deck.js";
  * Évite de répéter le trio loadContent/loadConfig/activeCards dans chaque jeu.
  *
  * @param {string} gameId
- * @param {object} opts  { builtIn, keyOf?, toValue? }
+ * @param {object} opts  { builtIn, keyOf?, toValue? } — builtIn : tableau, ou fonction qui
+ *        le renvoie (contenu chargé en différé, comme les questions du quiz)
  * @returns {{ reload:()=>Promise<void>, cards:()=>any[], version:()=>number }}
  */
 export function contentSource(gameId, { builtIn, keyOf = (x) => x, toValue = (e) => e.text }) {
@@ -24,7 +25,7 @@ export function contentSource(gameId, { builtIn, keyOf = (x) => x, toValue = (e)
       [custom, config] = await Promise.all([loadContent(gameId), loadConfig(gameId)]);
       version++;
     },
-    cards: () => activeCards({ builtIn, custom, config, keyOf, customToValue: toValue }),
+    cards: () => activeCards({ builtIn: typeof builtIn === "function" ? builtIn() : builtIn, custom, config, keyOf, customToValue: toValue }),
     version: () => version,
   };
 }

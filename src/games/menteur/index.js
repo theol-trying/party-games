@@ -1,4 +1,4 @@
-import { el, screenHead, announce, showPhase } from "../../ui.js";
+import { el, screenHead, announce, showPhase, typo } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { makeSeen } from "../../seen.js";
 import { playersCard } from "../../players.js";
@@ -6,6 +6,7 @@ import { openEditor } from "../../content.js";
 import { passThePhone, contentSource } from "../../game-kit.js";
 import { liveSession, peekAutoLive, dedupeNames } from "../../realtime.js";
 import { de } from "../../names.js";
+import { compterGorgees } from "../../gorgees.js";
 import { bumpMany } from "../../stats.js";
 import { celebrate } from "../../fx.js";
 import { MISSIONS } from "./data.js";
@@ -15,6 +16,29 @@ const SCHEMA = {
   fields: [{ key: "text", label: "Mission à glisser dans la conversation", type: "text" }],
   summary: (e) => e.text,
 };
+
+/** Mission voilée : visible seulement tant qu'on maintient le doigt dessus.
+    Le téléphone reste posé sur la table pendant toute la discussion ; une
+    mission affichée en clair s'y lisait par-dessus l'épaule. */
+function voile(texte, quoi) {
+  const invite = `👆 Maintiens appuyé pour voir ${quoi}`;
+  const zone = el("div.mt-mission.mt-voile", { text: invite, role: "button", tabindex: "0", "aria-label": invite });
+  const montrer = (e) => {
+    if (e && e.cancelable) e.preventDefault(); // pas de sélection de texte ni de loupe
+    zone.textContent = typo(texte);
+    zone.classList.add("is-visible");
+  };
+  const cacher = () => {
+    zone.textContent = invite;
+    zone.classList.remove("is-visible");
+  };
+  zone.addEventListener("pointerdown", montrer);
+  ["pointerup", "pointerleave", "pointercancel", "blur"].forEach((t) => zone.addEventListener(t, cacher));
+  zone.addEventListener("contextmenu", (e) => e.preventDefault()); // appui long = pas de menu
+  zone.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") montrer(e); });
+  zone.addEventListener("keyup", cacher);
+  return zone;
+}
 
 export function render(container, { game }) {
   const src = contentSource("menteur", { builtIn: MISSIONS });
@@ -103,7 +127,7 @@ export function render(container, { game }) {
         function montrerBonus() {
           bonusBtn.hidden = true;
           bonusBox.replaceChildren(
-            el("div.mt-mission", { text: m.bonus }),
+            voile(m.bonus, "ta mission bonus"),
             el("p.screen__subtitle", { text: "Réussis les DEUX : distribue 2 gorgées. Grillé : tu bois double." })
           );
         }
@@ -135,7 +159,7 @@ export function render(container, { game }) {
         });
         return [
           el("p.screen__subtitle", { text: "Ta mission :" }),
-          el("div.mt-mission", { text: mine.mission }),
+          voile(mine.mission, "ta mission"),
           el("p.screen__subtitle", { text: "Accomplis-la sans te faire griller." }),
           bonusBtn,
           bonusBox,
@@ -143,7 +167,7 @@ export function render(container, { game }) {
             ? el("div.card", { style: "margin-top:14px;border-color:var(--accent)" }, [
                 el("p", { text: "🕵️ Tu es la Taupe !", style: "font-weight:800" }),
                 el("p.screen__subtitle", { text: `Mission secrète ${de(mine.espionne.name)} :` }),
-                el("div.mt-mission", { text: mine.espionne.mission }),
+                voile(mine.espionne.mission, "sa mission"),
                 el("p.screen__subtitle", { text: `Fais-le griller (accuse-le, et qu'il soit le plus accusé) → 3 gorgées à distribuer. Sans te faire repérer !` }),
               ])
             : null,
@@ -240,6 +264,14 @@ export function render(container, { game }) {
               // Grillé : tous sauf le(s) grillé(s) sont passés inaperçus. Infondé :
               // tout le monde. (Avant, seul « infondé » comptait, pour tous : tout
               // le monde restait à égalité et le titre n'était jamais décerné.)
+              // 🍺 Compteur : grillé → le(s) grillé(s) (double avec la mission
+              // bonus) ; infondé → les accusateurs.
+              if (api.isHost()) {
+                const qui = verdict === "grille"
+                  ? grilled.map((id) => ({ id, n: inputs[id] && inputs[id].bonus ? 2 : 1 }))
+                  : accusers.map((id) => ({ id, n: 1 }));
+                compterGorgees(qui.map((x) => ({ ...x, nom: names[x.id], avatar: (live.avatars || {})[x.id] })), { manche: "menteur:" + n });
+              }
               if (api.isHost()) {
                 const joueurs = Object.keys(live.names || {}).filter((id) => (live.roles || {})[id]);
                 const impunis = verdict === "grille" ? joueurs.filter((id) => !grilled.includes(id)) : joueurs;

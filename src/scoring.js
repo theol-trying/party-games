@@ -13,6 +13,11 @@
 
 import { el } from "./ui.js";
 import { getData, setData } from "./store.js";
+import { awardStanding, effacerContribution } from "./crown.js";
+
+// Jeux qui alimentent le 👑 Roi de la soirée (mêmes jeux qu'en multi).
+const JEUX_COURONNE = ["quiz-gages", "estimations", "blind-test", "plus-susceptible"];
+const clePrenom = (nom) => "nom:" + String(nom).trim().toLowerCase();
 
 export function createScores(gameId, players) {
   const key = "scores:" + gameId;
@@ -28,7 +33,24 @@ export function createScores(gameId, players) {
     return scores;
   });
 
-  const persist = () => setData(key, scores);
+  // Partie sur un seul téléphone : le classement du jeu alimente aussi le Roi
+  // de la soirée (avant, seul le multi comptait). Pas les équipes (clé
+  // « jeu:teams ») : une équipe n'est pas un joueur. Écriture regroupée.
+  let couronneTimer = null;
+  const couronne = () => {
+    if (!JEUX_COURONNE.includes(gameId)) return;
+    clearTimeout(couronneTimer);
+    couronneTimer = setTimeout(() => {
+      const noms = Object.keys(scores);
+      const ids = noms.map(clePrenom);
+      if (!noms.some((n) => scores[n] > 0)) return void effacerContribution(gameId, ids).catch(() => {});
+      const parId = {}, nomDe = {};
+      noms.forEach((n) => { parId[clePrenom(n)] = scores[n]; nomDe[clePrenom(n)] = n; });
+      const classes = [...ids].sort((a, b) => parId[b] - parId[a]);
+      awardStanding(gameId, classes, nomDe, {}, { scores: parId }).catch(() => {});
+    }, 1500);
+  };
+  const persist = () => { setData(key, scores); couronne(); };
 
   return {
     scores,

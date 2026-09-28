@@ -24,7 +24,7 @@ export function render(container, { game }) {
   const stage = el("div");
   container.append(stage);
 
-  if (peekAutoLive()) startLive(); else setup(); // « suivre l'hôte » : salon direct
+  if (peekAutoLive()) startLive(); else modeSelect(); // « suivre l'hôte » : salon direct
   // Catégories personnalisées mémorisées par soirée (sans écraser un salon en cours).
   // On ne redessine l'écran de réglages que s'il est affiché et encore intact :
   // avant, une partie « Classique » déjà lancée était remplacée (son chrono
@@ -45,7 +45,20 @@ export function render(container, { game }) {
     if (liveStop) { liveStop(); liveStop = null; }
   };
 
-  /* ---------- Réglages + choix du mode ---------- */
+  /* ---------- Choix du support, comme dans les autres jeux ---------- */
+  function modeSelect() {
+    if (liveStop) { liveStop(); liveStop = null; }
+    showPhase(stage,
+      el("div.card.center", {}, [
+        el("h3", { text: "Comment jouer ?" }),
+        el("button.btn.btn--full", { text: "📱 Sur ce téléphone", onClick: setup }),
+        // Durée et catégories se règlent aussi dans le salon.
+        el("button.btn.btn--full.btn--ghost", { text: "🌐 Multi-appareils (chacun son tél)", style: "margin-top:10px", onClick: startLive }),
+      ])
+    );
+  }
+
+  /* ---------- Réglages + mode sur ce téléphone ---------- */
   function setup() {
     const catText = el("textarea.input", { rows: "6", style: "resize:vertical", text: categories.join("\n") });
     const dureeChips = el("div.row", { style: "margin-top:8px" });
@@ -90,12 +103,8 @@ export function render(container, { game }) {
             }));
           },
         }),
-        el("button.btn.btn--full.btn--ghost", {
-          text: "🌐 Multi-appareils (chacun son tél)",
-          style: "margin-top:10px",
-          onClick: () => { readCats(); startLive(); },
-        }),
-      ])
+      ]),
+      el("div.row", { style: "justify-content:center;margin-top:14px" }, [el("button.chip", { text: "← Mode", onClick: () => { readCats(); modeSelect(); } })])
     );
   }
 
@@ -119,11 +128,18 @@ export function render(container, { game }) {
       startLabel: "Lancer la manche",
       revealLabel: "Corriger la manche",
       newRoundLabel: "Nouvelle manche",
-      onExit: setup,
+      onExit: modeSelect,
       // Réglages modifiables depuis le salon : avant, le texte renvoyait aux
       // « Réglages », accessibles seulement en quittant le salon (et jamais vus
       // par un hôte arrivé via « Changer de jeu »).
       lobbyExtra: () => reglagesSalon(),
+      reglages: {
+        lire: () => ({ duree, categories }),
+        ecrire: (r) => {
+          if (DUREES.includes(r.duree)) duree = r.duree;
+          if (Array.isArray(r.categories) && r.categories.length) categories = nettoyerCategories(r.categories);
+        },
+      },
       // « Corriger la manche » pendant l'écriture : on ramasse d'abord les
       // réponses de tout le monde (sinon ceux qui n'avaient pas appuyé sur STOP
       // finissaient à 0 point, cases remplies).
