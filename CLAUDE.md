@@ -38,9 +38,16 @@ Site **modulaire** : les jeux s'enrichissent un par un. Audit et état : `AUDIT.
   le 2026-09-23 ; en local c'est instantané). Toute sortie volontaire doit donc envoyer
   `{ t: "leave" }` AVANT de couper — c'est ce que fait `stop()` dans `src/realtime.js`.
   Une sonde qui vérifie un départ en prod doit attendre plus de 10 s avant de conclure.
+  Re-mesuré le 2026-09-28 après correction de `ws.js` (qui ne répondait pas à la trame de
+  fermeture) : le client reçoit bien la fermeture en ~30 ms, mais le serveur ne voit
+  toujours partir le joueur qu'après ~10 s → le retard vient du proxy de Render, pas du code.
 - **Tester dans le navigateur intégré de Claude : `http://127.0.0.1:5178`, pas `localhost`.**
   Sur `localhost`, le service worker n'y atteint pas le réseau : il répond « hors-ligne »
   (503) pour tout module non précaché et l'accueil reste vide — faux bug.
+- ⚠️ La config `soiree` (`serve.ps1`) n'a **pas de WebSocket** : le multi y tourne en repli
+  polling. Pour tester le vrai temps réel : `node server.js` (même port 5178). Des invités
+  scriptés en Node (`new WebSocket('ws://127.0.0.1:5178/ws')`, message `join`) suffisent à
+  simuler d'autres téléphones ; `tests/live.test.mjs` et `tests/serveur.test.mjs` couvrent le protocole.
 - `ALLOWED_ORIGIN` restreint l'API au domaine de prod — vide = pas de restriction.
 - `kv-local.*` = persistance de dev du serveur PowerShell, hors dépôt.
 - **Ne pas proposer de « Mode Soirée »** : l'utilisateur l'a explicitement refusé.

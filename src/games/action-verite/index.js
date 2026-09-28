@@ -1,4 +1,4 @@
-import { el, screenHead, announce, showPhase } from "../../ui.js";
+import { el, screenHead, announce, showPhase, typo } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { makeSeen } from "../../seen.js";
 import { levelSelector, LEVELS } from "../../levels.js";
@@ -265,7 +265,7 @@ export function render(container, { game }) {
         const g = pickGage(level);
         tag.textContent = "⚡ Gage";
         tag.dataset.kind = "gage"; // sinon il gardait la couleur de la carte refusée
-        promptBox.textContent = g;
+        promptBox.textContent = typo(g);
         announce("Gage : " + g);
         refuseBtn.style.display = "none";
         stampGage(g);
@@ -278,7 +278,7 @@ export function render(container, { game }) {
       // La carte se retourne ; son texte et son étiquette changent quand elle
       // est de profil, donc jamais visibles à moitié mis à jour.
       retournerCarte(promptBox, () => {
-        promptBox.textContent = card || "Aucune carte à ce niveau — ajoute-en ou active-en via ✏️ Mes cartes.";
+        promptBox.textContent = typo(card || "Aucune carte à ce niveau — ajoute-en ou active-en via ✏️ Mes cartes.");
         tag.textContent = kind === "verite" ? "🗣️ Vérité" : "🔥 Action";
         tag.dataset.kind = kind;
         refuseBtn.style.display = card ? "" : "none"; // avec la carte, pas avant

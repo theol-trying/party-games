@@ -29,7 +29,6 @@ import { Q_ACTU } from "./data2-actu.js";
 const BASE = [
   { q: "Quelle est la capitale de l'Australie ?", choices: ["Sydney", "Canberra", "Melbourne", "Perth"], correct: 1 },
   { q: "Combien de côtés a un hexagone ?", choices: ["5", "6", "7", "8"], correct: 1 },
-  { q: "Qui a peint la Joconde ?", choices: ["Michel-Ange", "Raphaël", "Léonard de Vinci", "Botticelli"], correct: 2 },
   { q: "Quel est l'élément chimique O ?", choices: ["Or", "Osmium", "Oxygène", "Oganesson"], correct: 2 },
   { q: "En quelle année a eu lieu la chute du mur de Berlin ?", choices: ["1987", "1989", "1991", "1993"], correct: 1 },
   { q: "Quel océan est le plus grand ?", choices: ["Atlantique", "Indien", "Arctique", "Pacifique"], correct: 3 },
@@ -61,7 +60,6 @@ const BASE = [
   { q: "Quelle est la vitesse de la lumière (environ) ?", choices: ["300 km/s", "3 000 km/s", "300 000 km/s", "3 millions km/s"], correct: 2 },
   { q: "Quel gaz les plantes absorbent-elles ?", choices: ["Oxygène", "Azote", "CO2", "Hydrogène"], correct: 2 },
   { q: "Combien de cœurs possède une pieuvre ?", choices: ["1", "2", "3", "4"], correct: 2 },
-  { q: "Quelle planète est surnommée la planète rouge ?", choices: ["Vénus", "Jupiter", "Mars", "Saturne"], correct: 2 },
   { q: "Quel est l'organe le plus lourd du corps humain ?", choices: ["Le cerveau", "Le foie", "La peau", "Les poumons"], correct: 2 },
   { q: "À quelle température l'eau bout-elle au niveau de la mer ?", choices: ["90 °C", "95 °C", "100 °C", "110 °C"], correct: 2 },
   { q: "Quel animal est le plus rapide au monde en course ?", choices: ["Le lion", "Le guépard", "L'antilope", "Le lévrier"], correct: 1 },

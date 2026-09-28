@@ -1,4 +1,4 @@
-import { el, screenHead, announce, showPhase } from "../../ui.js";
+import { el, screenHead, announce, showPhase, typo } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { makeSeen } from "../../seen.js";
 import { levelSelector } from "../../levels.js";
@@ -311,7 +311,7 @@ export function render(container, { game }) {
       }
       announce("Je n'ai jamais " + p);
       counter.textContent = `${deck.size() - deck.remaining()} / ${deck.size()}`;
-      retournerCarte(promptBox, () => { promptBox.textContent = "Je n'ai jamais… " + p; });
+      retournerCarte(promptBox, () => { promptBox.textContent = typo("Je n'ai jamais… " + p); });
     }
 
     const levelUI = levelSelector({
@@ -319,7 +319,7 @@ export function render(container, { game }) {
       onChange: (v) => {
         level = v;
         deck = createDeck(pool(level), { seen });
-        promptBox.textContent = "Appuie sur « Suivant ». Bois si tu l'as déjà fait !";
+        promptBox.textContent = typo("Appuie sur « Suivant ». Bois si tu l'as déjà fait !");
         counter.textContent = "";
       },
     });

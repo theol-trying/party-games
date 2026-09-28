@@ -4,7 +4,7 @@
 été corrigés depuis (il induisait en erreur : il décrivait l'API comme ouverte, le site comme
 non installable et sans focus clavier, ce qui n'est plus vrai).*
 
-Dernière vérification complète : **2026-09-21**.
+Dernière vérification complète : **2026-09-28** (audit : serveur, moteur multi, 11 jeux, contenu).
 
 ---
 
@@ -26,10 +26,10 @@ support hors-ligne, sons et confettis.
 
 | Jeu | Contenu |
 |---|---|
-| Quiz à gages | 2549 questions · 26 catégories · 0 malformée · 0 doublon |
-| Je n'ai jamais | 743 phrases (374 soft / 247 soirée / 122 18+), dont 23 d'actu 2025-2026 |
-| Action ou Vérité | 707 cartes (358 actions + 349 vérités), dont 20 d'actu 2025-2026 |
-| Qui est le plus susceptible | 266 affirmations, dont 21 d'actu 2025-2026 |
+| Quiz à gages | 2546 questions · 26 catégories · 0 malformée · 0 doublon (même à la ponctuation près, testé) |
+| Je n'ai jamais | 738 phrases (369 soft / 249 soirée / 120 18+), dont 23 d'actu 2025-2026 |
+| Action ou Vérité | 701 cartes (360 actions + 341 vérités), dont 20 d'actu 2025-2026 |
+| Qui est le plus susceptible | 261 affirmations, dont 21 d'actu 2025-2026 |
 | Undercover | 239 paires, dont 26 d'actu 2025-2026 |
 | Tu préfères | 232 dilemmes, dont 23 d'actu 2025-2026 |
 | Le Menteur | 207 missions, dont 18 d'actu 2025-2026 |
@@ -55,12 +55,21 @@ indexé sur le numéro de manche — jamais dans une closure de rendu. Les écra
 (boutons « Revenir à la manche » / « Revoir la révélation »), ce qui réinitialise sinon l'état
 et re-déclenche les effets. C'est la source de la majorité des bugs passés.
 
+En multi, deux outils du moteur (`src/realtime.js`) servent précisément à cela :
+- `api.memo()` : un objet qui survit aux re-rendus de la manche en cours (réponse
+  choisie, vote, brouillon…) et repart à neuf à la manche suivante ;
+- `api.on("progress" | "state" | "timer")` rejoue le dernier événement reçu à tout
+  nouvel abonné : un écran re-rendu sait qui a répondu, où en est le chrono, etc.
+  Les abonnements sont remis à zéro à chaque écran de manche ou de révélation.
+- Les envois d'un écran portent le numéro de sa manche : le serveur ignore ceux qui
+  visent une autre manche (décompte oublié d'un ancien écran).
+
 ## 4. Points ouverts
 
 | Sujet | État |
 |---|---|
 | **Blind Test** | Jouable via la recherche d'extraits ; la liste manuelle (sans audio) sert au mode « joue-la toi-même », et l'UI le dit. |
-| **Mode équipes** | `teams.js` existe mais n'est branché que sur 2 jeux sur 10. |
+| **Mode équipes** | `teams.js` est branché sur 4 jeux sur 11 (Quiz, Bac, Blind Test, Plus susceptible), en mode un seul téléphone. |
 | **Couverture de tests** | `live.js` est du Node pur, donc testable sans navigateur — c'est là qu'ont vécu la plupart des bugs. |
 | **Modèle de confiance** | Le code de soirée (4 caractères) est le seul secret protégeant les données d'un salon. Acceptable pour des prénoms et des votes ; à savoir. |
 | **Durcissement HTTP** | Fait : CSP, `X-Frame-Options`, contrôle d'origine sur l'API **et** sur `/ws` (`ALLOWED_ORIGIN`) ; `/api/health` n'expose que la version majeure de Node. |

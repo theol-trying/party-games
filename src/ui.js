@@ -5,6 +5,14 @@
 
 import { gameArt } from "./art.js";
 
+/** Typographie française à l'affichage : espace insécable avant ? ! : ; » et
+    après «. Sur un écran de 375 px, un « ? » se retrouvait sinon seul en début
+    de ligne. Appliquée au rendu (et non dans les données) : le texte d'une carte
+    reste sa clé — anti-répétition, cartes désactivées, paquets exportés. */
+export function typo(texte) {
+  return String(texte).replace(/ ([?!:;»])/g, "\u00a0$1").replace(/« /g, "«\u00a0");
+}
+
 /** Crée un élément DOM. tag "div.classe#id", props, enfants (string/Node/array). */
 export function el(spec, props = {}, children = []) {
   const [tagAndClasses, id] = spec.split("#");
@@ -16,7 +24,8 @@ export function el(spec, props = {}, children = []) {
   for (const [k, v] of Object.entries(props)) {
     if (v == null || v === false) continue;
     if (k === "class") node.className = v;
-    else if (k === "text") node.textContent = v;
+    // (pas dans un champ de saisie : ce serait modifier le texte de l'utilisateur)
+    else if (k === "text") node.textContent = /^(TEXTAREA|INPUT)$/.test(node.tagName) ? v : typo(v);
     else if (k.startsWith("on") && typeof v === "function") {
       node.addEventListener(k.slice(2).toLowerCase(), v);
     } else if (k === "dataset") {
@@ -34,7 +43,7 @@ function appendChildren(node, children) {
   const list = Array.isArray(children) ? children : [children];
   for (const c of list) {
     if (c == null || c === false) continue;
-    node.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+    node.appendChild(typeof c === "string" ? document.createTextNode(typo(c)) : c);
   }
 }
 

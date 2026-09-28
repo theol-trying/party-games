@@ -63,7 +63,6 @@ export const Q_CULTURE = [
   { q: "Quel acteur incarne Jack dans « Titanic » ?", choices: ["Brad Pitt", "Matt Damon", "Johnny Depp", "Leonardo DiCaprio"], correct: 3 },
   { q: "Quel studio d'animation a créé « Le Voyage de Chihiro » ?", choices: ["Ghibli", "Pixar", "DreamWorks", "Disney"], correct: 0 },
   { q: "Quel est le premier long-métrage entièrement en images de synthèse (Pixar, 1995) ?", choices: ["Shrek", "Toy Story", "Le Roi lion", "Nemo"], correct: 1 },
-  { q: "Quel réalisateur est surnommé « le maître du suspense » ?", choices: ["Kubrick", "Scorsese", "Alfred Hitchcock", "Tarantino"], correct: 2 },
   { q: "Quel film de 1972 raconte l'histoire de la famille Corleone ?", choices: ["Les Affranchis", "Scarface", "Casino", "Le Parrain"], correct: 3 },
   { q: "Quel acteur joue le rôle-titre dans « Forrest Gump » ?", choices: ["Tom Hanks", "Tom Cruise", "Kevin Costner", "Robin Williams"], correct: 0 },
   { q: "Quelle actrice tient le fouet dans « Kill Bill » ? (rôle principal)", choices: ["Angelina Jolie", "Uma Thurman", "Scarlett Johansson", "Charlize Theron"], correct: 1 },
