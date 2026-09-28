@@ -45,8 +45,11 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGIN || "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
-// Rate-limit par IP sur /api/* (fenêtre glissante simple).
-const RATE_MAX = 120;
+// Rate-limit par IP sur /api/* (fenêtre glissante simple). Tous les téléphones
+// d'une soirée sur le même Wi-Fi sortent par la MÊME adresse IP : le plafond
+// est donc celui d'un groupe entier, pas d'un appareil (120 était trop juste
+// pour 8 téléphones qui ouvrent un jeu en même temps).
+const RATE_MAX = 400;
 const RATE_WINDOW_MS = 60 * 1000;
 const rate = new Map(); // ip -> { count, windowStart }
 
@@ -279,8 +282,26 @@ function serveStatic(req, res, urlPath) {
 }
 
 /* ---------- Routeur ---------- */
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host}`);
+// Toute exception d'un gestionnaire async devient un rejet non géré, qui
+// ARRÊTE Node : une seule requête piégée coupait alors tous les salons en
+// cours. D'où ce filet autour de chaque requête.
+const server = http.createServer((req, res) => {
+  handleRequest(req, res).catch((e) => {
+    console.error("[http]", e && e.message ? e.message : e);
+    if (!res.headersSent) sendJson(res, 500, { error: "erreur interne" });
+    else res.destroy();
+  });
+});
+
+async function handleRequest(req, res) {
+  // Base fixe : l'en-tête Host vient du client et peut être invalide. Une
+  // cible comme « //[ » reste impossible à analyser → 400, pas un plantage.
+  let url;
+  try {
+    url = new URL(req.url, "http://localhost");
+  } catch {
+    return sendJson(res, 400, { error: "requête invalide" });
+  }
   const pathname = url.pathname;
 
   // Endpoint de santé (léger, pas de contrôle) — pratique pour Render.
@@ -352,9 +373,11 @@ const server = http.createServer(async (req, res) => {
 
     try {
       if (req.method === "GET") {
+        // Clé absente = 200 avec value:null (et non 404) : c'est le cas normal
+        // d'une soirée neuve, pas une erreur — un 404 s'affichait en rouge dans
+        // la console à chaque ouverture de jeu.
         const value = await kvGet(key);
-        if (value === null) return sendJson(res, 404, { key, value: null });
-        return sendJson(res, 200, { key, value });
+        return sendJson(res, 200, { key, value: value === undefined ? null : value });
       }
       if (req.method === "PUT" || req.method === "POST") {
         // On EXIGE application/json. Sans ce contrôle, une page tierce pouvait
@@ -395,7 +418,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname.startsWith("/api/")) return sendJson(res, 404, { error: "route inconnue" });
 
   serveStatic(req, res, pathname);
-});
+}
 
 // Multi-appareils temps réel : WebSocket maison sur /ws (voir ws.js / live.js).
 // Même contrôle d'origine que l'API : un site tiers ne peut pas ouvrir de salon

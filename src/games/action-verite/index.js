@@ -1,5 +1,6 @@
 import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { createDeck } from "../../deck.js";
+import { makeSeen } from "../../seen.js";
 import { levelSelector, LEVELS } from "../../levels.js";
 import { openEditor, loadContent, loadConfig, activeCards } from "../../content.js";
 import { liveSession, peekAutoLive } from "../../realtime.js";
@@ -24,6 +25,9 @@ export function render(container, { game }) {
   let custom = [];
   let config = { onlyCustom: false, disabled: {} };
   const decks = { verite: {}, action: {} };
+  // Anti-répétition entre soirées, comme les autres jeux : les cartes déjà
+  // tirées reviennent en dernier (et « Tout remélanger » dans ✏️ Mes cartes).
+  const seen = makeSeen("action-verite");
 
   container.append(screenHead(game.title, "Niveau réglable · ajoute tes propres cartes", game.id));
   const stage = el("div");
@@ -99,7 +103,7 @@ export function render(container, { game }) {
           const card = choice === "verite" ? meta.v : meta.a;
           const bits = [
             el("div.av-tag", { text: kind }),
-            el("div.big-prompt.av-prompt", { text: card, style: data.refused ? "text-decoration:line-through;opacity:.5" : "" }),
+            el("div.big-prompt.av-prompt", { text: card, style: data.refused ? "text-decoration:line-through;color:var(--text-dim)" : "" }),
           ];
           if (data.refused) {
             bits.push(el("p", { text: `🙅 ${meta.targetName} a refusé ! Gage à la place :`, style: "font-weight:700;margin-top:10px" }));
@@ -132,7 +136,7 @@ export function render(container, { game }) {
               style: "font-weight:700;margin-top:10px",
             }));
           }
-          if (api.isHost()) bits.push(el("p.screen__subtitle", { text: "« 🎯 Joueur suivant » pour continuer.", style: "margin-top:8px;opacity:.75" }));
+          if (api.isHost()) bits.push(el("p.screen__subtitle", { text: "« 🎯 Joueur suivant » pour continuer.", style: "margin-top:8px" }));
           zone.replaceChildren(...bits);
         }
 
@@ -188,6 +192,7 @@ export function render(container, { game }) {
         const inputs = live.inputs || {};
         const names = live.names || {};
         const ch = inputs[meta.target] && inputs[meta.target].choice;
+        const refus = inputs[meta.target] && inputs[meta.target].refused ? inputs[meta.target] : null;
         // Bilan des paris du public.
         const bettors = Object.keys(names).filter((id) => id !== meta.target && inputs[id] && inputs[id].bet);
         const right = ch ? bettors.filter((id) => inputs[id].bet === ch) : [];
@@ -196,15 +201,19 @@ export function render(container, { game }) {
           el("h3", { text: `Récap — ${meta.targetName || "?"}` }),
           ch
             ? el("div", {}, [
-                el("div.av-tag", { text: ch === "verite" ? "🗣️ Vérité" : "🔥 Action" }),
-                el("div.big-prompt.av-prompt", { text: ch === "verite" ? meta.v : meta.a }),
+                el("div.av-tag", { text: ch === "verite" ? "🗣️ Vérité" : "🔥 Action", dataset: { kind: ch } }),
+                el("div.big-prompt.av-prompt", { text: ch === "verite" ? meta.v : meta.a, style: refus ? "text-decoration:line-through;color:var(--text-dim)" : "" }),
+                // Le refus et son gage apparaissent dans le récap (avant, une
+                // carte refusée y figurait comme faite).
+                refus ? el("p", { text: `🙅 Refusé ! Gage à la place :`, style: "font-weight:700;margin-top:10px" }) : null,
+                refus ? el("div.big-prompt.av-prompt", { text: refus.gage || "…" }) : null,
               ])
             : el("p.screen__subtitle", { text: "Aucun choix fait cette manche." }),
           bettors.length
             ? el("div", { style: "margin-top:12px" }, [
                 el("p.screen__subtitle", { text: "🗣️ Paris du public :", style: "margin-bottom:4px" }),
                 right.length ? el("p", { text: `😎 Bien vu : ${right.map((id) => names[id]).join(", ")}`, style: "font-weight:700" }) : null,
-                wrong.length ? el("p", { text: `🍺 À côté (ils boivent) : ${wrong.map((id) => names[id]).join(", ")}`, style: "font-weight:700;margin-top:2px" }) : null,
+                wrong.length ? el("p", { text: `🍺 À côté (${wrong.length > 1 ? "ils boivent" : "il boit"}) : ${wrong.map((id) => names[id]).join(", ")}`, style: "font-weight:700;margin-top:2px" }) : null,
               ])
             : null,
         ]);
@@ -225,14 +234,14 @@ export function render(container, { game }) {
         config,
         keyOf: (t) => `v|${lv}|${t}`,
         customToValue: (e) => e.text,
-      }));
+      }), { seen, keyOf: (t) => `v|${lv}|${t}` });
       decks.action[lv] = createDeck(activeCards({
         builtIn: ACTIONS[lv] || [],
         custom: custom.filter((e) => e.type === "action" && e.niveau === lv),
         config,
         keyOf: (t) => `a|${lv}|${t}`,
         customToValue: (e) => e.text,
-      }));
+      }), { seen, keyOf: (t) => `a|${lv}|${t}` });
     }
   }
 
@@ -255,6 +264,7 @@ export function render(container, { game }) {
       onClick: () => {
         const g = pickGage(level);
         tag.textContent = "⚡ Gage";
+        tag.dataset.kind = "gage"; // sinon il gardait la couleur de la carte refusée
         promptBox.textContent = g;
         announce("Gage : " + g);
         refuseBtn.style.display = "none";
@@ -301,6 +311,7 @@ export function render(container, { game }) {
       schema: EDIT_SCHEMA,
       builtInList: builtInList(),
       onDone: async () => { await reload(); mainScreen(); },
+      onReshuffle: () => seen.clear(),
     });
   }
 }

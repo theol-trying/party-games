@@ -8,17 +8,29 @@
    ========================================================================= */
 
 import { el } from "./ui.js";
-import { getData, setData } from "./store.js";
+import { getData, setData, getLocal } from "./store.js";
 
 const KEY = "players";
 
-/** Lecture synchrone immédiate (cache localStorage) pour un rendu instantané. */
+/** Lecture synchrone immédiate (cache localStorage) pour un rendu instantané.
+    Même clé que setData (préfixée par le code de la soirée) : l'ancienne
+    lecture visait une clé sans code, jamais écrite. */
 export function loadPlayers() {
-  try {
-    return JSON.parse(localStorage.getItem("soiree:" + KEY)) || [];
-  } catch {
-    return [];
-  }
+  const l = getLocal(KEY, []);
+  return Array.isArray(l) ? l : [];
+}
+
+/** Prénoms rendus distincts : « Léa », « Léa 2 »… Deux joueurs du même nom
+    partageaient sinon leurs réponses et leurs points (les jeux sur un seul
+    téléphone indexent tout par prénom). */
+export function prenomsDistincts(noms) {
+  const vus = new Set();
+  return noms.map((n) => {
+    let nom = n;
+    for (let i = 2; vus.has(nom.toLowerCase()); i++) nom = `${n} ${i}`;
+    vus.add(nom.toLowerCase());
+    return nom;
+  });
 }
 
 /** Sauvegarde locale + push serveur (tâche de fond). */
@@ -69,7 +81,7 @@ export function playersCard({ min = 2, cta = "Commencer", onReady }) {
   }
 
   function validNames() {
-    return players.map((p) => p.trim()).filter(Boolean);
+    return prenomsDistincts(players.map((p) => p.trim()).filter(Boolean));
   }
 
   const addBtn = el("button.btn.btn--ghost", {

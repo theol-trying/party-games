@@ -7,13 +7,14 @@ import { pickGage, chargerGages, ouvrirMesGages } from "../../gages.js";
 import { levelSelector, LEVELS } from "../../levels.js";
 import { teamBuilder } from "../../teams.js";
 import { openEditor } from "../../content.js";
-import { contentSource, themeSelector } from "../../game-kit.js";
+import { contentSource, themeSelector, paquetSuivi } from "../../game-kit.js";
 import { liveSession, syncCountdown, peekAutoLive } from "../../realtime.js";
 import { tick, vibrate, vibrateSuccess, vibrateTap } from "../../sound.js";
 import { confettiBurst, celebrate, stampGage } from "../../fx.js";
 import { awardStanding } from "../../crown.js";
 import { bump, bumpMany } from "../../stats.js";
 import { QUESTIONS, CATEGORIES } from "./data.js";
+import { de } from "../../names.js";
 
 // Points d'une bonne réponse : base + bonus de rapidité selon le rang d'arrivée.
 const SPEED_BONUS = [50, 30, 20, 10];
@@ -99,6 +100,7 @@ export function render(container, { game }) {
   // Choix du mode : sur ce téléphone (passe-le) ou chacun sur le sien.
   function modeSelect() {
     if (liveStop) { liveStop(); liveStop = null; }
+    stopCountdown(); // « Quitter » en plein chrono : plus de bips sur le menu
     showPhase(stage,
       el("div.card.center", {}, [
         el("h3", { text: "Comment jouer ?" }),
@@ -162,7 +164,7 @@ export function render(container, { game }) {
     // les repères de la partie précédente feraient sauter ses effets.
     stopCountdown();
     cdRound = quizFxRound = quizScoresRound = -1;
-    const deck = createDeck(questions(), { seen, keyOf: qKey });
+    const deck = paquetSuivi(src, { seen, keyOf: qKey }); // suit les cartes perso, même arrivées après l'ouverture du salon
     const scores = {}; // deviceId -> total cumulé (converge sur tous les clients)
     const streaks = {}; // deviceId -> série de bonnes réponses consécutives (autorité meta)
     let level = "soft"; // niveau des gages, réglé par l'hôte
@@ -209,9 +211,13 @@ export function render(container, { game }) {
     // (son chrono ne concerne plus personne) — on le coupe. Un simple re-rendu
     // de la MÊME manche ne le touche pas.
     if (n !== cdRound) { stopCountdown(); cdRound = n; }
-    let answered = false;
-    let myX2 = false; // « Tout ou rien » : la réponse compte double (ou -100 si fausse)
-    const total = api.players().length;
+    // Mémoire de manche : la réponse envoyée, le « Je double » et « temps
+    // écoulé » survivent à « Retour au salon → Revenir à la manche ». Avant,
+    // les boutons redevenaient actifs et l'on pouvait changer sa réponse.
+    const m = api.memo();
+    if (!("repondu" in m)) Object.assign(m, { repondu: false, choix: null, x2: false, tempsEcoule: false });
+    let total = api.players().length;
+    let dernierBip = null;
     const prog = el("p.screen__subtitle", { text: `0 / ${total} ont répondu`, style: "margin-top:14px" });
     const timerLine = el("p", { style: "min-height:22px;font-weight:800;font-size:1.2rem;margin-top:10px" });
     const feedback = el("div.qz-feedback", { style: "min-height:24px;margin-top:8px" });
@@ -222,36 +228,49 @@ export function render(container, { game }) {
       text: "🔥 Je double (risqué : faux = −100 + gage)",
       style: "margin-top:12px",
       onClick: () => {
-        if (answered) return;
-        myX2 = !myX2;
-        x2Btn.classList.toggle("is-active", myX2);
-        x2Btn.textContent = myX2 ? "🔥 DOUBLÉ ! (faux = −100 + gage)" : "🔥 Je double (risqué : faux = −100 + gage)";
+        if (m.repondu) return;
+        m.x2 = !m.x2;
+        peindreX2();
       },
     });
+    function peindreX2() {
+      x2Btn.classList.toggle("is-active", m.x2);
+      x2Btn.textContent = m.x2 ? "🔥 DOUBLÉ ! (faux = −100 + gage)" : "🔥 Je double (risqué : faux = −100 + gage)";
+    }
 
     const btns = meta.choices.map((c, idx) =>
       boutonReponse(c, idx, {
         onClick: () => {
-          if (answered) return;
-          answered = true;
-          api.submit({ choice: idx, x2: myX2 || undefined });
+          if (m.repondu) return;
+          m.repondu = true;
+          m.choix = idx;
+          api.submit({ choice: idx, x2: m.x2 || undefined });
           vibrateTap(); // accusé de réception tactile (Android)
-          btns.forEach((b) => (b.disabled = true));
-          x2Btn.disabled = true;
-          btns[idx].classList.add("is-choisi");
-          feedback.textContent = (myX2 ? "🔥 Doublé ! " : "✅ ") + "Réponse envoyée — en attente des autres…";
+          verrouiller();
         },
       })
     );
+    function verrouiller() {
+      btns.forEach((b) => (b.disabled = true));
+      x2Btn.disabled = true;
+      if (m.choix != null) {
+        btns[m.choix].classList.add("is-choisi");
+        feedback.textContent = (m.x2 ? "🔥 Doublé ! " : "✅ ") + "Réponse envoyée — en attente des autres…";
+      } else if (m.tempsEcoule) feedback.textContent = "⏰ Temps écoulé !";
+    }
+    peindreX2();
+    if (m.repondu) verrouiller();
 
     function lockOut() {
-      if (answered) return;
-      answered = true;
-      btns.forEach((b) => (b.disabled = true));
-      feedback.textContent = "⏰ Temps écoulé !";
+      if (m.repondu) return;
+      m.repondu = true;
+      m.tempsEcoule = true;
+      verrouiller();
     }
 
-    api.on("progress", (done) => { prog.textContent = `${done.length} / ${total} ont répondu`; });
+    // total : celui du serveur (joueurs présents ET distribués) — le chiffre
+    // figé au rendu restait faux après un départ.
+    api.on("progress", (done, attendus) => { if (attendus) total = attendus; prog.textContent = `${done.length} / ${total} ont répondu`; });
     api.on("timer", (endsAt) => {
       // Un seul décompte à la fois : l'hôte peut relancer le chrono, et cet
       // abonnement est repris à chaque re-rendu de la manche (« Revenir à la
@@ -261,9 +280,10 @@ export function render(container, { game }) {
       cdStop = syncCountdown(endsAt, {
         onTick: (s) => {
           timerLine.textContent = s > 0 ? `⏱️ ${s}` : "⏰";
-          if (s <= 3 && s > 0 && !answered) tick(); // tension des dernières secondes
+          // Un bip par seconde (le décompte passe toutes les 250 ms : 12 bips avant).
+          if (s <= 3 && s > 0 && !m.repondu && s !== dernierBip) { dernierBip = s; tick(); }
         },
-        onEnd: () => { cdStop = null; if (!answered) vibrate(150); lockOut(); },
+        onEnd: () => { cdStop = null; if (!m.repondu) vibrate(150); lockOut(); },
       });
     });
 
@@ -285,6 +305,9 @@ export function render(container, { game }) {
 
   // Résultats de la manche + classement (calcul déterministe partagé).
   function liveReveal(live, scores, streaks, { api, n }) {
+    // Révélation : le chrono de la manche est fini pour tout le monde (avant,
+    // un joueur sans réponse entendait encore les bips sur les résultats).
+    stopCountdown();
     const { choices, correct, base = {}, level = "soft", streaks: metaStreaks = {} } = live.meta || {};
     const inputs = live.inputs || {};
     const order = live.order || [];
@@ -323,7 +346,11 @@ export function render(container, { game }) {
     const myChoice = myInp ? myInp.choice : null;
     const myOk = myChoice === correct;
     const others = Object.keys(names).filter((id) => id !== me).map((id) => names[id]);
-    const myGage = myOk ? null : pickGage(level, others);
+    // Gage tiré UNE fois par manche : « Revoir la révélation » en tirait un
+    // autre, et l'on pouvait ainsi échapper au sien.
+    const mem = api.memo();
+    if (!("gage" in mem)) mem.gage = myOk ? null : pickGage(level, others);
+    const myGage = mem.gage;
     let myCallout;
     if (myOk) {
       const st = streaks[me] || 0;
@@ -414,7 +441,9 @@ export function render(container, { game }) {
     const catUI = categorySelector(cats, () => { deck.setFilter(catFilter); majResume(); });
     const levelUI = levelSelector({ initial: level, onChange: (v) => { level = v; majResume(); } });
     majResume();
-    const reglages = el("details.card.reglages", { open: "" }, [
+    // Replié d'emblée : le résumé montre déjà niveau et thèmes, et déplié il
+    // repoussait les réponses C et D sous l'écran dès la 1re question.
+    const reglages = el("details.card.reglages", {}, [
       el("summary", {}, [el("span", { text: "⚙️ Réglages" }), resume]),
       el("div.reglages__corps", {}, [
         el("p.screen__subtitle", { text: "Niveau des gages", style: "margin-bottom:8px" }),
@@ -461,7 +490,6 @@ export function render(container, { game }) {
       answered = false;
       const item = melanger(deck.next());
       count++;
-      if (count === 2) reglages.open = false;
       const pos = turn % nb;
       const player = players[pos];
       const dernierDuTour = nb >= 2 && pos === nb - 1;
@@ -508,7 +536,7 @@ export function render(container, { game }) {
       showPhase(qArea,
         el("div.card", {}, [
           nb >= 2 ? tourWrap : null,
-          el("p.screen__subtitle", { text: `Question ${count} · 🎯 au tour de ${player}` }),
+          el("p.screen__subtitle", { text: `Question ${count} · 🎯 au tour ${de(player)}` }),
           el("h2.qz-question", { text: item.q, style: "margin:8px 0 18px" }),
           el("div.stack.qz-choices", {}, boutons),
           feedback,
@@ -526,6 +554,7 @@ export function render(container, { game }) {
           el("button.chip", {
             text: "↺ Réinitialiser",
             onClick: () => {
+              if (!window.confirm("Remettre les scores de la soirée à zéro ?")) return;
               sc.reset();
               debutTour = { ...sc.scores };
               scoreWrap.replaceChildren(scoreboard(sc.scores));

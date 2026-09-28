@@ -416,6 +416,23 @@ body::after {
 
 /* Tableau des scores partagé (scoring.js) */
 .sb { display: flex; flex-direction: column; gap: 6px; }
+/* Ligne « nom — valeur » des révélations et classements. Née dans Undercover,
+   mais utilisée par 6 jeux : tant qu'elle vivait dans undercover/style.css
+   (chargée seulement si Undercover avait été ouvert), les autres affichaient
+   « Bob150 pts », collés et sans fond. */
+.uc-role-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  padding: 12px 14px; border-radius: 12px; background: var(--bg-soft);
+  border: 1px solid var(--border); font-size: 15px; text-align: left;
+}
+.uc-role-row > :last-child { text-align: right; }
+.uc-role-row.is-imp { border-color: #ff4d6d; background: rgba(255,77,109,0.1); }
+.uc-role-row.is-blanc { border-color: #ffd43b; background: rgba(255,212,59,0.1); }
+.ed-alerte { color: #ffb3c0; margin-top: 8px; }
+/* Réponse choisie (vote, aveu…) : .btn n'a pas de bordure, un simple
+   borderColor ne montrait donc rien. */
+.btn.is-choisi { outline: 3px solid var(--accent); outline-offset: 2px; opacity: 1; }
+
 .sb-row {
   display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px;
   padding: 9px 12px; background: var(--bg-soft); border-radius: 10px;

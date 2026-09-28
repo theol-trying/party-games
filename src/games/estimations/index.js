@@ -16,12 +16,12 @@ import { createDeck } from "../../deck.js";
 import { makeSeen } from "../../seen.js";
 import { createScores, scoreboard, podium, compteur } from "../../scoring.js";
 import { openEditor } from "../../content.js";
-import { contentSource, passThePhone, themeSelector } from "../../game-kit.js";
+import { contentSource, passThePhone, themeSelector, paquetSuivi } from "../../game-kit.js";
 import { liveSession, syncCountdown, peekAutoLive } from "../../realtime.js";
 import { tick, vibrate, vibrateTap } from "../../sound.js";
 import { celebrate, stampGage } from "../../fx.js";
 import { awardStanding } from "../../crown.js";
-import { lireNombre, classer, facteur, gorgees } from "./regles.js";
+import { lireNombre, classer, facteur, gorgees, estAnnee } from "./regles.js";
 import { QUESTIONS, THEMES } from "./data.js";
 
 const SCHEMA = {
@@ -32,6 +32,13 @@ const SCHEMA = {
     { key: "unite", label: "Unité (facultatif)", type: "text", optional: true },
   ],
   summary: (e) => `${e.q} → ${e.reponse}${e.unite ? " " + e.unite : ""}`,
+  // Avant : « 1665 marches » était accepté puis écarté sans prévenir.
+  valider: (v) => {
+    const n = lireNombre(v.reponse);
+    if (n == null) return "La réponse doit être un nombre (ex. 1665 ou 9,58) — l'unité va dans son propre champ.";
+    if (n < 0) return "La réponse doit être positive (le clavier des iPhone n'a pas de signe moins).";
+    return null;
+  },
 };
 /** Carte perso → question. Une réponse qui n'est pas un nombre est écartée
     (null), plutôt que de faire planter la manche. */
@@ -95,6 +102,7 @@ export function render(container, { game }) {
   let cdRound = -1;
   let fxRound = -1;       // manche dont les effets de révélation ont été joués
   let defileRound = -1;   // manche dont la réponse et les scores ont déjà défilé
+  let tamponTimer = null; // tampon « tu bois » en attente (voir tamponDiffere)
   const envoye = { n: -1, v: null }; // mon estimation déjà envoyée (multi)
 
   const questions = () => src.cards().filter(Boolean);
@@ -102,7 +110,18 @@ export function render(container, { game }) {
 
   if (peekAutoLive()) startLive(); else modeSelect(); // « suivre l'hôte » : salon direct
   src.reload();
-  return () => { stopCountdown(); if (liveStop) liveStop(); };
+  return () => { stopCountdown(); annulerTampon(); if (liveStop) liveStop(); };
+
+  // Tampon « tu bois » affiché un peu après la révélation : un seul à la fois,
+  // annulé si l'on passe à la question suivante avant qu'il ne tombe (sinon il
+  // recouvrait la nouvelle question).
+  function tamponDiffere(texte) {
+    annulerTampon();
+    tamponTimer = setTimeout(() => { tamponTimer = null; stampGage(texte); }, 900);
+  }
+  function annulerTampon() {
+    if (tamponTimer) { clearTimeout(tamponTimer); tamponTimer = null; }
+  }
 
   function stopCountdown() { if (cdStop) { cdStop(); cdStop = null; } }
 
@@ -125,7 +144,8 @@ export function render(container, { game }) {
 
   /** Champ de saisie d'une estimation : clavier numérique, validation à Entrée. */
   function champEstimation(unite, onValide) {
-    const input = el("input.input.es-saisie", { inputmode: "decimal", autocomplete: "off", placeholder: "Ton estimation", "aria-label": "Ton estimation" });
+    // maxlength : un « 99999999999999999999 » débordait de la ligne des résultats.
+    const input = el("input.input.es-saisie", { inputmode: "decimal", autocomplete: "off", maxlength: "15", placeholder: "Ton estimation", "aria-label": "Ton estimation" });
     const ok = el("button.btn.btn--full", { text: "Valider", style: "margin-top:12px", disabled: "" });
     const maj = () => { ok.disabled = lireNombre(input.value) == null; };
     const valider = () => { const v = lireNombre(input.value); if (v != null) onValide(v); };
@@ -164,13 +184,15 @@ export function render(container, { game }) {
     deck.setFilter(filtre);
 
     function question() {
+      annulerTampon();
       const item = deck.next();
       manche++;
       const estimations = {};
-      // ⚙️ Ouverts à la 1re manche, repliés ensuite (comme le quiz) ; l'état vit
+      // ⚙️ Repliés (comme le quiz) ; l'état vit
       // dans `etat`, donc le bloc recréé à chaque manche garde les choix faits.
       const resume = el("span.reglages__resume", { text: resumeReglages(etat) });
-      const reglages = el("details.card.reglages", manche === 1 ? { open: "" } : {}, [
+      // Replié d'emblée (le résumé suffit) : déplié, il poussait le champ de réponse sous l'écran.
+      const reglages = el("details.card.reglages", {}, [
         el("summary", {}, [el("span", { text: "⚙️ Réglages" }), resume]),
         el("div.reglages__corps", {}, [
           blocReglages(etat, () => { deck.setFilter(filtre); resume.textContent = resumeReglages(etat); }),
@@ -203,14 +225,15 @@ export function render(container, { game }) {
     }
 
     function revelationSolo(item, estimations, avecGorgees) {
-      const r = classer(item.reponse, players.map((p) => ({ id: p, v: estimations[p] })));
+      const annee = estAnnee(item.q, item.unite);
+      const r = classer(item.reponse, players.map((p) => ({ id: p, v: estimations[p] })), { annee });
       Object.entries(r.points).forEach(([p, n]) => sc.add(p, n));
-      const boire = aBoire(r, item.reponse, avecGorgees);
+      const boire = aBoire(r, item.reponse, avecGorgees, annee);
       const nom = (id) => id;
       const bilan = verdict(r, nom, boire, avecGorgees);
       announce(`Réponse : ${nombre(item.reponse, item.unite)}. ${bilan.texte}`);
       if (r.gagnants.length) celebrate();
-      if (Object.keys(boire).length) setTimeout(() => stampGage(texteBoire(boire, nom, avecGorgees)), 900);
+      if (Object.keys(boire).length) tamponDiffere(texteBoire(boire, nom, avecGorgees));
 
       const scoreWrap = el("div", {}, [scoreboard(sc.scores, { podium: true })]);
       showPhase(stage,
@@ -222,7 +245,7 @@ export function render(container, { game }) {
         el("div.card", { style: "margin-top:14px" }, [
           el("div.row", { style: "justify-content:space-between;align-items:center;margin-bottom:6px" }, [
             el("h3", { text: "Classement" }),
-            el("button.chip", { text: "↺ Réinitialiser", onClick: () => { sc.reset(); scoreWrap.replaceChildren(scoreboard(sc.scores, { podium: true })); } }),
+            el("button.chip", { text: "↺ Réinitialiser", onClick: () => { if (!window.confirm("Remettre les scores de la soirée à zéro ?")) return; sc.reset(); scoreWrap.replaceChildren(scoreboard(sc.scores, { podium: true })); } }),
           ]),
           scoreWrap,
         ]),
@@ -241,7 +264,9 @@ export function render(container, { game }) {
     // de la partie précédente feraient prendre la manche 1 pour « déjà jouée ».
     stopCountdown();
     cdRound = fxRound = defileRound = envoye.n = -1;
-    const deck = createDeck(questions(), { seen, keyOf: qKey });
+    // Suit les cartes perso, même arrivées après l'ouverture du salon ; les
+    // réponses non numériques sont écartées comme en solo (voir questions()).
+    const deck = paquetSuivi({ cards: questions, version: src.version }, { seen, keyOf: qKey });
     const scores = {}; // deviceId → total (converge sur tous les téléphones via meta.base)
     // Réglages de l'hôte : c'est lui qui tire les questions (deck filtré chez lui)
     // et l'option gorgées part avec chaque manche, pour un verdict identique partout.
@@ -274,7 +299,9 @@ export function render(container, { game }) {
 
   function liveRound({ api, meta, n }) {
     if (n !== cdRound) { stopCountdown(); cdRound = n; }
-    const total = api.players().length;
+    annulerTampon(); // un tampon « tu bois » en retard ne recouvre pas la nouvelle question
+    let total = api.players().length;
+    let dernierBip = null;
     const prog = el("p.screen__subtitle", { text: `0 / ${total} ont répondu`, style: "margin-top:14px" });
     const timerLine = el("p.es-chrono");
     const zone = el("div");
@@ -291,13 +318,13 @@ export function render(container, { game }) {
       confirme(v);
     }));
 
-    api.on("progress", (done) => { prog.textContent = `${done.length} / ${total} ont répondu`; });
+    api.on("progress", (done, attendus) => { if (attendus) total = attendus; prog.textContent = `${done.length} / ${total} ont répondu`; });
     api.on("timer", (endsAt) => {
       stopCountdown();
       cdStop = syncCountdown(endsAt, {
         onTick: (s) => {
           timerLine.textContent = s > 0 ? `⏱️ ${s}` : "⏰";
-          if (s <= 3 && s > 0 && envoye.n !== n) tick();
+          if (s <= 3 && s > 0 && envoye.n !== n && s !== dernierBip) { dernierBip = s; tick(); } // un bip par seconde
         },
         onEnd: () => {
           cdStop = null;
@@ -323,13 +350,14 @@ export function render(container, { game }) {
     const names = live.names || {};
     const inputs = live.inputs || {};
     const ids = Object.keys(names);
-    const r = classer(meta.reponse, ids.map((id) => ({ id, v: inputs[id] ? inputs[id].v : null })));
+    const annee = estAnnee(meta.q, meta.unite);
+    const r = classer(meta.reponse, ids.map((id) => ({ id, v: inputs[id] ? inputs[id].v : null })), { annee });
     // Totaux déterministes : base de l'hôte + points de la manche → identiques partout.
     ids.forEach((id) => { scores[id] = (base[id] || 0) + (r.points[id] || 0); });
     const nom = (id) => names[id] || "?";
     const me = api.me;
     const avecGorgees = meta.gorgees === true; // réglage de l'hôte, transmis avec la manche
-    const boire = aBoire(r, meta.reponse, avecGorgees);
+    const boire = aBoire(r, meta.reponse, avecGorgees, annee);
 
     // Effets personnels, une seule fois par manche (pas à « Revoir la révélation »).
     if (n != null && n !== fxRound) {
@@ -337,7 +365,7 @@ export function render(container, { game }) {
       if (r.gagnants.includes(me)) celebrate();
       else if (boire[me]) {
         const combien = pluriel(boire[me], "gorgée");
-        setTimeout(() => stampGage(r.absents.includes(me) ? `Pas de réponse : tu bois ${combien} 🍺` : `Le plus loin : tu bois ${combien} 🍺`), 900);
+        tamponDiffere(r.absents.includes(me) ? `Pas de réponse : tu bois ${combien} 🍺` : `Le plus loin : tu bois ${combien} 🍺`);
       }
       // 👑 Roi de la soirée : l'hôte seul contribue (sinon compté une fois par téléphone).
       if (api.isHost()) awardStanding("estimations", [...ids].sort((a, b) => scores[b] - scores[a]), names, live.avatars || {});
@@ -356,6 +384,15 @@ export function render(container, { game }) {
         points: scores[id],
         avant: defile ? base[id] || 0 : scores[id],
       }))),
+      // Le podium n'en montre que 3 : à partir du 4e, on ne voyait jamais son total.
+      ids.length > 3
+        ? el("div.sb", { style: "margin-top:10px" }, [...ids].sort((a, b) => scores[b] - scores[a]).slice(3).map((id, i) =>
+            el("div.sb-row", {}, [
+              el("span.sb-rank", { text: `${i + 4}.` }),
+              el("span.sb-name", { text: nom(id) + (id === me ? " (toi)" : "") }),
+              el("span.sb-pts", { text: pluriel(scores[id], "pt") }),
+            ])))
+        : null,
     ]);
   }
 
@@ -376,9 +413,9 @@ export function render(container, { game }) {
 
   /** Qui boit, et combien : id → gorgées. Le(s) plus loin(s) et les absents ;
       1 gorgée chacun, ou selon l'écart si l'option est active (absent = 3). */
-  function aBoire(r, reponse, avecGorgees) {
+  function aBoire(r, reponse, avecGorgees, annee = false) {
     const m = {};
-    for (const l of r.lignes) if (r.perdants.includes(l.id)) m[l.id] = avecGorgees ? gorgees(reponse, l.v) : 1;
+    for (const l of r.lignes) if (r.perdants.includes(l.id)) m[l.id] = avecGorgees ? gorgees(reponse, l.v, { annee }) : 1;
     for (const id of r.absents) m[id] = avecGorgees ? gorgees(reponse, null) : 1;
     return m;
   }
@@ -393,6 +430,9 @@ export function render(container, { game }) {
   /** Les estimations, de la plus proche à la plus lointaine. */
   function lignesEstimations(r, item, nom, { moi, boire = {}, avecGorgees = false } = {}) {
     const { unite, reponse } = item;
+    const annee = estAnnee(item.q, unite);
+    // Écart : « à 15 ans » pour une année (le rapport ×/÷ n'y a pas de sens).
+    const ecartTexte = (l) => annee ? `à ${pluriel(Math.round(l.ecart), "an")}` : `à ${nombre(l.ecart, unite)}${ecartEnFois(reponse, l.v)}`;
     const lignes = r.lignes.map((l) => {
       const gagne = r.points[l.id];
       const boit = boire[l.id];
@@ -402,7 +442,7 @@ export function render(container, { game }) {
         el("span.es-ligne__val", {}, [
           el("strong", { text: nombre(l.v, unite) }),
           // L'écart en « fois » parle mieux que la différence brute sur les gros nombres.
-          el("small", { text: l.ecart <= 1e-9 ? "pile !" : `à ${nombre(l.ecart, unite)}${ecartEnFois(reponse, l.v)}` }),
+          el("small", { text: l.ecart <= 1e-9 ? "pile !" : ecartTexte(l) }),
         ]),
         gagne ? el("span.es-ligne__pts", { text: `+${gagne}` })
           : boit && avecGorgees ? el("span.es-ligne__pts.is-boit", { text: `${boit} 🍺` }) : null,

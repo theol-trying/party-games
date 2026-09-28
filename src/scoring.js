@@ -128,8 +128,11 @@ export function scoreboard(scoresObj, { podium: avecPodium = false } = {}) {
     tete,
     ...reste.map((name, j) => {
       const i = debut + j;
+      // Rang « sportif » : deux ex æquo ont la même médaille ; à 0 point, pas de
+      // médaille du tout (avant : 🥇 et 🥈 dès le début, à 0 partout).
+      const rang = ranked.filter((x) => scoresObj[x] > scoresObj[name]).length;
       return el("div.sb-row" + (i === 0 && max > 0 ? ".is-leader" : ""), {}, [
-        el("span.sb-rank", { text: medal(i) }),
+        el("span.sb-rank", { text: scoresObj[name] > 0 ? medal(rang) : "–" }),
         el("span.sb-name", { text: name }),
         el("span.sb-pts", {}, [compteur(scoresObj[name], avant(name)), gain(gagne(name))]),
       ]);

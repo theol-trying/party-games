@@ -1,7 +1,7 @@
 {
   "name": "Soirée — Jeux à boire & jeux d'ambiance",
   "short_name": "Soirée",
-  "description": "10 jeux de soirée et jeux à boire, pour un téléphone posé sur la table.",
+  "description": "11 jeux de soirée et jeux à boire, sur un seul téléphone ou chacun le sien.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

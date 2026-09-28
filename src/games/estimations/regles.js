@@ -18,10 +18,18 @@ export function lireNombre(saisie) {
 
 const EPS = 1e-9; // égalité de flottants (9.58 − 9.5 ≠ 0.08 pile en binaire)
 
+/** Question dont la réponse est une ANNÉE (« En quelle année… ? », sans unité).
+    Pour une année, ni la marge de 1 % ni le rapport n'ont de sens : 1 % de
+    1789, c'est ±18 ans, et 1789 contre 1800 fait « ×1,006 ». */
+export function estAnnee(question, unite) {
+  return !unite && /\bann[ée]e\b/i.test(String(question || ""));
+}
+
 /** Tombé « pile » : écart nul, ou ≤ 1 % de la réponse (la précision d'un bon
-    estimateur, pas celle d'une calculatrice). */
-export function estPile(reponse, estimation) {
+    estimateur, pas celle d'une calculatrice). Une année, elle, doit être exacte. */
+export function estPile(reponse, estimation, { annee = false } = {}) {
   const ecart = Math.abs(estimation - reponse);
+  if (annee) return ecart <= EPS;
   return ecart <= EPS || ecart <= Math.abs(reponse) * 0.01 + EPS;
 }
 
@@ -37,9 +45,14 @@ export function facteur(reponse, v) {
 
 /** Option « gorgées selon l'écart » : combien boit un perdant. 1 gorgée si on
     reste à moins d'une fois et demie la réponse, 2 jusqu'à trois fois, 3 au-delà.
-    Pas de réponse = 3 (le pire écart possible). */
-export function gorgees(reponse, v) {
+    Pas de réponse = 3 (le pire écart possible). Pour une année, l'écart se
+    compte en années : jusqu'à 5 ans → 1, jusqu'à 25 ans → 2, au-delà → 3. */
+export function gorgees(reponse, v, { annee = false } = {}) {
   if (v == null) return 3;
+  if (annee) {
+    const ans = Math.abs(v - reponse);
+    return ans <= 5 ? 1 : ans <= 25 ? 2 : 3;
+  }
   const f = facteur(reponse, v);
   return f <= 1.5 ? 1 : f <= 3 ? 2 : 3;
 }
@@ -48,6 +61,7 @@ export function gorgees(reponse, v) {
  * Classe une manche.
  * @param {number} reponse
  * @param {Array<{id:string, v:number|null|undefined}>} estimations  v absent = pas de réponse
+ * @param {{annee?:boolean}} [opts]  réponse = une année (« pile » = exact)
  * @returns {{
  *   lignes: Array<{id, v, ecart, rang}>,  // joueurs ayant répondu, du plus proche au plus loin
  *   gagnants: string[],                     // le(s) plus proche(s) — ex æquo compris
@@ -57,7 +71,7 @@ export function gorgees(reponse, v) {
  *   points: Object<string, number>,         // points marqués cette manche
  * }}
  */
-export function classer(reponse, estimations) {
+export function classer(reponse, estimations, { annee = false } = {}) {
   const repondu = [];
   const absents = [];
   for (const e of estimations) {
@@ -80,7 +94,7 @@ export function classer(reponse, estimations) {
   const gagnants = repondu.filter((l) => Math.abs(l.ecart - meilleur) <= EPS).map((l) => l.id);
   // Personne ne boit si tout le monde est à égalité (il n'y a pas de « plus loin »).
   const perdants = pire - meilleur > EPS ? repondu.filter((l) => Math.abs(l.ecart - pire) <= EPS).map((l) => l.id) : [];
-  const pile = estPile(reponse, repondu[0].v);
+  const pile = estPile(reponse, repondu[0].v, { annee });
   for (const id of gagnants) points[id] = pile ? 2 : 1; // le plus proche : 1 point, 2 s'il tombe pile
 
   return { lignes: repondu, gagnants, perdants, absents, pile, points };

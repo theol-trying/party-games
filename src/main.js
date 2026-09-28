@@ -70,6 +70,8 @@ function roomBanner() {
     } catch {}
   });
   newBtn.addEventListener("click", () => {
+    // Nouveau code = ce téléphone quitte la soirée en cours : on demande.
+    if (!window.confirm("Créer une nouvelle soirée ? Ce téléphone quittera la soirée " + code + ".")) return;
     newRoom();
     announce("Nouvelle soirée créée");
     renderHome();
@@ -128,12 +130,12 @@ function renderHome() {
     el("p", {
       text:
         "Choisis un jeu, pose le téléphone au milieu de la table, et laisse-toi guider. " +
-        "Chaque jeu est indépendant — enrichis-les à ton rythme.",
+        "Ou chacun sur son téléphone : le multi-appareils est dans chaque jeu.",
     }),
   ]);
 
   // Filtres par ambiance : une seule grille au lieu d'une section par
-  // catégorie — sur téléphone, les 10 jeux tiennent ainsi en un écran et demi.
+  // catégorie — sur téléphone, les 11 jeux tiennent ainsi en un écran et demi.
   const categories = CATEGORIES.filter((c) => gamesByCategory(c.id).length);
   const options = [{ id: "tout", chip: "✨ Tous" }, ...categories];
   let filtre = lireLocal(CLE_FILTRE);
@@ -223,10 +225,12 @@ async function renderGame(id, token) {
     console.error(err);
     mount(
       el("div.screen", { dataset: { game: game.id } }, [
+        // Échec le plus probable : le réseau (module non encore en cache).
         el("div.placeholder", {}, [
-          el("p", { text: `« ${game.title} » n'est pas encore prêt.` }),
-          el("p", { text: String(err.message || err) }),
-          el("a.btn.btn--ghost", { href: "#/", text: "Retour à l'accueil", style: "margin-top:14px;display:inline-block" }),
+          el("p", { text: `😵 « ${game.title} » n'a pas pu se charger — la connexion a sans doute sauté.` }),
+          el("p.screen__subtitle", { text: String(err.message || err) }),
+          el("button.btn", { text: "🔄 Réessayer", style: "margin-top:14px", onClick: () => location.reload() }),
+          el("a.btn.btn--ghost", { href: "#/", text: "Retour à l'accueil", style: "margin-top:10px;display:inline-block" }),
         ]),
       ])
     );
@@ -340,8 +344,10 @@ function router() {
   else renderHome();
 }
 
+// Un module s'exécute une fois la page analysée : pas besoin d'attendre
+// DOMContentLoaded (qui relançait le routeur une 2e fois à chaque chargement,
+// donc deux fois la recherche de partie en cours d'un lien d'invitation).
 window.addEventListener("hashchange", router);
-window.addEventListener("DOMContentLoaded", router);
 router();
 
 // Service worker : installe le support hors-ligne (échoue en silence si indispo).

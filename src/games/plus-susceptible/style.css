@@ -9,5 +9,5 @@
 .ps-winner { color: #c77dff; font-size: 26px; }
 .ps-choices .btn { text-align: center; }
 .ps-ranking { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; text-align: left; }
-.ps-rank-row { display: grid; grid-template-columns: 90px 1fr 24px; align-items: center; gap: 10px; font-size: 14px; }
+.ps-rank-row { display: grid; grid-template-columns: minmax(90px, 40%) 1fr 24px; align-items: center; gap: 10px; font-size: 14px; }
 .ps-rank-bar { height: 10px; border-radius: 999px; background: linear-gradient(90deg, #c77dff, #7da7ff); transform-origin: left; transform: scaleX(var(--v, 0)); min-width: 2px; }

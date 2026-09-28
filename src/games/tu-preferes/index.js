@@ -1,7 +1,7 @@
 import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { openEditor } from "../../content.js";
-import { contentSource } from "../../game-kit.js";
+import { contentSource, paquetSuivi } from "../../game-kit.js";
 import { liveSession, peekAutoLive } from "../../realtime.js";
 import { makeSeen } from "../../seen.js";
 import { awardStanding } from "../../crown.js";
@@ -37,6 +37,7 @@ export function render(container, { game }) {
     openEditor(stage, { gameId: "tu-preferes", schema: SCHEMA, builtInList: builtInList(), onDone: async () => { await src.reload(); deck = createDeck(dilemmes(), { seen, keyOf: dKey }); draw(); }, onReshuffle: () => seen.clear() });
   }
 
+  let courant = { a: "", b: "" }; // dilemme affiché (pour le verdict)
   function optionBtn(side, label) {
     const btn = el("button.tp-option", {}, [
       el("div.tp-option__label", { text: label }),
@@ -55,10 +56,13 @@ export function render(container, { game }) {
     revealed = true;
     const { a, b } = counts;
     let verdict;
-    if (a === b) verdict = "Égalité parfaite… tout le monde boit ! 🍻";
+    // L'intitulé du camp, pas « Camp A » : aucune lettre n'est affichée ici.
+    if (a + b === 0) verdict = "Personne n'a voté 🤷";
+    else if (a === 0 || b === 0) verdict = "Unanimité ! Personne ne boit… sauf pour trinquer 🥂";
+    else if (a === b) verdict = "Égalité parfaite… tout le monde boit ! 🍻";
     else {
-      const loser = a < b ? "A" : "B";
-      verdict = `Camp ${loser} minoritaire → il boit ! 🍻`;
+      const min = Math.min(a, b);
+      verdict = `Camp minoritaire : « ${a < b ? courant.a : courant.b} » → ${min > 1 ? "ils boivent" : "il boit"} ! 🍻`;
     }
     stage.querySelector(".tp-verdict").textContent = verdict;
     announce(verdict);
@@ -75,6 +79,7 @@ export function render(container, { game }) {
     revealed = false;
     counts = { a: 0, b: 0 };
     const d = deck.next();
+    courant = d || courant;
     if (!d) {
       showPhase(stage, el("div.card.center", {}, [
         el("p", { text: "Aucun dilemme actif — ajoute-en ou change la source via ✏️ Mes cartes." }),
@@ -108,9 +113,9 @@ export function render(container, { game }) {
   function startLive() {
     if (!dilemmes().length) return modeSelect();
     if (liveStop) liveStop();
-    const liveDeck = createDeck(dilemmes(), { seen, keyOf: dKey });
+    const liveDeck = paquetSuivi(src, { seen, keyOf: dKey }); // suit les cartes perso, même arrivées après l'ouverture du salon
     const predScores = {}; // deviceId -> bonnes prédictions cumulées (base + delta)
-    const stats = { rounds: 0, agreeSum: 0, unanimous: 0 }; // stats de soirée (identiques partout)
+    const stats = { rounds: 0, agreeSum: 0, unanimous: 0, derniere: -1 }; // stats de soirée (identiques partout)
 
     liveStop = liveSession(stage, {
       gameId: "tu-preferes",
@@ -130,11 +135,17 @@ export function render(container, { game }) {
         return { roles, meta: { a: d.a, b: d.b, base } };
       },
       renderMine: (mine, { api, meta }) => {
-        let myPick = null;
-        let myPredict = null;
+        // Camp et prédiction mémorisés pour la manche, et renvoyés ENSEMBLE à
+        // chaque envoi (l'envoi remplace le précédent : re-choisir un camp
+        // effaçait la prédiction).
+        const m = api.memo();
+        if (!("pick" in m)) Object.assign(m, { pick: null, predict: null });
+        const envoyer = () => api.submit({ pick: m.pick, predict: m.predict || undefined });
         const status = el("p.screen__subtitle", { text: "Choisis ton camp 🤫", style: "margin-top:12px" });
+        // Lettres A / B visibles : la prédiction « Camp A / Camp B » y renvoie.
         const mk = (side, label) =>
           el("button.tp-option", { style: "width:100%" }, [
+            el("span.tp-option__lettre", { text: side.toUpperCase(), "aria-hidden": "true" }),
             el("div.tp-option__label", { text: label }),
           ]);
         const btnA = mk("a", meta.a);
@@ -142,35 +153,47 @@ export function render(container, { game }) {
         // 🔮 Prédiction (optionnelle) : quel camp sera majoritaire ?
         const predRow = el("div", { style: "display:none;margin-top:14px" });
         const predStatus = el("span");
-        const mkPred = (side, label) => el("button.chip", {
-          text: label,
-          onClick: (e) => {
-            if (myPredict) return;
-            myPredict = side;
-            api.submit({ pick: myPick, predict: side });
-            [...predRow.querySelectorAll("button")].forEach((b) => (b.disabled = true));
-            e.currentTarget.classList.add("is-active");
-            predStatus.textContent = " ✅";
-          },
-        });
+        const mkPred = (side, label) => {
+          const b = el("button.chip", {
+            text: label,
+            onClick: () => {
+              if (m.predict) return;
+              m.predict = side;
+              envoyer();
+              peindrePred();
+            },
+          });
+          b.dataset.side = side;
+          return b;
+        };
+        function peindrePred() {
+          [...predRow.querySelectorAll("button")].forEach((b) => { b.disabled = true; b.classList.toggle("is-active", b.dataset.side === m.predict); });
+          predStatus.textContent = " ✅";
+        }
         predRow.append(
           el("p.screen__subtitle", { text: "🔮 Bonus : quel camp sera MAJORITAIRE ?", style: "margin-bottom:6px" }),
           el("div.row", { style: "justify-content:center" }, [mkPred("a", "Camp A"), mkPred("b", "Camp B"), predStatus])
         );
-        const pickSide = (side, btn) => {
-          if (myPick) return;
-          myPick = side;
-          api.submit({ pick: side });
+        function peindreCamp() {
+          const btn = m.pick === "a" ? btnA : btnB;
           [btnA, btnB].forEach((b) => (b.style.opacity = ".55"));
           btn.style.opacity = "1";
           btn.style.outline = "3px solid var(--accent)";
           status.textContent = "✅ Camp choisi — en attente des autres…";
           predRow.style.display = "";
+        }
+        const pickSide = (side) => {
+          if (m.pick) return;
+          m.pick = side;
+          envoyer();
+          peindreCamp();
         };
-        btnA.addEventListener("click", () => pickSide("a", btnA));
-        btnB.addEventListener("click", () => pickSide("b", btnB));
+        btnA.addEventListener("click", () => pickSide("a"));
+        btnB.addEventListener("click", () => pickSide("b"));
+        if (m.pick) peindreCamp();
+        if (m.predict) peindrePred();
         api.on("progress", (done, total) => {
-          if (myPick) status.textContent = `✅ Voté · ${done.length} / ${total} ont choisi`;
+          if (m.pick) status.textContent = `✅ Voté · ${done.length} / ${total} ont choisi`;
         });
         return [
           el("h3", { text: "Tu préfères…", style: "margin-bottom:12px" }),
@@ -179,7 +202,7 @@ export function render(container, { game }) {
           predRow,
         ];
       },
-      renderReveal: (live, { api }) => {
+      renderReveal: (live, { api, n }) => {
         const names = live.names || {};
         const inputs = live.inputs || {};
         const base = (live.meta && live.meta.base) || {};
@@ -188,8 +211,13 @@ export function render(container, { game }) {
         const campB = ids.filter((id) => inputs[id] && inputs[id].pick === "b");
         const na = campA.length, nb = campB.length;
         let verdict;
-        if (na === nb) verdict = "Égalité parfaite… tout le monde boit ! 🍻";
-        else verdict = `Camp minoritaire : « ${na < nb ? live.meta.a : live.meta.b} » → il boit ! 🍻`;
+        if (na + nb === 0) verdict = "Personne n'a voté 🤷";
+        else if (na === 0 || nb === 0) verdict = "Unanimité ! Personne ne boit… sauf pour trinquer 🥂";
+        else if (na === nb) verdict = "Égalité parfaite… tout le monde boit ! 🍻";
+        else {
+          const nbMin = Math.min(na, nb);
+          verdict = `Camp minoritaire : « ${na < nb ? live.meta.a : live.meta.b} » → ${nbMin > 1 ? "ils boivent" : "il boit"} ! 🍻`;
+        }
 
         // 🔮 Prophètes : bonne prédiction du camp majoritaire (égalité = personne).
         const majority = na === nb ? null : na > nb ? "a" : "b";
@@ -197,13 +225,17 @@ export function render(container, { game }) {
         ids.forEach((id) => (predScores[id] = (base[id] || 0) + (prophets.includes(id) ? 1 : 0)));
         const predRank = ids.map((id) => ({ id, s: predScores[id] })).filter((r) => r.s > 0).sort((a, b) => b.s - a.s);
         // 👑 Contribue au Roi de la soirée (classement des prophètes).
-        if (api.isHost() && predRank.length) awardStanding("tu-preferes", predRank.map((r) => r.id), names, live.avatars || {});
+        if (api.isHost() && predRank.length) awardStanding("tu-preferes", predRank.map((r) => r.id), names, live.avatars || {}, { scores: predScores });
 
-        // 📊 Stats de soirée (déterministes : chaque téléphone calcule pareil).
+        // 📊 Stats de soirée (déterministes : chaque téléphone calcule pareil),
+        // comptées une fois par manche : « Revoir la révélation » les gonflait.
         const total = na + nb;
-        stats.rounds++;
-        if (total > 0) stats.agreeSum += Math.max(na, nb) / total;
-        if (total > 1 && (na === 0 || nb === 0)) stats.unanimous++;
+        if (n !== stats.derniere) {
+          stats.derniere = n;
+          stats.rounds++;
+          if (total > 0) stats.agreeSum += Math.max(na, nb) / total;
+          if (total > 1 && (na === 0 || nb === 0)) stats.unanimous++;
+        }
         const agreePct = stats.rounds ? Math.round((stats.agreeSum / stats.rounds) * 100) : 0;
 
         const bloc = (label, camp, isMin) =>

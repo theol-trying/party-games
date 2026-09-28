@@ -49,8 +49,10 @@ export function render(container, { game }) {
     });
 
     const modeChips = el("div.row", { style: "margin-top:8px" });
-    const mHidden = el("button.chip.is-active", { text: "🙈 Rien voir (classique)" });
-    const mPrev = el("button.chip", { text: "👀 Voir la ligne d'avant" });
+    // État affiché = état réel (au retour des réglages, « voir la ligne d'avant »
+    // restait actif alors que l'autre bouton paraissait sélectionné).
+    const mHidden = el("button.chip" + (seePrevious ? "" : ".is-active"), { text: "🙈 Ne rien voir (classique)" });
+    const mPrev = el("button.chip" + (seePrevious ? ".is-active" : ""), { text: "👀 Voir la ligne d'avant" });
     mHidden.addEventListener("click", () => { seePrevious = false; mHidden.classList.add("is-active"); mPrev.classList.remove("is-active"); });
     mPrev.addEventListener("click", () => { seePrevious = true; mPrev.classList.add("is-active"); mHidden.classList.remove("is-active"); });
     modeChips.append(mHidden, mPrev);
@@ -77,7 +79,8 @@ export function render(container, { game }) {
         révélation finale avec la meilleure ligne. */
   function startLive() {
     if (liveStop) liveStop();
-    let liveTheme = "libre"; // thème choisi par l'hôte dans le salon
+    podiumFxRound = -1; // salon peut-être recréé : les manches repartent de 1
+    let liveTheme = theme; // thème choisi par l'hôte (repart de celui choisi en solo)
 
     const themePools = () => {
       const th = THEMES.find((t) => t.id === liveTheme) || {};
@@ -125,7 +128,11 @@ export function render(container, { game }) {
         });
         // order/amorces dans meta : nécessaires à TOUS pour assembler l'histoire
         // avant la révélation finale (les textes restent cachés jusqu'au dévoilement).
-        return { roles, meta: { count: n, theme: label, consigne, order, amorces: amor }, open: true };
+        // noms : ceux de la distribution — un joueur parti ensuite restait « ? »
+        // dans l'histoire et sur les boutons de vote.
+        const noms = {};
+        ps.forEach((pl) => (noms[pl.id] = pl.name));
+        return { roles, meta: { count: n, theme: label, consigne, order, amorces: amor, noms }, open: true };
       },
       renderMine: (mine, ctx) => liveWrite(mine, ctx),
       renderReveal: (live, ctx) => livePodium(live, ctx),
@@ -136,93 +143,118 @@ export function render(container, { game }) {
       return ids.map((id) =>
         el("p.ce-line", {}, [
           `${amor[id]} ${(texts[id] && texts[id].text) || "…"} `,
-          el("em", { text: `— ${names[id] || "?"}`, style: "opacity:.5;font-size:.8em" }),
+          el("em", { text: `— ${names[id] || "?"}`, style: "color:var(--text-dim);font-size:.8em" }),
           decorate ? decorate(id) : "",
         ])
       );
     }
 
+    // Écran d'écriture puis de vote. Tout ce qui doit survivre à « Retour au
+    // salon → Revenir à la manche » vit dans api.memo() : avant, la zone
+    // d'écriture revenait vide et voter envoyait un texte vide, qui effaçait
+    // la ligne déjà écrite (l'envoi remplace la réponse précédente).
     function liveWrite(mine, { api, meta }) {
-      let myText = "";
-      let myVote = null;
+      const m = api.memo();
+      if (!("texte" in m)) Object.assign(m, { texte: "", vote: null, brouillon: "" });
       let inputsCache = {};
       let phase = "write";
+      let fait = 0;
+      let attendus = meta.count || 0;
       const zone = el("div");
-      const nameOf = (id) => (api.players().find((p) => p.id === id) || {}).name || "?";
+      const noms = meta.noms || {};
+      const nameOf = (id) => noms[id] || (api.players().find((p) => p.id === id) || {}).name || "?";
+      // Ma ligne : mémorisée, sinon relue dans les réponses publiques (téléphone rechargé).
+      const maLigne = () => m.texte || (inputsCache[api.me] && inputsCache[api.me].text) || "";
 
+      let prog = null;
+      let hostBtn = null;
+      function peindreProgression() {
+        if (prog) prog.textContent = `${fait} / ${attendus} lignes écrites`;
+        if (hostBtn) {
+          // Toujours disponible : un joueur absent ne bloque plus le dévoilement.
+          hostBtn.textContent = fait >= attendus ? "📖 Dévoiler l'histoire" : `📖 Dévoiler maintenant (${fait}/${attendus})`;
+          hostBtn.hidden = fait === 0;
+        }
+      }
       function renderWrite() {
         const ta = el("textarea.input.ce-input", { rows: "3", placeholder: "…" });
+        ta.value = maLigne() || m.brouillon;
+        ta.addEventListener("input", () => { m.brouillon = ta.value; });
         const status = el("p.screen__subtitle", { text: "Personne ne verra ta ligne avant le dévoilement 🤫", style: "margin-top:10px" });
-        const prog = el("p.screen__subtitle", { text: "", style: "margin-top:4px" });
-        const hostBtn = api.isHost()
-          ? el("button.chip", { text: "📖 Dévoiler l'histoire", style: "display:none;margin-top:10px", onClick: () => api.sendState({ phase: "story" }) })
+        prog = el("p.screen__subtitle", { text: "", style: "margin-top:4px" });
+        hostBtn = api.isHost()
+          ? el("button.chip", { style: "margin-top:10px", onClick: () => api.sendState({ phase: "story" }) })
           : null;
         const sendBtn = el("button.btn.btn--full", {
           text: "Envoyer ma ligne ✍️",
           style: "margin-top:12px",
           onClick: () => {
             const txt = ta.value.trim();
-            if (!txt || myText) return;
-            myText = txt;
-            ta.disabled = true;
-            sendBtn.disabled = true;
-            api.submit({ text: myText });
-            status.textContent = "✅ Envoyée — en attente des autres…";
+            if (!txt || maLigne()) return;
+            m.texte = txt;
+            api.submit({ text: m.texte });
+            verrouiller();
           },
         });
-        api.on("progress", (done, total) => {
-          prog.textContent = `${done.length} / ${total} lignes écrites`;
-          if (hostBtn && done.length >= total) hostBtn.style.display = "";
-        });
+        function verrouiller() {
+          ta.disabled = true;
+          sendBtn.disabled = true;
+          status.textContent = "✅ Envoyée — en attente des autres…";
+        }
+        if (maLigne()) verrouiller();
         const posLabel = mine.pos === 0 ? "🚀 Tu écris LE DÉBUT" : mine.pos === meta.count - 1 ? "🏁 Tu écris LA FIN" : `Tu écris la ligne ${mine.pos + 1} / ${meta.count}`;
         zone.replaceChildren(
           el("p.screen__subtitle", { text: posLabel }),
           el("div.ce-amorce", { text: mine.amorce }),
           ta, sendBtn, status, prog, hostBtn || ""
         );
+        peindreProgression();
       }
 
       function renderStory() {
+        prog = hostBtn = null;
         const voteRow = el("div.row", { style: "justify-content:center;flex-wrap:wrap;margin-top:12px" });
         Object.keys(meta.order).filter((id) => id !== api.me).forEach((id) => {
-          const c = el("button.chip" + (myVote === id ? ".is-active" : ""), {
+          const c = el("button.chip" + (m.vote === id ? ".is-active" : ""), {
             text: `🏅 ${nameOf(id)}`,
             onClick: (e) => {
-              if (myVote) return;
-              myVote = id;
-              api.submit({ text: myText, vote: id }); // fusion : garde ma ligne, ajoute mon vote
+              if (m.vote) return;
+              m.vote = id;
+              api.submit({ text: maLigne(), vote: id }); // fusion : garde ma ligne, ajoute mon vote
               [...voteRow.children].forEach((b) => (b.disabled = true));
               e.currentTarget.classList.add("is-active");
             },
           });
-          if (myVote) c.disabled = true; // l'écran se re-rend à chaque vote reçu : conserver l'état
+          if (m.vote) c.disabled = true; // l'écran se re-rend à chaque vote reçu : conserver l'état
           voteRow.appendChild(c);
         });
         zone.replaceChildren(
           el("h3.center", { text: "📖 Votre chef-d'œuvre" }),
-          el("div.ce-story", { style: "margin-top:10px" }, storyLines(meta.order, meta.amorces, inputsCache, namesMap())),
+          el("div.ce-story", { style: "margin-top:10px" }, storyLines(meta.order, meta.amorces, inputsCache, noms)),
           el("p.screen__subtitle", { text: "🏅 Vote pour la meilleure ligne (pas la tienne) :", style: "margin-top:14px" }),
           voteRow,
-          api.isHost() ? el("p.screen__subtitle", { text: "Puis « 🏆 Podium » pour les résultats.", style: "margin-top:8px;opacity:.75" }) : ""
+          api.isHost() ? el("p.screen__subtitle", { text: "Puis « 🏆 Podium » pour les résultats.", style: "margin-top:8px" }) : ""
         );
-        announce("Histoire dévoilée, votez pour la meilleure ligne");
       }
-
-      function namesMap() {
-        const m = {};
-        api.players().forEach((p) => (m[p.id] = p.name));
-        return m;
-      }
-
-      api.on("progress", (done, total, inputs) => {
-        inputsCache = inputs || {};
-        if (phase === "story") renderStory(); // lignes tardives / votes qui tombent
-      });
-      api.on("state", (s) => {
-        if (s && s.phase === "story" && phase !== "story") { phase = "story"; renderStory(); }
-      });
 
       renderWrite();
+      // Abonnements APRÈS le premier rendu : le rejeu (api.on) peut ainsi
+      // basculer directement sur l'histoire si elle est déjà dévoilée.
+      api.on("progress", (done, total, inputs) => {
+        inputsCache = inputs || {};
+        fait = done.length;
+        if (total) attendus = total;
+        if (phase === "story") renderStory(); // lignes tardives / votes qui tombent
+        else peindreProgression();
+      });
+      api.on("state", (s) => {
+        if (s && s.phase === "story" && phase !== "story") {
+          phase = "story";
+          renderStory();
+          announce("Histoire dévoilée, votez pour la meilleure ligne"); // une fois, pas à chaque vote reçu
+        }
+      });
+
       return [
         meta.consigne ? el("p.screen__subtitle", { text: `${meta.theme} — ${meta.consigne}`, style: "margin-bottom:8px" }) : "",
         zone,

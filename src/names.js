@@ -35,3 +35,11 @@ export function resolveNames(text, names = []) {
     return name;
   });
 }
+
+/** « de » élidé devant une voyelle : de("Alice") → « d'Alice », de("Bob") →
+    « de Bob », de("oublier…") → « d'oublier… ». Le h n'est pas élidé (muet ou
+    aspiré, impossible à deviner : « de Hugo » reste correct). */
+export function de(mot) {
+  const m = String(mot || "");
+  return /^[aeiouyàâäéèêëîïôöùûüœæ]/i.test(m) && !/^y[aeiouéè]/i.test(m) ? `d'${m}` : `de ${m}`;
+}

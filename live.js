@@ -3,15 +3,17 @@
 
    Un salon = un couple (code de soirée, jeu). Protocole JSON :
    Client → serveur :
-     { t:"join", room, game, id, name, avatar? }
+     { t:"join", room, game, id, name, avatar?, wasHost? }   (wasHost : ce téléphone était l'hôte)
      { t:"join", room, id, spectator:true, game? }    (écran TV : regarde sans jouer ;
                        game absent/inconnu → jeu courant de la room, sinon "nogame")
-     { t:"start", roles:{deviceId:payload}, meta?, open? }  (hôte ; open=true →
-                       les inputs sont diffusés en cours de manche via progress)
-     { t:"input", data }                               (réponse du joueur, manche en cours)
-     { t:"timer", seconds }                            (hôte : chrono synchronisé)
-     { t:"state", data }                               (hôte : update diffusé en cours de manche,
+     { t:"start", roles:{deviceId:payload}, meta?, open?, after? }  (hôte ; open=true →
+                       les inputs sont diffusés en cours de manche via progress ;
+                       after = dernière manche vue par l'hôte, pour ne jamais réutiliser un numéro)
+     { t:"input", data, n? }                           (réponse du joueur, manche en cours)
+     { t:"timer", seconds, n? }                        (hôte : chrono synchronisé)
+     { t:"state", data, n? }                           (hôte : update diffusé en cours de manche,
                                                         mémorisé pour resynchroniser les reconnectés)
+     → n : numéro de la manche visée ; un envoi pour une autre manche est ignoré.
      { t:"goto", game }                                (hôte : toute la soirée change de jeu)
      { t:"kick", id }                                  (hôte : éjecte un joueur du salon)
      { t:"host", id }                                  (hôte : passe la main à un autre joueur)
@@ -22,8 +24,10 @@
      { t:"leave" }
    Serveur → client :
      { t:"lobby", players:[{id,name,avatar}], host, avatars }
-     { t:"round", n, you, names, meta, avatars }      (rôle PRIVÉ du joueur)
-     { t:"progress", n, done:[ids], total, inputs? }  (ordre = buzzer ; inputs si open)
+     { t:"round", n, you, names, meta, avatars, endsAt?, now? }  (rôle PRIVÉ du joueur ;
+                                                        endsAt = chrono déjà lancé dans la manche)
+     { t:"progress", n, done:[ids], total, inputs? }  (ordre = buzzer ; inputs si open ;
+                                                        total = joueurs présents qui ont un rôle)
      { t:"timer", n, endsAt, now }                    (horloge serveur pour compenser l'offset)
      { t:"state", n, data }
      { t:"revealed", n, roles, inputs, order, names, meta, avatars }
@@ -51,6 +55,12 @@ const MAX_ROOMS = 500;
 const ROOM_RE = /^[A-Z0-9]{1,8}$/;
 const GAME_RE = /^[a-z0-9-]{1,32}$/;
 const ID_RE = /^[a-zA-Z0-9]{1,20}$/;
+// Revendication d'hôte (voir « join ») : acceptée seulement juste après la
+// création du salon — le temps que tout le monde se (re)connecte.
+const HOST_CLAIM_MS = 15000;
+// Hôte parti puis revenu (page rechargée — Safari le fait seul en arrière-plan —,
+// réseau coupé) : il reprend la main s'il revient dans ce délai.
+const HOST_RETOUR_MS = 120000;
 
 const rooms = new Map(); // "ROOM|game" -> { players: Map<id,{name,avatar,ws}>, spectators: Map<id,{ws}>, hostId, round, room, game }
 const roomGame = new Map(); // "ROOM" -> dernier jeu où un joueur est entré (pour router un spectateur « wildcard »)
@@ -94,16 +104,31 @@ function avatarsOf(r) {
   return avatars;
 }
 
+// Joueurs attendus dans la manche : présents ET distribués. Un retardataire
+// (sans rôle) ou un joueur parti ne doit pas bloquer « tout le monde a répondu ».
+function attendus(r) {
+  if (!r.round) return 0;
+  let n = 0;
+  for (const id of r.players.keys()) if (Object.prototype.hasOwnProperty.call(r.round.roles, id)) n++;
+  return n;
+}
+function progressMessage(r) {
+  return JSON.stringify({
+    t: "progress", n: r.round.n, done: r.round.order, total: attendus(r),
+    ...(r.round.open ? { inputs: r.round.inputs } : {}),
+  });
+}
+
 // Rejoue la manche en cours à un membre (joueur ou spectateur). Pour un
 // spectateur, on passe son ws (il n'est pas dans r.players) ; roles[id] est
 // alors absent → you:null (aucun rôle privé).
 function sendRoundTo(r, id, ws) {
   const sock = ws || (r.players.get(id) && r.players.get(id).ws);
   if (!sock || !r.round) return;
-  const { n, roles, names, meta, revealed, inputs, order, timerEndsAt, open, lastState, avatars } = r.round;
-  sock.send(JSON.stringify({ t: "round", n, you: roles[id] ?? null, names, meta, avatars }));
-  if (order.length)
-    sock.send(JSON.stringify({ t: "progress", n, done: order, total: r.players.size, ...(open ? { inputs } : {}) }));
+  const { n, roles, names, meta, revealed, inputs, order, timerEndsAt, lastState, avatars } = r.round;
+  // endsAt/now : chrono déjà lancé (même échu) — voir onRound côté client.
+  sock.send(JSON.stringify({ t: "round", n, you: roles[id] ?? null, names, meta, avatars, ...(timerEndsAt ? { endsAt: timerEndsAt, now: Date.now() } : {}) }));
+  if (order.length) sock.send(progressMessage(r));
   if (timerEndsAt && timerEndsAt > Date.now())
     sock.send(JSON.stringify({ t: "timer", n, endsAt: timerEndsAt, now: Date.now() }));
   if (revealed) sock.send(JSON.stringify({ t: "revealed", n, roles, inputs, order, names, meta, avatars }));
@@ -125,6 +150,7 @@ function removePlayer(key, id, ws) {
   }
   const p = r.players.get(id);
   if (!p || (ws && p.ws !== ws)) return; // une reconnexion a déjà remplacé ce socket
+  if (r.hostId === id) r.hoteParti = { id, at: Date.now() };
   r.players.delete(id);
   if (r.players.size === 0) {
     // Plus de joueurs : les écrans TV re-cherchent le jeu courant de la room
@@ -137,7 +163,14 @@ function removePlayer(key, id, ws) {
     if (roomGame.get(r.room) === r.game) roomGame.delete(r.room); // pas de fuite : purge le routage du salon disparu
   } else {
     broadcast(r, lobbyMessage(r));
+    if (r.round && !r.round.revealed) broadcast(r, progressMessage(r));
   }
+}
+
+// Un envoi qui vise une autre manche que celle en cours (écran oublié, décompte
+// d'une manche passée) est ignoré. Sans n (ancien client) : accepté.
+function horsManche(msg, r) {
+  return msg.n !== undefined && msg.n !== null && msg.n !== r.round.n;
 }
 
 /** Branche un socket WebSocket sur le protocole des salons. */
@@ -194,10 +227,13 @@ function handleSocket(ws) {
         return ws.close();
       }
       const k = roomKey(room, game);
+      // Même socket, autre salon : on quitte proprement le précédent (sinon
+      // fantôme là-bas jusqu'à la fermeture du socket).
+      if (key && key !== k && myId) removePlayer(key, myId, ws);
       let r = rooms.get(k);
       if (!r) {
         if (rooms.size >= MAX_ROOMS) return ws.close();
-        r = { players: new Map(), spectators: new Map(), hostId: null, round: null, room, game };
+        r = { players: new Map(), spectators: new Map(), hostId: null, round: null, room, game, createdAt: Date.now(), hostClaimed: false };
         rooms.set(k, r);
       }
       if (!r.players.has(id) && r.players.size >= MAX_PLAYERS) return ws.close();
@@ -205,6 +241,18 @@ function handleSocket(ws) {
       if (old && old.ws !== ws) old.ws.close(); // reconnexion : remplace l'ancien socket
       r.players.set(id, { name, avatar, ws });
       ensureHost(r); // premier arrivé = hôte
+      // Salon tout juste (re)créé — « Changer de jeu », redémarrage du serveur —
+      // ou pas encore lancé : le vrai hôte reprend la main même si un invité est
+      // arrivé avant lui (au Blind Test, c'est le DJ qui doit l'être). Une seule
+      // revendication par salon, et plus aucune une fois la partie lancée.
+      if (msg.wasHost === true && !r.hostClaimed && (Date.now() - r.createdAt < HOST_CLAIM_MS || !r.round)) {
+        r.hostId = id;
+        r.hostClaimed = true;
+      }
+      // L'hôte qui revient peu après son départ récupère son rôle (la main
+      // était passée automatiquement au plus ancien, pas par un transfert).
+      if (r.hoteParti && r.hoteParti.id === id && Date.now() - r.hoteParti.at < HOST_RETOUR_MS) r.hostId = id;
+      if (r.hoteParti && r.hoteParti.id === id) r.hoteParti = null;
       roomGame.set(room, game); // ce salon devient le « jeu courant » de la room (routage des spectateurs)
       key = k;
       myId = id;
@@ -231,7 +279,7 @@ function handleSocket(ws) {
       if (myId !== ensureHost(r)) return;
       const roles = msg.roles && typeof msg.roles === "object" ? msg.roles : {};
       r.round = {
-        n: (r.round ? r.round.n : 0) + 1,
+        n: Math.max(r.round ? r.round.n : 0, Number.isInteger(msg.after) && msg.after > 0 && msg.after < 1e6 ? msg.after : 0) + 1,
         roles,
         names: namesOf(r),
         avatars: avatarsOf(r),
@@ -248,15 +296,12 @@ function handleSocket(ws) {
       // (le message « round » est poussé par joueur, pas via broadcast).
       for (const [sid, sp] of r.spectators) sendRoundTo(r, sid, sp.ws);
     } else if (msg.t === "input") {
-      if (!r.round || r.round.revealed) return;
+      if (!r.round || r.round.revealed || horsManche(msg, r)) return;
       const data = msg.data === undefined ? true : msg.data;
       if (JSON.stringify(data).length > 4096) return; // réponse anormalement grosse
       if (!(myId in r.round.inputs)) r.round.order.push(myId); // 1re soumission : rang conservé
       r.round.inputs[myId] = data; // re-soumettre remplace la réponse, pas le rang
-      broadcast(r, JSON.stringify({
-        t: "progress", n: r.round.n, done: r.round.order, total: r.players.size,
-        ...(r.round.open ? { inputs: r.round.inputs } : {}),
-      }));
+      broadcast(r, progressMessage(r));
     } else if (msg.t === "react") {
       // Ouvert à TOUS les joueurs (c'est l'intérêt : réagir pendant que les
       // autres jouent), mais borné en cadence et limité à la liste fermée.
@@ -269,12 +314,12 @@ function handleSocket(ws) {
       p.lastReact = now;
       broadcast(r, JSON.stringify({ t: "react", id: myId, emoji }));
     } else if (msg.t === "timer") {
-      if (myId !== ensureHost(r) || !r.round) return;
+      if (myId !== ensureHost(r) || !r.round || horsManche(msg, r)) return;
       const seconds = Math.max(1, Math.min(600, Number(msg.seconds) || 0));
       r.round.timerEndsAt = Date.now() + seconds * 1000;
       broadcast(r, JSON.stringify({ t: "timer", n: r.round.n, endsAt: r.round.timerEndsAt, now: Date.now() }));
     } else if (msg.t === "state") {
-      if (myId !== ensureHost(r) || !r.round) return;
+      if (myId !== ensureHost(r) || !r.round || horsManche(msg, r)) return;
       r.round.lastState = msg.data ?? null; // mémorisé pour les reconnexions
       broadcast(r, JSON.stringify({ t: "state", n: r.round.n, data: msg.data ?? null }));
     } else if (msg.t === "goto") {
@@ -299,6 +344,7 @@ function handleSocket(ws) {
       const target = String(msg.id || "");
       if (target === myId || !r.players.has(target)) return;
       r.hostId = target;
+      r.hoteParti = null; // transfert volontaire : l'ancien hôte ne la reprend pas en revenant
       broadcast(r, lobbyMessage(r));
     } else if (msg.t === "ceremony") {
       // Cérémonie du Roi : l'hôte la déclenche, tous les téléphones la jouent

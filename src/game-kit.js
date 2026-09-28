@@ -4,6 +4,7 @@
 
 import { el, showPhase } from "./ui.js";
 import { loadContent, loadConfig, activeCards } from "./content.js";
+import { createDeck } from "./deck.js";
 
 /**
  * Source de contenu d'un jeu : contenu intégré + cartes perso, filtré par la
@@ -12,16 +13,48 @@ import { loadContent, loadConfig, activeCards } from "./content.js";
  *
  * @param {string} gameId
  * @param {object} opts  { builtIn, keyOf?, toValue? }
- * @returns {{ reload:()=>Promise<void>, cards:()=>any[] }}
+ * @returns {{ reload:()=>Promise<void>, cards:()=>any[], version:()=>number }}
  */
 export function contentSource(gameId, { builtIn, keyOf = (x) => x, toValue = (e) => e.text }) {
   let custom = [];
   let config = { onlyCustom: false, disabled: {} };
+  let version = 0; // +1 à chaque rechargement (voir paquetSuivi)
   return {
     async reload() {
       [custom, config] = await Promise.all([loadContent(gameId), loadConfig(gameId)]);
+      version++;
     },
     cards: () => activeCards({ builtIn, custom, config, keyOf, customToValue: toValue }),
+    version: () => version,
+  };
+}
+
+/**
+ * Paquet qui suit sa source de contenu : il est (re)construit au premier tirage
+ * qui suit un rechargement de la source. Le salon multi s'ouvre souvent AVANT
+ * que les cartes perso ne soient arrivées (« Changer de jeu », tournoi,
+ * « Reprendre ») : un paquet construit à l'ouverture ignorait alors, pour toute
+ * la partie, les cartes perso, les cartes désactivées et « seulement les nôtres ».
+ * Même interface que createDeck ; le filtre éventuel est conservé.
+ */
+export function paquetSuivi(src, options = {}) {
+  let deck = null;
+  let vue = -1;
+  let filtre = null;
+  const paquet = () => {
+    if (!deck || vue !== src.version()) {
+      deck = createDeck(src.cards(), options);
+      vue = src.version();
+      if (filtre) deck.setFilter(filtre);
+    }
+    return deck;
+  };
+  return {
+    next: () => paquet().next(),
+    remaining: () => paquet().remaining(),
+    size: () => paquet().size(),
+    reset: () => paquet().reset(),
+    setFilter(fn) { filtre = fn || null; paquet().setFilter(filtre); },
   };
 }
 

@@ -104,3 +104,19 @@ test("banque de questions : réponses numériques, énoncés uniques", () => {
     vus.add(q.q);
   }
 });
+
+test("années : « pile » exige l'année exacte, et les gorgées se comptent en années", async () => {
+  const { estAnnee } = await import("../src/games/estimations/regles.js");
+  assert.equal(estAnnee("En quelle année le mur de Berlin est-il tombé ?", ""), true);
+  assert.equal(estAnnee("Combien de marches a la tour Eiffel ?", "marches"), false);
+  // 1 % de 1789 = ±18 ans : avant, 1800 comptait « pile ».
+  assert.equal(estPile(1789, 1800), true, "hors année : la marge de 1 % s'applique");
+  assert.equal(estPile(1789, 1800, { annee: true }), false);
+  assert.equal(estPile(1789, 1789, { annee: true }), true);
+  assert.equal(gorgees(1789, 1792, { annee: true }), 1);
+  assert.equal(gorgees(1789, 1800, { annee: true }), 2);
+  assert.equal(gorgees(1789, 1900, { annee: true }), 3);
+  const r = classer(2007, [{ id: "a", v: 2008 }, { id: "b", v: 1990 }], { annee: true });
+  assert.equal(r.pile, false, "2008 pour 2007 n'est pas « pile »");
+  assert.deepEqual(r.gagnants, ["a"]);
+});

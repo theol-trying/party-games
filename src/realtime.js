@@ -28,7 +28,7 @@
    Helper exporté : syncCountdown(endsAtClient, {onTick, onEnd}) -> stop()
    ========================================================================= */
 
-import { el, showPhase, announce } from "./ui.js";
+import { el, showPhase, refreshPhase, announce } from "./ui.js";
 import { getData, setData } from "./store.js";
 import { currentRoom, setRoom, normalizeCode } from "./room.js";
 import { pop, roundCue, jingle } from "./sound.js";
@@ -44,6 +44,7 @@ const AVATAR_KEY = "soiree.avatar"; // emoji choisi par le joueur (apparaît par
 const AUTO_KEY = "soiree.autolive"; // « suivre l'hôte » : le prochain jeu ouvre direct son salon
 const JOINED_KEY = "soiree.joined"; // déjà connecté cette session : plus de re-saisie du prénom
 const LASTGAME_KEY = "soiree.lastgame"; // dernier salon rejoint (bannière « Reprendre » de l'accueil)
+const HOST_KEY = "soiree.hote"; // code de la soirée dont CE téléphone est l'hôte
 
 // Palette d'avatars (emoji) proposée dans l'écran de connexion.
 export const AVATARS = ["🦊", "🐼", "🐸", "🦁", "🐙", "🦄", "🐵", "🐧", "🦉", "🐝", "🦖", "🐳", "👽", "🤖", "👻", "🎃", "🦩", "🐺", "🐷", "🦌", "🐨", "🦈", "🌮", "🍕"];
@@ -149,8 +150,22 @@ export function resumeInfo() {
     return gameId ? { gameId } : null;
   } catch { return null; }
 }
+/* L'hôte est le premier arrivé dans un salon. Or un salon est recréé à chaque
+   « Changer de jeu » (un salon par jeu) et à chaque redémarrage du serveur :
+   l'invité le plus rapide devenait alors hôte à la place du vrai. Le téléphone
+   hôte le retient donc pour la soirée, et le revendique en rejoignant (le
+   serveur n'accepte cette revendication que juste après la création du salon). */
+function memoriserHote(estHote) {
+  try {
+    if (estHote) sessionStorage.setItem(HOST_KEY, currentRoom());
+    else if (sessionStorage.getItem(HOST_KEY) === currentRoom()) sessionStorage.removeItem(HOST_KEY);
+  } catch {}
+}
+function etaisHote() {
+  try { return sessionStorage.getItem(HOST_KEY) === currentRoom(); } catch { return false; }
+}
 function forgetSession() {
-  try { sessionStorage.removeItem(JOINED_KEY); sessionStorage.removeItem(LASTGAME_KEY); } catch {}
+  try { sessionStorage.removeItem(JOINED_KEY); sessionStorage.removeItem(LASTGAME_KEY); sessionStorage.removeItem(HOST_KEY); } catch {}
 }
 
 /** Compte à rebours synchronisé : endsAtClient vient de api.on("timer", …).
@@ -175,6 +190,10 @@ export function syncCountdown(endsAtClient, { onTick, onEnd }) {
 
 export function liveSession(stage, {
   gameId, title, minPlayers = 2, assign, renderMine, renderReveal, lobbyExtra, onExit,
+  // beforeReveal(api, reveler) : facultatif. Appelé quand l'hôte touche le
+  // bouton de révélation, AVANT de révéler ; le jeu appelle reveler() quand il
+  // est prêt (ex. Bac : ramasser d'abord les réponses de ceux qui écrivent encore).
+  beforeReveal,
   revealLabel = "Révéler les rôles", // libellé du bouton hôte (jeux interactifs : « Révéler les réponses »)
   newRoundLabel = "Nouvelle manche", // libellé « manche suivante » (ex : « Question suivante »)
   startLabel, // libellé du bouton de lancement dans le lobby (défaut : « Distribuer les rôles »)
@@ -198,7 +217,10 @@ export function liveSession(stage, {
   let tvAudio = false; // un ecran TV diffuse-t-il le son ? (Blind Test, optionnel)
 
   function emit(ev, ...args) {
-    if (ev === "state") { lastStateData = args[0]; hasLastState = true; } // mémorisé pour les abonnés tardifs
+    // Mémorisés pour les abonnés tardifs (écran re-rendu, voir api.on).
+    if (ev === "state") { lastStateData = args[0]; hasLastState = true; }
+    else if (ev === "progress") lastProgress = args;
+    else if (ev === "timer") lastTimer = args[0];
     for (const cb of listeners[ev] || []) {
       try { cb(...args); } catch (e) { console.error(e); }
     }
@@ -218,15 +240,39 @@ export function liveSession(stage, {
     react: (emoji) => net && net.react && net.react(emoji), // réaction emoji visible par tous
     tvAudio: () => tvAudio, // un écran TV a-t-il pris le son en charge ? (Blind Test)
     newRound: () => distribute(),
+    // Mémoire de la manche : le MÊME objet à chaque rendu de la manche en
+    // cours, un objet neuf à la manche suivante. C'est là qu'un jeu range ce
+    // qui doit survivre à « Retour au salon → Revenir à la manche » (réponse
+    // choisie, vote, brouillon…) — une variable de la closure de rendu, elle,
+    // repart de zéro à chaque rendu.
+    memo: () => memo,
     on: (ev, cb) => {
       (listeners[ev] || (listeners[ev] = [])).push(cb); // progress | state | timer
-      // Un écran (re)rendu APRÈS le dernier state de la manche le rejoue aussitôt :
-      // retardataire sur un reveal contesté, retour via « Revenir à la manche »…
-      if (ev === "state" && hasLastState) {
-        try { cb(lastStateData); } catch (e) { console.error(e); }
+      // Un écran (re)rendu APRÈS un événement de la manche le rejoue aussitôt :
+      // retardataire, retour via « Revenir à la manche », nouvel hôte… Sans
+      // ça, l'écran re-rendu ignorait qui avait déjà répondu et le chrono.
+      // Le chrono est rejoué même échu : l'écran sait ainsi que le temps est écoulé.
+      const rejeu = ev === "state" ? (hasLastState ? [lastStateData] : null)
+        : ev === "progress" ? lastProgress
+        : ev === "timer" ? (lastTimer != null ? [lastTimer] : null)
+        : null;
+      if (rejeu) {
+        try { cb(...rejeu); } catch (e) { console.error(e); }
       }
     },
   };
+  // Version de l'API liée à UNE manche : ses envois portent le numéro de la
+  // manche, et le serveur ignore ceux qui arrivent pendant une autre. Un
+  // décompte oublié par un ancien écran ne peut donc plus envoyer les réponses
+  // de la manche N dans la manche N+1, ni relancer son chrono.
+  function apiDeManche(n) {
+    return {
+      ...api,
+      submit: (data) => net && net.input(data, n),
+      startTimer: (s) => net && net.timer(s, n),
+      sendState: (d) => net && net.state(d, n),
+    };
+  }
 
   // ⚠️ TOUTE variable `let/const` de session doit être déclarée ICI, avant le
   // `return stop` — plus bas, son initialisation ne s'exécuterait jamais (TDZ).
@@ -234,10 +280,14 @@ export function liveSession(stage, {
   let lastCount = 0; // taille du salon au dernier rendu (son « pop » à l'arrivée)
   let lastStateData = null; // dernier state reçu (rejoué aux abonnés tardifs)
   let hasLastState = false;
+  let lastProgress = null; // derniers arguments de progress (rejoués aux abonnés tardifs)
+  let lastTimer = null; // dernière échéance de chrono (horloge locale), idem
+  let memo = {}; // mémoire de la manche en cours (api.memo)
   let lastRevealed = null; // dernier reveal reçu (bouton « Revenir » depuis le salon)
   let wakeLock = null; // anti-mise en veille pendant le salon/les manches
   let ceremonyCleanup = null; // arrêt de la cérémonie en cours (timers)
-  let tournoi = null; // tournoi en cours (rafraîchi à chaque affichage du salon)
+  let tournoi = null; // tournoi en cours (rafraîchi à l'affichage du salon)
+  let tournoiLu = 0; // date de la dernière lecture du tournoi (limite les requêtes)
 
   // Au retour au premier plan (téléphone déverrouillé) : reconnexion immédiate
   // au lieu d'attendre les timers de retry, et ré-acquisition du wake lock
@@ -293,7 +343,7 @@ export function liveSession(stage, {
   }
 
   // Barre de réactions : présente sur l'écran de manche et de révélation, donc
-  // dans les 10 jeux sans qu'ils aient à s'en occuper. Masquée en repli
+  // dans les 11 jeux sans qu'ils aient à s'en occuper. Masquée en repli
   // polling : à 4 s de latence, une réaction n'a plus aucun intérêt.
   function reactionBar() {
     if (!net || net.mode !== "ws") return null;
@@ -362,16 +412,23 @@ export function liveSession(stage, {
 
   function lobbyScreen() {
     if (stopped) return;
+    const dejaAffiche = view === "lobby"; // simple mise à jour (arrivée, statut…) → redessin en place
     view = "lobby";
     // Le tournoi vit dans le KV partagé : on le relit à l'affichage du salon
     // pour que tous les téléphones voient la même progression, puis on
     // re-rend si l'état a changé depuis le dernier affichage.
-    getTournoi().then((t) => {
-      const avant = tournoi ? `${tournoi.index}/${tournoi.jeux.length}` : "";
-      const apres = t ? `${t.index}/${t.jeux.length}` : "";
-      if (avant !== apres && !stopped && view === "lobby") { tournoi = t; lobbyScreen(); }
-      else tournoi = t;
-    }).catch(() => {});
+    // Au plus une lecture toutes les 5 s : le salon est redessiné à chaque
+    // arrivée, et tous les téléphones d'une soirée partagent souvent la même
+    // adresse IP (même Wi-Fi), donc le même quota de requêtes du serveur.
+    if (Date.now() - tournoiLu > 5000) {
+      tournoiLu = Date.now();
+      getTournoi().then((t) => {
+        const avant = tournoi ? `${tournoi.index}/${tournoi.jeux.length}` : "";
+        const apres = t ? `${t.index}/${t.jeux.length}` : "";
+        if (avant !== apres && !stopped && view === "lobby") { tournoi = t; lobbyScreen(); }
+        else tournoi = t;
+      }).catch(() => {});
+    }
     const isHost = host === me;
     const disp = dedupeNames(players);
     const list = players.length
@@ -390,7 +447,8 @@ export function liveSession(stage, {
                       if (window.confirm(`Donner le rôle d'hôte à ${p.name} ?`)) net && net.host(p.id);
                     },
                   }),
-                  el("button.chip", { text: "✕", "aria-label": `Retirer ${p.name} du salon`, onClick: () => net && net.kick(p.id) }),
+                  // Confirmation : un ✕ touché par erreur éjectait un ami en pleine partie.
+                  el("button.chip", { text: "✕", "aria-label": `Retirer ${p.name} du salon`, onClick: () => { if (window.confirm(`Retirer ${p.name} du salon ?`)) net && net.kick(p.id); } }),
                 ])
               : el("span", { text: "" }),
         ])))
@@ -415,7 +473,7 @@ export function liveSession(stage, {
       qr.style.cssText = "display:block;border-radius:14px";
       qr.setAttribute("aria-label", "QR code d'invitation à la soirée");
     } catch {}
-    showPhase(stage, el("div.card.center", {}, [
+    (dejaAffiche ? refreshPhase : showPhase)(stage, el("div.card.center", {}, [
       el("h3", { text: title }),
       // Bloc d'invitation : le code et le QR sont ce que les invités cherchent
       // en premier, ils méritent mieux qu'une ligne de sous-titre.
@@ -523,12 +581,21 @@ export function liveSession(stage, {
   function roleScreen() {
     if (stopped || !round) return;
     view = "role";
+    // Écran neuf = abonnements neufs : ceux de l'écran remplacé visaient un DOM
+    // détaché, et doublaient chaque traitement (dépouillement exécuté deux fois…).
+    // Les événements déjà reçus sont rejoués au nouvel abonné (api.on).
+    listeners = { progress: [], state: [], timer: [], tvaudio: [] };
     const body = round.you != null
-      ? renderMine(round.you, { name: myName, api, meta: round.meta, n: round.n })
+      ? renderMine(round.you, { name: myName, api: apiDeManche(round.n), meta: round.meta, n: round.n })
       : el("p", { text: "Tu as rejoint après la distribution — attends la prochaine manche." });
     const actions = [];
     if (host === me) {
-      actions.push(el("button.btn.btn--full", { text: revealLabel, onClick: () => net && net.reveal() }));
+      const reveler = () => net && net.reveal();
+      const nManche = round.n;
+      actions.push(el("button.btn.btn--full", {
+        text: revealLabel,
+        onClick: () => (beforeReveal ? beforeReveal(apiDeManche(nManche), reveler) : reveler()),
+      }));
       actions.push(el("button.btn.btn--full.btn--ghost", { text: newRoundLabel, style: "margin-top:10px", onClick: distribute }));
     }
     actions.push(el("button.btn.btn--ghost.btn--full", { text: "Retour au salon", style: "margin-top:10px", onClick: lobbyScreen }));
@@ -543,13 +610,14 @@ export function liveSession(stage, {
   function revealScreen(revealed) {
     if (stopped) return;
     view = "reveal";
+    listeners = { progress: [], state: [], timer: [], tvaudio: [] }; // idem roleScreen
     const actions = [];
     if (host === me) actions.push(el("button.btn.btn--full", { text: newRoundLabel, onClick: distribute }));
     actions.push(el("button.btn.btn--ghost.btn--full", { text: "Retour au salon", style: "margin-top:10px", onClick: lobbyScreen }));
     showPhase(stage, el("div.card.center", {}, [
       // n : identité de manche stable → les jeux keyent leurs FX dessus (une seule
       // salve par manche, pas de re-tir à « Revoir la révélation »).
-      renderReveal(revealed, { api, n: revealed && revealed.n }),
+      renderReveal(revealed, { api: apiDeManche(revealed && revealed.n), n: revealed && revealed.n }),
       el("div", { style: "margin-top:16px" }, actions),
       reactionBar(),
       statusLine(),
@@ -586,12 +654,25 @@ export function liveSession(stage, {
     lastCount = list.length;
     players = list;
     if (avs) avatars = avs;
+    const hostChanged = host !== null && host !== hostId;
     host = hostId;
-    if (view === "lobby" || view === "name") lobbyScreen();
+    memoriserHote(hostId === me);
+    // (Pas de re-rendu sur l'écran « Prénom / code » : une arrivée effaçait la
+    // saisie en cours. La 1re connexion passe déjà par lobbyScreen.)
+    if (view === "lobby") lobbyScreen();
+    // Nouvel hôte en pleine manche : son écran doit afficher les boutons
+    // d'hôte (révéler, suivant, chrono du jeu…), et celui de l'ancien les perdre.
+    else if (hostChanged && view === "role") roleScreen();
+    else if (hostChanged && view === "reveal" && lastRevealed) revealScreen(lastRevealed);
   }
-  function onRound(n, you, names, meta, avs) {
+  // endsAt : échéance du chrono déjà lancé dans cette manche (horloge locale),
+  // transmise AVEC la manche : l'écran rendu à la reconnexion sait ainsi qu'un
+  // chrono tourne (ou est échu) avant même de recevoir le message timer — sinon
+  // l'hôte rechargé relançait le chrono de tout le monde à sa durée complète.
+  function onRound(n, you, names, meta, avs, endsAt = null) {
     if (avs) avatars = avs;
     round = { n, you, names, meta };
+    if (endsAt != null) lastTimer = endsAt;
     if (n !== shownRound) {
       cancelCeremony(); // une manche neuve interrompt un podium encore animé (onglet en arrière-plan)
       shownRound = n;
@@ -599,6 +680,9 @@ export function liveSession(stage, {
       listeners = { progress: [], state: [], timer: [], tvaudio: [] }; // nouvelle manche : abonnements frais
       lastStateData = null;
       hasLastState = false;
+      lastProgress = null;
+      if (endsAt == null) lastTimer = null; // manche neuve sans chrono lancé
+      memo = {};
       lastRevealed = null;
       roundCue();
       roleScreen();
@@ -695,7 +779,7 @@ export function liveSession(stage, {
       retries = 0;
       status = "⚡ temps réel";
       if (view === "lobby") lobbyScreen();
-      sock.send(JSON.stringify({ t: "join", room: currentRoom(), game: gameId, id: me, name: myName, avatar: myAvatar }));
+      sock.send(JSON.stringify({ t: "join", room: currentRoom(), game: gameId, id: me, name: myName, avatar: myAvatar, wasHost: etaisHote() }));
     }
 
     function open() {
@@ -714,7 +798,7 @@ export function liveSession(stage, {
         let m;
         try { m = JSON.parse(e.data); } catch { return; }
         if (m.t === "lobby") onLobby(m.players || [], m.host || null, m.avatars || {});
-        else if (m.t === "round") onRound(m.n, m.you, m.names || {}, m.meta ?? null, m.avatars || {});
+        else if (m.t === "round") onRound(m.n, m.you, m.names || {}, m.meta ?? null, m.avatars || {}, typeof m.endsAt === "number" && typeof m.now === "number" ? Date.now() + (m.endsAt - m.now) : null);
         else if (m.t === "progress") { if (round && m.n === round.n) emit("progress", m.done || [], m.total || 0, m.inputs || null); }
         else if (m.t === "timer") {
           // Convertit l'échéance serveur en horloge locale (compense l'offset).
@@ -745,10 +829,13 @@ export function liveSession(stage, {
     const sendJson = (o) => { if (sock && sock.readyState === 1) sock.send(JSON.stringify(o)); };
     return {
       mode: "ws",
-      start(roles, meta, open) { sendJson({ t: "start", roles, meta, open: open === true }); },
-      input(data) { sendJson({ t: "input", data }); },
-      timer(seconds) { sendJson({ t: "timer", seconds }); },
-      state(data) { sendJson({ t: "state", data }); },
+      // after : dernière manche affichée ici. Si le serveur a redémarré (chaque
+      // déploiement), il repart de 0 ; sans ce repère, la manche suivante
+      // portait un numéro déjà vu et aucun téléphone ne l'affichait.
+      start(roles, meta, open) { sendJson({ t: "start", roles, meta, open: open === true, after: Math.max(0, shownRound) }); },
+      input(data, n) { sendJson({ t: "input", data, n }); },
+      timer(seconds, n) { sendJson({ t: "timer", seconds, n }); },
+      state(data, n) { sendJson({ t: "state", data, n }); },
       goto(game) { sendJson({ t: "goto", game }); },
       kick(id) { sendJson({ t: "kick", id }); },
       host(id) { sendJson({ t: "host", id }); },

@@ -6,10 +6,12 @@ import { buzz, vibrate } from "../../sound.js";
 import { teamBuilder } from "../../teams.js";
 import { openEditor } from "../../content.js";
 import { contentSource } from "../../game-kit.js";
-import { liveSession } from "../../realtime.js";
+import { liveSession, peekAutoLive, deviceId } from "../../realtime.js";
 import { celebrate } from "../../fx.js";
 import { awardStanding } from "../../crown.js";
 import { TRACKS } from "./data.js";
+
+const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? "s" : ""}`;
 
 const BT_SCHEMA = {
   title: "Blind Test",
@@ -42,7 +44,8 @@ export function render(container, { game }) {
   const objectUrls = []; // URLs de fichiers locaux à libérer au cleanup
   const src = contentSource("blind-test", { builtIn: TRACKS, keyOf: (t) => t.title, toValue: (e) => ({ title: e.title, artist: e.artist, audioUrl: e.url || "" }) });
 
-  modeSelect0();
+  // « Suivre l'hôte » (lien d'invitation, Reprendre) : on entre en joueur.
+  if (peekAutoLive()) startLive([]); else modeSelect0();
   src.reload();
 
   // Nettoyage : coupe l'extrait, libère les fichiers locaux, stoppe le salon.
@@ -56,13 +59,21 @@ export function render(container, { game }) {
   // Choix du support : un téléphone (buzzers partagés) ou multi (buzzer chacun).
   function modeSelect0() {
     if (liveStop) { liveStop(); liveStop = null; }
+    couperSon();
     showPhase(stage,
       el("div.card.center", {}, [
         el("h3", { text: "Comment jouer ?" }),
         el("button.btn.btn--full", { text: "📱 Sur ce téléphone", onClick: () => showPhase(stage, playersCard({ min: 2, cta: "Suite →", onReady: (names) => modeScreen(names) })) }),
-        el("button.btn.btn--full.btn--ghost", { text: "🌐 Multi — buzzer sur chaque tél", style: "margin-top:10px", onClick: () => sourceScreen(null, "blind-test", (q) => startLive(q)) }),
+        el("p.screen__subtitle", { text: "🌐 Multi — un buzzer sur chaque téléphone :", style: "margin-top:16px" }),
+        el("button.btn.btn--full.btn--ghost", { text: "🎧 Je suis le DJ (je prépare la playlist)", style: "margin-top:8px", onClick: () => sourceScreen(null, "blind-test", (q) => startLive(q)) }),
+        // Avant, un invité devait passer par la recherche et ajouter un titre
+        // pour que le bouton de lancement s'active, juste pour rejoindre.
+        el("button.btn.btn--full.btn--ghost", { text: "🙋 Je rejoins la partie (joueur)", style: "margin-top:10px", onClick: () => startLive([]) }),
       ])
     );
+  }
+  function couperSon() {
+    if (currentAudio) { try { currentAudio.pause(); } catch {} currentAudio = null; }
   }
 
   // Choix : chacun pour soi ou en équipes.
@@ -85,8 +96,7 @@ export function render(container, { game }) {
   function builtInTracks() { return TRACKS.map((t) => ({ key: t.title, label: `${t.title} — ${t.artist}` })); }
 
   /* ---------- Choix de la source + construction de la playlist ---------- */
-  function sourceScreen(players, scoreKey, onLaunch) {
-    const queue = [];
+  function sourceScreen(players, scoreKey, onLaunch, queue = []) {
     let provider = "itunes";
 
     const queueInfo = el("p.bt-queue", { text: "0 titre dans la playlist" });
@@ -97,9 +107,13 @@ export function render(container, { game }) {
       queueInfo.textContent = `${queue.length} titre${queue.length > 1 ? "s" : ""} dans la playlist`;
       launch.disabled = queue.length === 0;
     }
+    // Sans doublon : même extrait (src), ou même titre + artiste pour les titres sans audio.
+    const cle = (t) => t.src || `${t.title}|${t.artist}`.toLowerCase();
     function addTrack(t) {
+      if (queue.some((x) => cle(x) === cle(t))) return false;
       queue.push(t);
       refreshQueue();
+      return true;
     }
 
     // -- Recherche --
@@ -139,18 +153,20 @@ export function render(container, { game }) {
         // Remplissage express : monter une playlist en tapant 20 fois
         // « + Ajouter » décourageait tout le monde. Un tap sur un thème puis
         // un tap ici, et la partie peut commencer.
-        const dejaLa = new Set(queue.map((t) => t.src));
+        const nouveaux = list.filter((t) => !queue.some((x) => x.src === t.preview));
+        const nbExpress = Math.min(10, nouveaux.length);
         const express = el("button.btn.btn--full", {
-          text: `⚡ Ajouter ${Math.min(10, list.length)} titres d'un coup`,
+          text: nbExpress ? `⚡ Ajouter ${pluriel(nbExpress, "titre")} d'un coup` : "✓ Déjà tous dans la playlist",
+          disabled: !nbExpress,
           style: "margin-bottom:10px",
           onClick: (e) => {
-            const ajoutes = shuffle(list.filter((t) => !dejaLa.has(t.preview)))
+            const ajoutes = shuffle(nouveaux)
               .slice(0, 10)
-              .map((t) => ({ title: t.title, artist: t.artist, src: t.preview }));
-            ajoutes.forEach(addTrack);
+              .map((t) => ({ title: t.title, artist: t.artist, src: t.preview }))
+              .filter(addTrack); // le nombre annoncé = le nombre réellement ajouté
             e.currentTarget.disabled = true;
-            e.currentTarget.textContent = `✓ ${ajoutes.length} titres ajoutés`;
-            announce(`${ajoutes.length} titres ajoutés à la playlist`);
+            e.currentTarget.textContent = `✓ ${pluriel(ajoutes.length, "titre")} ${ajoutes.length > 1 ? "ajoutés" : "ajouté"}`;
+            announce(`${pluriel(ajoutes.length, "titre")} dans la playlist`);
           },
         });
         results.replaceChildren(
@@ -195,8 +211,8 @@ export function render(container, { game }) {
       text: `🎤 Liste à chanter/jouer soi-même (${defaultTracks().length})`,
       title: "Titres connus, sans extrait audio : tu lances la musique depuis ton téléphone",
       onClick: () => {
-        shuffle(defaultTracks().slice()).forEach((t) => addTrack({ title: t.title, artist: t.artist, src: t.audioUrl || "" }));
-        announce("Liste manuelle chargée");
+        const n = shuffle(defaultTracks().slice()).filter((t) => addTrack({ title: t.title, artist: t.artist, src: t.audioUrl || "" })).length;
+        announce(n ? `${pluriel(n, "titre")} ${n > 1 ? "ajoutés" : "ajouté"}` : "Déjà dans la playlist");
       },
     });
     const editBtn = el("button.chip", {
@@ -205,7 +221,7 @@ export function render(container, { game }) {
         gameId: "blind-test",
         schema: BT_SCHEMA,
         builtInList: builtInTracks(),
-        onDone: async () => { await src.reload(); sourceScreen(players, scoreKey, onLaunch); },
+        onDone: async () => { await src.reload(); sourceScreen(players, scoreKey, onLaunch, queue); }, // la playlist en cours est conservée
       }),
     });
 
@@ -283,12 +299,16 @@ export function render(container, { game }) {
       const answer = el("div.bt-answer", { style: "display:none" });
 
       function resolve(correct) {
+        if (revealed) return; // réponse déjà révélée : « Correct » ne rapporte plus rien
         if (correct && buzzedBy) { sc.add(buzzedBy); celebrate(); }
         revealAnswer();
       }
       function revealAnswer() {
         if (revealed) return;
         revealed = true;
+        // Plus de buzz après la révélation (avant : un buzz tardif rouvrait le
+        // jury, et « Correct » pouvait être pressé indéfiniment).
+        buzzers.querySelectorAll(".bt-buzzer").forEach((b) => (b.disabled = true));
         answer.style.display = "";
         answer.replaceChildren(
           el("div.bt-answer__title", { text: t.title }),
@@ -320,6 +340,7 @@ export function render(container, { game }) {
             el("button.chip", {
               text: "↺ Réinitialiser",
               onClick: () => {
+                if (!window.confirm("Remettre les scores de la soirée à zéro ?")) return;
                 sc.reset();
                 scoreWrap.replaceChildren(scoreboard(sc.scores));
               },
@@ -339,9 +360,13 @@ export function render(container, { game }) {
   function startLive(tracks) {
     if (liveStop) liveStop();
     const deck = createDeck(tracks);
-    const scores = {}; // deviceId -> total (autorité hôte, diffusé via state)
+    // Totaux : tenus par TOUS les téléphones (recopiés de chaque résultat), pour
+    // qu'un nouvel hôte reparte des bons scores au lieu de tout remettre à 0.
+    const scores = {}; // deviceId -> total
     let roundTrack = null; // secret DJ
     let lastTotals = null; // pour l'écran final
+    let extrait = 0; // n° de l'extrait dans la partie en cours (l'hôte le numérote)
+    let partieFinie = false; // « Terminer la partie » vue : le prochain extrait ouvre une nouvelle partie
     let btFxRound = -1; // manche dont les confettis du gagnant ont déjà été joués
     // Un écran TV a-t-il pris le son en charge ? Purement optionnel : sans lui,
     // la musique reste sur le téléphone de l'hôte, comme avant.
@@ -362,6 +387,15 @@ export function render(container, { game }) {
       lobbyExtra: () => {
         const wrap = el("div", { style: "margin:10px 0" });
         function build() {
+          // Hôte sans playlist (entré en « joueur », ou page rechargée) : il ne
+          // peut rien faire écouter, il faut d'abord la préparer.
+          if (!deck.size()) {
+            wrap.replaceChildren(
+              el("p.screen__subtitle.center", { text: "⚠️ Tu es l'hôte, mais ta playlist est vide.", style: "font-weight:700" }),
+              el("button.btn.btn--full.btn--ghost", { text: "🎧 Préparer la playlist", style: "margin-top:8px", onClick: () => sourceScreen(null, "blind-test", (q) => startLive(q)) })
+            );
+            return;
+          }
           const longueurs = [5, 10, 15, 0].map((v) =>
             el("button.chip" + (nbExtraits === v ? ".is-active" : ""), {
               text: v ? `${v} extraits` : "Sans fin",
@@ -388,6 +422,15 @@ export function render(container, { game }) {
         return wrap;
       },
       assign: (ps) => {
+        // Après « Terminer la partie » : une nouvelle partie repart de zéro
+        // (avant, elle démarrait à « Extrait 10 / 10 » avec les anciens scores).
+        if (partieFinie) {
+          partieFinie = false;
+          extrait = 0;
+          lastTotals = null;
+          Object.keys(scores).forEach((k) => delete scores[k]);
+        }
+        extrait++;
         let t = deck.next();
         if (!t) { deck.reset(); t = deck.next(); }
         roundTrack = t || { title: "?", artist: "", src: "" };
@@ -398,13 +441,20 @@ export function render(container, { game }) {
         // `src` voyage (l'URL d'extrait est opaque : ni titre ni artiste), pour
         // qu'un écran TV puisse diffuser le son. Le titre, lui, reste le secret
         // du DJ et ne transite jamais.
-        return { roles, meta: { base, src: roundTrack.src || "", total: nbExtraits, bareme } };
+        // Seule une URL web peut être lue par l'écran TV (un fichier du
+        // téléphone, en blob:, n'existe que sur le téléphone de l'hôte).
+        const srcWeb = /^https?:/i.test(roundTrack.src || "") ? roundTrack.src : "";
+        return { roles, meta: { base, src: srcWeb, total: nbExtraits, bareme, extrait, dj: deviceId() } };
       },
       renderMine: (mine, ctx) => liveRound(ctx), // ctx porte n (manche)
       renderReveal: (live, { api }) => {
+        couperSon(); // l'extrait ne continue pas sur le classement final
+        partieFinie = true;
         const names = live.names || {};
         const totals = lastTotals || (live.meta && live.meta.base) || {};
-        const rows = Object.keys(names).map((id) => ({ id, t: totals[id] || 0 })).sort((a, b) => b.t - a.t);
+        const dj = live.meta && live.meta.dj;
+        // Le DJ ne buzze pas : il n'a rien à faire dans le classement (ni au Roi).
+        const rows = Object.keys(names).filter((id) => id !== dj).map((id) => ({ id, t: totals[id] || 0 })).sort((a, b) => b.t - a.t);
         // 👑 Contribue au Roi de la soirée (classement final du blind test).
         if (api.isHost() && rows.some((r) => r.t > 0)) awardStanding("blind-test", rows.map((r) => r.id), names, live.avatars || {});
         return el("div", {}, [
@@ -442,9 +492,11 @@ export function render(container, { game }) {
       const nameOf = (id) => (api.players().find((p) => p.id === id) || {}).name || "?";
 
       const total = meta.total || 0;
+      const numero = meta.extrait || n; // n° dans la partie (le n° de manche du serveur ne repart jamais à 1)
       const compteur = total
-        ? el("p.screen__subtitle.center", { text: `Extrait ${Math.min(n, total)} / ${total}` })
+        ? el("p.screen__subtitle.center", { text: `Extrait ${Math.min(numero, total)} / ${total}` })
         : null;
+      const m = api.memo(); // survit à « Retour au salon → Revenir à la manche »
       const bareme1er = meta.bareme === "premier";
       const info = el("p.bt-buzzinfo.center", {
         text: api.isHost()
@@ -477,6 +529,13 @@ export function render(container, { game }) {
       };
       function refreshJudge() {
         if (!api.isHost() || decided) return judgeBox.replaceChildren();
+        // Nouvel hôte en pleine manche : le titre secret était chez l'ancien DJ.
+        if (!roundTrack) {
+          return judgeBox.replaceChildren(
+            el("p.screen__subtitle", { text: "🎬 Tu es le nouveau DJ : le titre de cet extrait était sur le téléphone de l'ancien. Passe-le, puis lance le suivant." }),
+            el("button.chip", { text: "⏭️ Passer cet extrait", style: "margin-top:8px", onClick: () => { const totals = baseTotals(); api.sendState({ phase: "flop", answer: { title: "Titre inconnu (changement de DJ)", artist: "" }, totals }); } })
+          );
+        }
         const kids = [];
         // ⭐ Manche spéciale : il faut donner l'artiste ET le titre, points doublés.
         const dbl = el("button.chip" + (doubleRound ? ".is-active" : ""), {
@@ -522,7 +581,8 @@ export function render(container, { game }) {
         if (s.phase === "won" && n != null && n !== btFxRound) { btFxRound = n; celebrate(); }
         decided = true;
         lastTotals = s.totals || lastTotals;
-        const ids = Object.keys(s.totals || {}).sort((a, b) => (s.totals[b] || 0) - (s.totals[a] || 0));
+        if (s.totals) Object.assign(scores, s.totals); // tous les téléphones suivent les totaux
+        const ids = Object.keys(s.totals || {}).filter((id) => id !== meta.dj).sort((a, b) => (s.totals[b] || 0) - (s.totals[a] || 0));
         resultBox.replaceChildren(
           el("div.bt-answer", {}, [
             el("div.bt-answer__title", { text: s.answer ? s.answer.title : "?" }),
@@ -542,7 +602,7 @@ export function render(container, { game }) {
         if (audioEl && audioEl.pause) audioEl.pause();
         // Fin de partie : le bouton « Terminer » existait déjà mais rien
         // n'indiquait quand s'arrêter. On le dit clairement au dernier extrait.
-        if (total && n >= total) {
+        if (total && numero >= total) {
           resultBox.appendChild(el("p.screen__subtitle.center", {
             text: api.isHost()
               ? `🏁 Dernier extrait (${total}/${total}) — termine la partie pour le classement final.`
@@ -552,14 +612,53 @@ export function render(container, { game }) {
         }
       }
 
-      let feltFirstBuzz = false;
+      const bits = [];
+      if (api.isHost()) {
+        // La TV ne prend le son que si elle PEUT le jouer : un fichier du
+        // téléphone (blob:) ou un titre à chanter n'y existent pas — avant,
+        // l'hôte se taisait et personne n'entendait rien.
+        if (tvSon && meta.src) {
+          // Un écran TV diffuse le son : inutile de le jouer ici aussi, ça
+          // ferait un double écho. L'hôte redevient simple arbitre.
+          couperSon();
+          bits.push(el("div.placeholder", { text: "🔊 Le son joue sur l'écran TV — tu n'as plus qu'à arbitrer." }));
+        } else {
+          // Même élément audio pour toute la manche : un écran re-rendu (retour
+          // au salon, nouvel hôte) ne relance plus l'extrait depuis le début.
+          if (!m.audio) {
+            m.audio = roundTrack && roundTrack.src
+              ? el("audio.bt-audio", { src: roundTrack.src, controls: "", autoplay: "", "aria-label": "Extrait à deviner" })
+              : el("div.placeholder", { text: "Pas d'audio pour ce titre — chante-le ou lance-le à la main 🎤" });
+            if (currentAudio && currentAudio !== m.audio) currentAudio.pause();
+          }
+          audioEl = m.audio;
+          currentAudio = audioEl && audioEl.pause ? audioEl : null;
+          bits.push(el("p.screen__subtitle", { text: "🎧 Tu es le DJ" }), audioEl);
+        }
+      } else {
+        buzzBtn = el("button.bt-buzzer.bt-buzzer--big", {
+          text: "🔔 BUZZ !",
+          disabled: m.buzze === true,
+          onClick: () => {
+            m.buzze = true;
+            buzzBtn.disabled = true;
+            buzz();
+            api.submit(true);
+            info.textContent = "🔔 Buzzé ! Attends la validation du DJ…";
+          },
+        });
+        bits.push(buzzBtn);
+      }
+      bits.push(info, compteur, orderBox, judgeBox, resultBox);
+      // Abonnements APRÈS la construction de l'écran : l'état déjà reçu est
+      // rejoué tout de suite (api.on), il doit trouver l'audio et le buzzer.
       api.on("progress", (done) => {
         order = done;
         refreshOrder();
         refreshJudge();
         if (order.length && !decided) {
           if (!api.isHost()) info.textContent = `🔔 ${nameOf(order[0])} a buzzé en premier !`;
-          if (!feltFirstBuzz) { feltFirstBuzz = true; if (order[0] !== api.me) vibrate(40); }
+          if (!m.vibre) { m.vibre = true; if (order[0] !== api.me) vibrate(40); }
         }
       });
       api.on("state", (s) => {
@@ -571,34 +670,6 @@ export function render(container, { game }) {
         } else if (s.phase === "won" || s.phase === "flop") showResult(s);
       });
 
-      const bits = [];
-      if (api.isHost()) {
-        if (tvSon) {
-          // Un écran TV diffuse le son : inutile de le jouer ici aussi, ça
-          // ferait un double écho. L'hôte redevient simple arbitre.
-          if (currentAudio) { currentAudio.pause(); currentAudio = null; }
-          bits.push(el("div.placeholder", { text: "🔊 Le son joue sur l'écran TV — tu n'as plus qu'à arbitrer." }));
-        } else {
-          audioEl = roundTrack && roundTrack.src
-            ? el("audio.bt-audio", { src: roundTrack.src, controls: "", autoplay: "", "aria-label": "Extrait à deviner" })
-            : el("div.placeholder", { text: "Pas d'audio pour ce titre — chante-le ou lance-le à la main 🎤" });
-          if (currentAudio) currentAudio.pause();
-          currentAudio = audioEl && audioEl.pause ? audioEl : null;
-          bits.push(el("p.screen__subtitle", { text: "🎧 Tu es le DJ" }), audioEl);
-        }
-      } else {
-        buzzBtn = el("button.bt-buzzer.bt-buzzer--big", {
-          text: "🔔 BUZZ !",
-          onClick: () => {
-            buzzBtn.disabled = true;
-            buzz();
-            api.submit(true);
-            info.textContent = "🔔 Buzzé ! Attends la validation du DJ…";
-          },
-        });
-        bits.push(buzzBtn);
-      }
-      bits.push(info, compteur, orderBox, judgeBox, resultBox);
       refreshJudge();
       return bits.filter(Boolean);
     }

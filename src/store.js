@@ -15,7 +15,31 @@ import { currentRoom } from "./room.js";
 
 const API = "/api/kv/";
 const LS_PREFIX = "soiree:";
-let apiAvailable = null; // null = inconnu, true/false = détecté
+// Après une erreur réseau, on repasse en local-seul un court moment, puis on
+// retente. (Avant : la moindre coupure — Wi-Fi qui saute, passage en 4G —
+// coupait le partage jusqu'au rechargement de la page, donc toute la soirée
+// puisque le site ne recharge jamais entre deux jeux.)
+const PAUSE_APRES_ECHEC_MS = 10000;
+let apiEnPauseJusqua = 0;
+const apiEnPause = () => Date.now() < apiEnPauseJusqua;
+function signalerEchec() {
+  apiEnPauseJusqua = Date.now() + PAUSE_APRES_ECHEC_MS;
+}
+
+// Écritures qui n'ont pas pu partir (réseau coupé, serveur saturé) : la
+// dernière valeur de chaque clé est repoussée dès que possible.
+const enAttente = new Map(); // clé complète -> valeur
+let relance = null;
+function planifierRelance() {
+  if (relance) return;
+  relance = setTimeout(() => {
+    relance = null;
+    const lot = [...enAttente];
+    enAttente.clear();
+    lot.forEach(([k, v]) => pousser(k, v));
+  }, PAUSE_APRES_ECHEC_MS + 500);
+}
+try { window.addEventListener("online", () => { apiEnPauseJusqua = 0; if (enAttente.size) { clearTimeout(relance); relance = null; planifierRelance(); } }); } catch {}
 
 /** Préfixe la clé par le code de la soirée : deux groupes sont isolés, deux
     appareils avec le même code partagent la donnée. Ex. "ABCD:players". */
@@ -47,40 +71,58 @@ export function getLocal(key, fallback = null) {
 /** Lit une valeur (API en priorité, sinon localStorage). */
 export async function getData(key, fallback = null) {
   const k = scopedKey(key);
-  if (apiAvailable !== false) {
+  // Une écriture locale pas encore repartie est plus récente que le serveur.
+  if (enAttente.has(k)) return lsGet(k, fallback);
+  if (!apiEnPause()) {
     try {
       const res = await fetch(API + encodeURIComponent(k));
-      if (res.status === 404) {
-        apiAvailable = true;
-        return lsGet(k, fallback);
-      }
+      if (res.status === 404) return lsGet(k, fallback);
       if (res.ok) {
-        apiAvailable = true;
         const json = await res.json();
         // On rafraîchit le cache local au passage.
         if (json.value != null) lsSet(k, json.value);
         return json.value != null ? json.value : lsGet(k, fallback);
       }
     } catch {
-      apiAvailable = false;
+      signalerEchec();
     }
   }
   return lsGet(k, fallback);
 }
 
-/** Écrit une valeur (localStorage immédiat + push serveur en tâche de fond). */
+/** Écrit une valeur (localStorage immédiat + push serveur en tâche de fond).
+    Renvoie { ok, raison? } : raison = "trop-gros" quand le serveur refuse la
+    taille (plafond de 32 Ko) — la donnée reste alors sur CE téléphone seulement. */
 export async function setData(key, value) {
   const k = scopedKey(key);
   lsSet(k, value);
-  if (apiAvailable === false) return;
+  return pousser(k, value);
+}
+
+async function pousser(k, value) {
+  if (apiEnPause()) {
+    enAttente.set(k, value);
+    planifierRelance();
+    return { ok: false, raison: "hors-ligne" };
+  }
   try {
     const res = await fetch(API + encodeURIComponent(k), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ value }),
     });
-    apiAvailable = res.ok ? true : apiAvailable;
+    if (res.ok) return { ok: true };
+    if (res.status === 413) return { ok: false, raison: "trop-gros" };
+    // 429 (trop de requêtes), 5xx : on repoussera plus tard.
+    if (res.status === 429 || res.status >= 500) {
+      enAttente.set(k, value);
+      planifierRelance();
+    }
+    return { ok: false, raison: "serveur" };
   } catch {
-    apiAvailable = false;
+    signalerEchec();
+    enAttente.set(k, value);
+    planifierRelance();
+    return { ok: false, raison: "hors-ligne" };
   }
 }

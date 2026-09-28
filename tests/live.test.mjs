@@ -329,3 +329,74 @@ test("un message mal formé ou une donnée géante ne cassent pas le salon", () 
   send(a, { t: "input", data: "ok" });
   assert.deepEqual(last(a, "progress").done, ["alice"], "le salon fonctionne toujours");
 });
+
+/* ---- Audit du 2026-09-28 : manches après redémarrage, hôte, départs ---- */
+
+test("après un redémarrage du serveur, la manche suivante ne réutilise pas un numéro déjà vu", () => {
+  const r = newRoom();
+  const a = join(r, "quiz-gages", "alice", "Alice");
+  // Salon neuf (serveur redémarré) mais l'hôte avait déjà vu la manche 5.
+  send(a, { t: "start", roles: { alice: "A" }, after: 5 });
+  assert.equal(last(a, "round").n, 6);
+  send(a, { t: "start", roles: { alice: "A" }, after: 2 }); // repère plus ancien : sans effet
+  assert.equal(last(a, "round").n, 7);
+});
+
+test("un envoi qui vise une autre manche est ignoré (décompte d'un ancien écran)", () => {
+  const r = newRoom();
+  const a = join(r, "quiz-gages", "alice", "Alice");
+  const b = join(r, "quiz-gages", "bob", "Bob");
+  send(a, { t: "start", roles: { alice: "A", bob: "B" } }); // manche 1
+  send(a, { t: "start", roles: { alice: "A", bob: "B" } }); // manche 2
+  send(b, { t: "input", n: 1, data: "réponse de la manche 1" });
+  assert.equal(last(a, "progress"), undefined, "la réponse périmée ne compte pas");
+  send(a, { t: "timer", n: 1, seconds: 30 });
+  assert.equal(last(b, "timer"), undefined, "l'ancien chrono ne repart pas");
+  send(b, { t: "input", n: 2, data: "ok" });
+  assert.deepEqual(last(a, "progress").done, ["bob"]);
+});
+
+test("le vrai hôte reprend la main dans un salon tout juste créé, une seule fois", () => {
+  const r = newRoom();
+  const b = join(r, "blind-test", "bob", "Bob"); // l'invité arrive le premier
+  assert.equal(last(b, "lobby").host, "bob");
+  const a = socket();
+  send(a, { t: "join", room: r, game: "blind-test", id: "alice", name: "Alice", wasHost: true });
+  assert.equal(last(b, "lobby").host, "alice", "l'hôte d'origine est rétabli");
+  const c = socket();
+  send(c, { t: "join", room: r, game: "blind-test", id: "carl", name: "Carl", wasHost: true });
+  assert.equal(last(b, "lobby").host, "alice", "une deuxième revendication est refusée");
+});
+
+test("le total attendu exclut les retardataires sans rôle, et suit les départs", () => {
+  const r = newRoom();
+  const a = join(r, "quiz-gages", "alice", "Alice");
+  const b = join(r, "quiz-gages", "bob", "Bob");
+  const c = join(r, "quiz-gages", "carl", "Carl");
+  send(a, { t: "start", roles: { alice: "A", bob: "B", carl: "C" } });
+  join(r, "quiz-gages", "dan", "Dan"); // arrive après la distribution
+  send(a, { t: "input", data: 1 });
+  assert.equal(last(a, "progress").total, 3, "Dan n'a pas de rôle : il n'est pas attendu");
+  send(c, { t: "leave" });
+  assert.equal(last(a, "progress").total, 2, "Carl parti : plus que 2 attendus, diffusé tout de suite");
+  send(b, { t: "input", data: 2 });
+  assert.equal(last(a, "progress").done.length, 2);
+});
+
+test("l'hôte qui recharge sa page reprend la main, sauf s'il l'avait donnée", () => {
+  const r = newRoom();
+  const a = join(r, "quiz-gages", "alice", "Alice");
+  const b = join(r, "quiz-gages", "bob", "Bob");
+  a.close(); // page rechargée : la main passe à Bob
+  assert.equal(last(b, "lobby").host, "bob");
+  join(r, "quiz-gages", "alice", "Alice"); // Alice revient
+  assert.equal(last(b, "lobby").host, "alice", "Alice est de nouveau l'hôte");
+
+  const r2 = newRoom();
+  const c = join(r2, "quiz-gages", "carl", "Carl");
+  const d = join(r2, "quiz-gages", "dan", "Dan");
+  send(c, { t: "host", id: "dan" }); // transfert volontaire
+  c.close();
+  join(r2, "quiz-gages", "carl", "Carl");
+  assert.equal(last(d, "lobby").host, "dan", "un transfert volontaire n'est pas annulé au retour");
+});

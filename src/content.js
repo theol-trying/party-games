@@ -24,14 +24,14 @@ export async function loadContent(gameId) {
   return Array.isArray(list) ? list : [];
 }
 export async function saveContent(gameId, entries) {
-  await setData("content:" + gameId, entries);
+  return setData("content:" + gameId, entries);
 }
 export async function loadConfig(gameId) {
   const cfg = await getData("content-cfg:" + gameId, {});
   return { onlyCustom: !!(cfg && cfg.onlyCustom), disabled: (cfg && cfg.disabled) || {} };
 }
 export async function saveConfig(gameId, cfg) {
-  await setData("content-cfg:" + gameId, cfg);
+  return setData("content-cfg:" + gameId, cfg);
 }
 export function newId() {
   return "c" + Math.random().toString(36).slice(2, 9);
@@ -62,6 +62,8 @@ function sanitizeEntry(raw, schema) {
       e[f.key] = v;
     }
   }
+  // Validation propre au jeu (ex. Estimations : la réponse doit être un nombre).
+  if (schema.valider && schema.valider(e)) return null;
   return e;
 }
 
@@ -84,22 +86,33 @@ export function openEditor(container, { gameId, schema, builtInList = [], onDone
   });
 
   const addBtn = el("button.btn.btn--full", { text: "Ajouter", style: "margin-top:10px" });
+  const formMsg = el("p.screen__subtitle.ed-alerte", { role: "status" }); // refus de validation du jeu
   const sourceWrap = el("div");
   const listWrap = el("div.stack.ed-list");
   const builtinWrap = el("div");
   const countInfo = el("p.screen__subtitle");
+  // Le serveur plafonne chaque valeur à 32 Ko : au-delà, les cartes restent sur
+  // CE téléphone. On le dit, au lieu de laisser croire qu'elles sont partagées.
+  const alerteTaille = el("p.screen__subtitle.ed-alerte", { hidden: true, role: "status" });
+  function verifierEnvoi(r) {
+    const trop = r && r.raison === "trop-gros";
+    alerteTaille.hidden = !trop;
+    alerteTaille.textContent = trop
+      ? "⚠️ Trop de cartes pour les partager avec la soirée : elles restent sur ce téléphone. Supprimes-en quelques-unes (ou raccourcis-les)."
+      : "";
+  }
 
   const isOff = (key) => !!config.disabled[key];
   async function toggleOff(key) {
     if (config.disabled[key]) delete config.disabled[key];
     else config.disabled[key] = true;
-    await saveConfig(gameId, config);
+    verifierEnvoi(await saveConfig(gameId, config));
     renderList();
     renderBuiltin();
   }
   async function setOnlyCustom(v) {
     config.onlyCustom = v;
-    await saveConfig(gameId, config);
+    verifierEnvoi(await saveConfig(gameId, config));
     renderSource();
   }
 
@@ -111,7 +124,7 @@ export function openEditor(container, { gameId, schema, builtInList = [], onDone
   const valid = (v) => textFields.every((f) => f.optional || v[f.key]);
   const resetForm = () => { editingId = null; textFields.forEach((f) => (controls[f.key].value = "")); addBtn.textContent = "Ajouter"; };
 
-  async function persist() { await saveContent(gameId, entries); renderList(); }
+  async function persist() { verifierEnvoi(await saveContent(gameId, entries)); renderList(); }
 
   function offBtn(key) {
     return el("button.chip", { text: isOff(key) ? "🚫" : "👁", title: isOff(key) ? "Activer" : "Désactiver", onClick: () => toggleOff(key) });
@@ -176,6 +189,9 @@ export function openEditor(container, { gameId, schema, builtInList = [], onDone
   addBtn.addEventListener("click", async () => {
     const v = readValues();
     if (!valid(v)) return;
+    const refus = schema.valider ? schema.valider(v) : null;
+    formMsg.textContent = refus || "";
+    if (refus) return;
     if (editingId) { const e = entries.find((x) => x.id === editingId); if (e) Object.assign(e, v); }
     else entries.push({ id: newId(), ...v });
     resetForm();
@@ -190,7 +206,10 @@ export function openEditor(container, { gameId, schema, builtInList = [], onDone
       const lines = bulkArea.value.split("\n").map((s) => s.trim().slice(0, MAX_LEN)).filter(Boolean);
       if (!lines.length) return;
       const v = readValues();
-      lines.forEach((line) => entries.push({ id: newId(), ...v, [singleText.key]: line }));
+      lines.forEach((line) => {
+        const e = { id: newId(), ...v, [singleText.key]: line };
+        if (!schema.valider || !schema.valider(e)) entries.push(e);
+      });
       bulkArea.value = "";
       await persist();
     });
@@ -296,7 +315,8 @@ export function openEditor(container, { gameId, schema, builtInList = [], onDone
       ]),
       el("div.card", {}, [sourceWrap]),
       countInfo,
-      el("div.card", { style: "margin-top:14px" }, [el("h3", { text: "Ajouter / modifier" }), ...formRows, addBtn, bulkBlock, ioBlock]),
+      alerteTaille,
+      el("div.card", { style: "margin-top:14px" }, [el("h3", { text: "Ajouter / modifier" }), ...formRows, addBtn, formMsg, bulkBlock, ioBlock]),
       el("div.card", { style: "margin-top:14px" }, [el("h3", { text: "Mes cartes", style: "margin-bottom:10px" }), listWrap]),
       el("div.card", { style: "margin-top:14px", hidden: !builtInList.length }, [el("h3", { text: "Cartes intégrées", style: "margin-bottom:10px" }), builtinWrap]),
       reshuffleBlock,

@@ -93,6 +93,18 @@ export function showPhase(container, ...nodes) {
   window.scrollTo({ top: 0 });
 }
 
+/** Redessine l'écran EN PLACE (même écran, données à jour) : ni animation,
+    ni retour en haut de page, et les blocs dépliés (<details>) le restent.
+    Pour le salon, redessiné à chaque arrivée : avant, l'hôte en train de régler
+    les thèmes voyait le bloc se refermer et la page remonter d'un coup. */
+export function refreshPhase(container, ...nodes) {
+  const ouverts = [...container.querySelectorAll("details")].map((d) => d.open);
+  const y = window.scrollY;
+  container.replaceChildren(...nodes);
+  container.querySelectorAll("details").forEach((d, i) => { if (ouverts[i]) d.open = true; });
+  window.scrollTo({ top: y });
+}
+
 /** Charge (une seule fois) la feuille de style propre à un jeu. */
 export function ensureGameStyle(gameId) {
   const href = `src/games/${gameId}/style.css`;

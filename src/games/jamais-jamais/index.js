@@ -66,7 +66,7 @@ export function render(container, { game }) {
       revealLabel: "🔎 Révéler",
       newRoundLabel: "Manche suivante →",
       onExit: modeSelect,
-      lobbyExtra: () => {
+      lobbyExtra: (ps = []) => {
         const ui = levelSelector({ initial: level, onChange: (v) => (level = v) });
         const mkMode = (id, label) => {
           const c = el("button.chip" + (liveMode === id ? ".is-active" : ""), { text: label });
@@ -79,6 +79,11 @@ export function render(container, { game }) {
             mkMode("classic", "🎲 Classique"),
             mkMode("grill", "🔥 Grill (piégez une cible)"),
           ]),
+          // Le grill demande au moins 3 joueurs (une cible + 2 piégeurs) : en
+          // dessous, la manche part en classique — on le dit.
+          liveMode === "grill" && ps.length < 3
+            ? el("p.screen__subtitle", { text: "🔥 Le grill se joue à 3 ou plus : à 2, la manche sera en mode classique.", style: "margin-bottom:10px" })
+            : null,
           el("p.screen__subtitle", { text: "Niveau", style: "margin-bottom:8px" }),
           ui.node,
         ]);
@@ -139,7 +144,7 @@ export function render(container, { game }) {
           jjDone = val; // mémorisé (survit au re-render → pas d'écrasement du pari)
           api.submit({ done: val });
           [bYes, bNo].forEach((b) => (b.disabled = true));
-          btn.style.borderColor = "var(--accent)";
+          btn.classList.add("is-choisi");
           status.textContent = "✅ Réponse envoyée — parie sur le nombre de coupables…";
           guessRow.style.display = "";
         };
@@ -149,7 +154,7 @@ export function render(container, { game }) {
         if (done) {
           bYes.disabled = true;
           bNo.disabled = true;
-          (myDone ? bYes : bNo).style.borderColor = "var(--accent)";
+          (myDone ? bYes : bNo).classList.add("is-choisi");
         }
         api.on("progress", (d, total) => {
           if (done) status.textContent = `✅ Répondu · ${d.length} / ${total}`;
@@ -168,9 +173,11 @@ export function render(container, { game }) {
         const did = ids.filter((id) => inputs[id] && inputs[id].done === true);
         const not = ids.filter((id) => inputs[id] && inputs[id].done === false);
         let verdict;
-        if (!did.length && not.length) verdict = "Personne ne l'a fait… tables d'anges 😇";
+        if (!did.length && !not.length) verdict = "Personne n'a répondu 🤷";
+        else if (!did.length) verdict = "Personne ne l'a fait… table d'anges 😇";
         else if (did.length === ids.length) verdict = "TOUT LE MONDE l'a fait 😱 Santé générale !";
-        else verdict = `${did.length} coupable${did.length > 1 ? "s" : ""} → ils boivent ! 🍻`;
+        else if (did.length === 1) verdict = `1 coupable : ${names[did[0]]} boit ! 🍻`;
+        else verdict = `${did.length} coupables → ils boivent ! 🍻`;
 
         // 🔮 Pari sur le nombre de coupables : le plus proche gagne, le plus loin boit.
         const actual = did.length;
@@ -202,7 +209,7 @@ export function render(container, { game }) {
             ? el("div", { style: "margin-top:12px" }, [
                 el("p", { text: `🔮 Pari : ${actual} coupable${actual > 1 ? "s" : ""} au total.`, style: "font-weight:700" }),
                 el("p", { text: `🎯 Meilleur pronostic : ${prophets.map((id) => names[id]).join(", ")}`, style: "margin-top:4px" }),
-                wrongest.length ? el("p", { text: `😵 Le plus loin du compte boit : ${wrongest.map((id) => names[id]).join(", ")} 🍻`, style: "margin-top:4px" }) : null,
+                wrongest.length ? el("p", { text: wrongest.length > 1 ? `😵 Les plus loin du compte boivent : ${wrongest.map((id) => names[id]).join(", ")} 🍻` : `😵 Le plus loin du compte boit : ${names[wrongest[0]]} 🍻`, style: "margin-top:4px" }) : null,
               ])
             : null,
         ]);
@@ -212,9 +219,10 @@ export function render(container, { game }) {
     // 🔥 Grill : chacun écrit en secret un « je n'ai jamais » pour piéger la cible.
     function grillRound(api, meta) {
       const isTarget = api.me === meta.target;
-      const others = api.players().filter((p) => p.id !== meta.target).length;
+      let others = api.players().filter((p) => p.id !== meta.target).length;
       const prog = el("p.screen__subtitle", { text: `0 / ${others} pièges écrits`, style: "margin-top:10px" });
-      api.on("progress", (done) => { prog.textContent = `${done.length} / ${others} pièges écrits`; });
+      // total du serveur (présents distribués) moins la cible : suit les départs.
+      api.on("progress", (done, total) => { if (total) others = Math.max(0, total - 1); prog.textContent = `${done.length} / ${others} pièges écrits`; });
       if (isTarget) {
         return [
           el("h3", { text: "🔥 C'est TOI qu'on grille !" }),
@@ -222,7 +230,8 @@ export function render(container, { game }) {
           prog,
         ];
       }
-      let sent = false;
+      // Piège mémorisé pour la manche : au retour, le champ ne revient plus vide et actif.
+      const m = api.memo();
       const ta = el("input.input", { placeholder: `… (piège pour ${meta.targetName})`, maxlength: "120" });
       const status = el("p.screen__subtitle", { text: "Ta phrase restera secrète jusqu'à la révélation 🤫", style: "margin-top:8px" });
       const send = el("button.btn.btn--full", {
@@ -230,13 +239,19 @@ export function render(container, { game }) {
         style: "margin-top:10px",
         onClick: () => {
           const t = ta.value.trim();
-          if (!t || sent) return;
-          sent = true;
-          ta.disabled = true;
+          if (!t || m.piege) return;
+          m.piege = t;
           api.submit({ phrase: t });
-          status.textContent = "✅ Piège envoyé — en attente des autres…";
+          verrouiller();
         },
       });
+      function verrouiller() {
+        ta.value = m.piege;
+        ta.disabled = true;
+        send.disabled = true;
+        status.textContent = "✅ Piège envoyé — en attente des autres…";
+      }
+      if (m.piege) verrouiller();
       ta.addEventListener("keydown", (e) => { if (e.key === "Enter") send.click(); });
       return [
         el("h3", { text: `🔥 On grille ${meta.targetName} !` }),
@@ -257,7 +272,7 @@ export function render(container, { game }) {
         el("div.stack", {}, phrases.length
           ? phrases.map((p) => el("div.uc-role-row", {}, [
               el("span", { text: "Je n'ai jamais… " + p.phrase }),
-              el("span", { text: "😈 " + p.author, style: "opacity:.6" }),
+              el("span", { text: "😈 " + p.author, style: "color:var(--text-dim)" }),
             ]))
           : [el("p.screen__subtitle", { text: "Personne n'a écrit de piège 😅" })]),
       ]);

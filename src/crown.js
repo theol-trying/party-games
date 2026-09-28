@@ -40,11 +40,15 @@ function colorOf(text) {
 
 /** Contribution d'un jeu au classement (appelée par l'HÔTE à la révélation).
     rankedIds : deviceIds classés (meilleur d'abord). Remplace la contribution
-    précédente de ce jeu → idempotent, converge vers le classement final. */
-export async function awardStanding(gameId, rankedIds, names = {}, avatars = {}) {
+    précédente de ce jeu → idempotent, converge vers le classement final.
+    opts.scores (id → score) : les ex æquo partagent le même rang — sans lui,
+    deux joueurs à égalité recevaient 5 et 3 points selon l'ordre du tri. */
+export async function awardStanding(gameId, rankedIds, names = {}, avatars = {}, { scores = null } = {}) {
   if (!Array.isArray(rankedIds) || !rankedIds.length) return;
   const crown = (await getData(KEY, {})) || {};
-  rankedIds.forEach((id, i) => {
+  const rangDe = (id, i) => (scores ? rankedIds.filter((x) => (scores[x] || 0) > (scores[id] || 0)).length : i);
+  rankedIds.forEach((id, idx) => {
+    const i = rangDe(id, idx);
     if (!id) return;
     const e = crown[id] || (crown[id] = { name: names[id] || "?", avatar: avatars[id] || "", byGame: {} });
     if (names[id]) e.name = names[id];

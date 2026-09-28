@@ -66,18 +66,29 @@ export function render(container, { game }) {
         const n = ps.length;
         const wrap = el("div.stack", { style: "margin:10px 0" });
         function build() {
-          const mk = (label, get, set) =>
+          // Imposteurs + Mr White ≤ joueurs − 1 (il faut au moins un civil) :
+          // la distribution le réduisait déjà, mais sans le dire.
+          const mk = (label, get, set, max) =>
             el("div.uc-step", {}, [
               el("span.uc-step__label", { text: label }),
               el("div.uc-step__ctrl", {}, [
-                el("button.btn.btn--ghost.uc-step__btn", { text: "−", onClick: () => { set(Math.max(0, get() - 1)); build(); } }),
+                el("button.btn.btn--ghost.uc-step__btn", { text: "−", "aria-label": `Moins de ${label}`, onClick: () => { set(Math.max(0, get() - 1)); build(); } }),
                 el("span.uc-step__val", { text: String(get()) }),
-                el("button.btn.btn--ghost.uc-step__btn", { text: "+", onClick: () => { set(Math.min(Math.max(0, n - 1), get() + 1)); build(); } }),
+                el("button.btn.btn--ghost.uc-step__btn", { text: "+", "aria-label": `Plus de ${label}`, onClick: () => { set(Math.min(Math.max(0, max()), get() + 1)); build(); } }),
               ]),
             ]);
+          // Bornage seulement une fois le salon jouable (3 joueurs) : hôte seul,
+          // il ramenait sinon définitivement les imposteurs à 0.
+          if (n >= 3) {
+            liveImp = Math.min(liveImp, n - 1);
+            liveWhite = Math.min(liveWhite, n - 1 - liveImp);
+          }
+          const imp = liveImp + liveWhite === 0 ? 1 : liveImp; // aucun rôle spécial → 1 imposteur forcé
+          const civ = Math.max(0, n - imp - liveWhite);
           wrap.replaceChildren(
-            mk("imposteurs", () => liveImp, (x) => (liveImp = x)),
-            mk("Mr White", () => liveWhite, (x) => (liveWhite = x))
+            mk("Imposteurs", () => liveImp, (x) => (liveImp = x), () => n - 1 - liveWhite),
+            mk("Mr White", () => liveWhite, (x) => (liveWhite = x), () => n - 1 - liveImp),
+            el("p.uc-summary", { text: n >= 3 ? `${civ} civil${civ > 1 ? "s" : ""} · ${imp} imposteur${imp > 1 ? "s" : ""} · ${liveWhite} Mr White` : "Il faut au moins 3 joueurs." })
           );
         }
         build();
@@ -121,45 +132,71 @@ export function render(container, { game }) {
     const ROLE_TAG = { imposteur: "🕵️ Imposteur", blanc: "🎭 Mr White", civil: "😇 Civil" };
 
     /* ----- Arbitrage côté hôte (hostGame n'existe que sur son téléphone) ----- */
+    // Joueurs encore dans le salon : un joueur parti ou exclu ne doit ni
+    // bloquer le vote (« tout le monde a voté » n'arrivait jamais), ni compter
+    // dans l'équilibre civils / imposteurs.
+    const presents = (api) => new Set(api.players().map((p) => p.id));
     function hostVote(api) {
       if (!hostGame) return;
+      const ici = presents(api);
+      hostGame.alive = hostGame.alive.filter((id) => ici.has(id));
       hostGame.k++;
       api.sendState({ phase: "vote", k: hostGame.k, alive: hostGame.alive.slice() });
     }
     function hostEvaluate(api, out, outRole, tally) {
+      const ici = presents(api);
+      hostGame.alive = hostGame.alive.filter((id) => ici.has(id));
       const alive = hostGame.alive;
+      const base = { out, outRole, tally, alive: alive.slice() };
       const specials = alive.filter((id) => hostGame.roles[id].role !== "civil").length;
       const civils = alive.length - specials;
-      if (specials === 0) api.sendState({ phase: "over", winner: "civils", out, outRole, tally });
-      else if (specials >= civils) api.sendState({ phase: "over", winner: "imposteurs", out, outRole, tally });
-      else api.sendState({ phase: "result", k: hostGame.k, out, outRole, tally });
+      if (specials === 0) api.sendState({ phase: "over", winner: "civils", ...base });
+      else if (specials >= civils) api.sendState({ phase: "over", winner: "imposteurs", ...base });
+      else api.sendState({ phase: "result", k: hostGame.k, ...base });
     }
     function hostResolve(api, cur, inputsCache) {
       if (!hostGame || !cur || cur.phase !== "vote") return;
-      const { k, alive } = cur;
+      const { k } = cur;
+      // Un vote ne se dépouille qu'une fois : un indice publié pendant l'aller-
+      // retour du verdict relançait sinon le dépouillement (et, en cas
+      // d'égalité, un 2e tirage au sort éliminait un deuxième joueur).
+      if (hostGame.resolvedK === k) return;
+      const ici = presents(api);
+      const alive = cur.alive.filter((id) => ici.has(id));
+      if (!alive.length) return;
       const allIn = alive.every((id) => inputsCache[id] && inputsCache[id].k === k);
       if (!allIn) return;
       const tally = {};
       alive.forEach((t) => (tally[t] = 0));
       alive.forEach((v) => { const t = inputsCache[v].vote; if (t in tally) tally[t]++; });
       const max = Math.max(...Object.values(tally));
+      hostGame.resolvedK = k;
+      // Toutes les voix visaient un joueur parti : personne n'est désigné → on revote.
+      if (max === 0) return hostVote(api);
       const tied = alive.filter((t) => tally[t] === max);
       const out = tied[Math.floor(Math.random() * tied.length)]; // égalité : l'hôte tranche au hasard
-      hostGame.alive = hostGame.alive.filter((x) => x !== out);
+      hostGame.alive = hostGame.alive.filter((x) => x !== out && ici.has(x));
       const role = hostGame.roles[out].role;
-      if (role === "blanc") api.sendState({ phase: "whiteGuess", k, out, tally });
+      if (role === "blanc") api.sendState({ phase: "whiteGuess", k, out, tally, alive: hostGame.alive.slice() });
       else hostEvaluate(api, out, role, tally);
     }
 
     /* ----- Écran de partie (état piloté par les messages state/progress) ----- */
     function liveGame(mine, api, n) {
-      let cur = null; // dernier état reçu
-      let inputsCache = {}; // votes + indices visibles (mode open)
-      let myVoteK = 0; // manche de vote où j'ai déjà voté
-      let myVote = null; // ma dernière cible de vote
-      let myClue = ""; // mon indice écrit courant
-      const dead = new Set(); // éliminés connus côté client
+      let cur = null; // dernier état reçu (rejoué par api.on au re-rendu)
+      let inputsCache = {}; // votes + indices visibles (mode open, rejoués aussi)
+      // Mémoire de la partie : survit à « Retour au salon → Revenir à la manche ».
+      const m = api.memo();
+      if (!m.dead) Object.assign(m, { dead: new Set(), myVoteK: 0, myVote: null, myClue: "" });
+      const dead = m.dead; // éliminés connus côté client
       const nameOf = (id) => (api.players().find((p) => p.id === id) || {}).name || "?";
+      // Hôte promu en cours de partie : les rôles secrets ne sont que sur le
+      // téléphone de l'ancien hôte, il ne peut donc pas arbitrer la suite.
+      const hoteSansArbitrage = () => api.isHost() && !hostGame;
+      const noteNouvelHote = () => el("p.screen__subtitle", {
+        text: "🎬 Tu es le nouvel hôte, mais les rôles secrets étaient sur le téléphone de l'ancien : révèle les rôles, puis lance une nouvelle partie.",
+        style: "margin-top:10px",
+      });
 
       const myCard =
         mine.role === "blanc"
@@ -183,9 +220,9 @@ export function render(container, { game }) {
         onClick: () => {
           const c = clueInput.value.trim();
           if (!c || dead.has(api.me)) return;
-          myClue = c;
+          m.myClue = c;
           // Fusion avec mon éventuel vote : re-soumettre remplace la valeur, pas le rang.
-          api.submit({ k: myVoteK || undefined, vote: myVote || undefined, clue: myClue });
+          api.submit({ k: m.myVoteK || undefined, vote: m.myVote || undefined, clue: m.myClue });
           refreshClues();
         },
       });
@@ -216,21 +253,25 @@ export function render(container, { game }) {
         const bits = [];
         if (!cur) {
           bits.push(el("p", { text: "🗣️ Discussion : chacun décrit son mot en UN mot, sans le dire.", style: "color:var(--text-dim)" }));
-          if (api.isHost()) bits.push(el("button.btn.btn--full", { text: "🗳️ Lancer le vote", style: "margin-top:12px", onClick: () => hostVote(api) }));
+          if (hoteSansArbitrage()) bits.push(noteNouvelHote());
+          else if (api.isHost()) bits.push(el("button.btn.btn--full", { text: "🗳️ Lancer le vote", style: "margin-top:12px", onClick: () => hostVote(api) }));
           else bits.push(el("p.screen__subtitle", { text: "L'hôte lancera le vote.", style: "margin-top:8px" }));
         } else if (cur.phase === "vote") {
-          const voted = cur.alive.filter((id) => inputsCache[id] && inputsCache[id].k === cur.k).length;
+          // Seuls les vivants encore là : un joueur parti n'apparaît plus en « ? ».
+          const ici = presents(api);
+          const vivants = cur.alive.filter((id) => ici.has(id));
+          const voted = vivants.filter((id) => inputsCache[id] && inputsCache[id].k === cur.k).length;
           bits.push(el("h3", { text: `🗳️ Vote ${cur.k} — qui est l'intrus ?` }));
-          bits.push(el("p.screen__subtitle", { text: `${voted} / ${cur.alive.length} ont voté` }));
+          bits.push(el("p.screen__subtitle", { text: `${voted} / ${vivants.length} ont voté` }));
           if (!cur.alive.includes(api.me)) {
             bits.push(el("p", { text: "☠️ Tu es éliminé — spectateur.", style: "margin-top:10px" }));
-          } else if (myVoteK === cur.k) {
+          } else if (m.myVoteK === cur.k) {
             bits.push(el("p", { text: "✅ Vote envoyé — en attente des autres…", style: "margin-top:10px" }));
           } else {
-            cur.alive.filter((id) => id !== api.me).forEach((id) =>
+            vivants.filter((id) => id !== api.me).forEach((id) =>
               bits.push(el("button.btn.btn--ghost.btn--full", {
                 text: nameOf(id), style: "margin-top:8px",
-                onClick: () => { myVoteK = cur.k; myVote = id; api.submit({ k: cur.k, vote: id, clue: myClue || undefined }); renderPhase(); },
+                onClick: () => { m.myVoteK = cur.k; m.myVote = id; api.submit({ k: cur.k, vote: id, clue: m.myClue || undefined }); renderPhase(); },
               }))
             );
           }
@@ -251,12 +292,14 @@ export function render(container, { game }) {
               ]));
           if (cur.out === api.me) bits.push(el("p", { text: "☠️ Tu deviens spectateur.", style: "color:var(--text-dim)" }));
           bits.push(tallyRows(cur.tally));
-          if (api.isHost()) bits.push(el("button.btn.btn--full", { text: "🗳️ Vote suivant", style: "margin-top:12px", onClick: () => hostVote(api) }));
+          if (hoteSansArbitrage()) bits.push(noteNouvelHote());
+          else if (api.isHost()) bits.push(el("button.btn.btn--full", { text: "🗳️ Vote suivant", style: "margin-top:12px", onClick: () => hostVote(api) }));
         } else if (cur.phase === "whiteGuess") {
           bits.push(el("h3", { text: `🎭 ${nameOf(cur.out)} était Mr White !` }));
           bits.push(el("p", { text: "Il annonce à voix haute le mot qu'il pense être celui des civils.", style: "color:var(--text-dim);margin:8px 0" }));
           bits.push(tallyRows(cur.tally));
-          if (api.isHost()) {
+          if (hoteSansArbitrage()) bits.push(noteNouvelHote());
+          else if (api.isHost()) {
             bits.push(el("button.btn.btn--full", { text: "✅ Il a trouvé — Mr White gagne", style: "margin-top:12px", onClick: () => api.sendState({ phase: "over", winner: "white", out: cur.out, outRole: "blanc" }) }));
             bits.push(el("button.btn.btn--full.btn--ghost", { text: "❌ Raté — la partie continue", style: "margin-top:10px", onClick: () => hostEvaluate(api, cur.out, "blanc", cur.tally) }));
           }
@@ -283,7 +326,10 @@ export function render(container, { game }) {
 
       api.on("state", (s) => {
         cur = s;
-        if ((s.phase === "result" || s.phase === "whiteGuess") && s.out) dead.add(s.out);
+        if ((s.phase === "result" || s.phase === "whiteGuess" || s.phase === "over") && s.out) dead.add(s.out);
+        // Téléphone rechargé en pleine partie : sa mémoire est vide, mais l'état
+        // porte la liste des vivants → les autres joueurs sont éliminés.
+        if (Array.isArray(s.alive)) api.players().forEach((pl) => { if (!s.alive.includes(pl.id)) dead.add(pl.id); });
         if (dead.has(api.me)) { clueInput.disabled = true; clueSend.disabled = true; }
         refreshClues();
         renderPhase();
@@ -328,9 +374,10 @@ export function render(container, { game }) {
     const summary = el("p.uc-summary");
     const startBtn = el("button.btn.btn--full", { text: "C'est parti" });
 
-    function clamp(v) {
-      return Math.max(0, Math.min(n - 1, v));
-    }
+    // Chaque compteur est borné par l'autre : il reste toujours au moins un
+    // civil (avant : « -1 civil · 2 imposteurs · 2 Mr White » était possible).
+    const clampImp = (v) => Math.max(0, Math.min(n - 1 - white, v));
+    const clampWhite = (v) => Math.max(0, Math.min(n - 1 - imp, v));
     function refresh() {
       impVal.textContent = imp;
       whiteVal.textContent = white;
@@ -341,10 +388,9 @@ export function render(container, { game }) {
       summary.classList.toggle("is-bad", !(special >= 1 && civ >= 1));
     }
 
-    function stepper(label, get, set) {
-      const dec = el("button.btn.btn--ghost.uc-step__btn", { text: "−", onClick: () => { set(clamp(get() - 1)); refresh(); }, "aria-label": `Moins ${label}` });
-      const inc = el("button.btn.btn--ghost.uc-step__btn", { text: "+", onClick: () => { set(clamp(get() + 1)); refresh(); }, "aria-label": `Plus ${label}` });
-      const valEl = label === "imposteurs" ? impVal : whiteVal;
+    function stepper(label, get, set, clamp, valEl) {
+      const dec = el("button.btn.btn--ghost.uc-step__btn", { text: "−", onClick: () => { set(clamp(get() - 1)); refresh(); }, "aria-label": `Moins de ${label}` });
+      const inc = el("button.btn.btn--ghost.uc-step__btn", { text: "+", onClick: () => { set(clamp(get() + 1)); refresh(); }, "aria-label": `Plus de ${label}` });
       return el("div.uc-step", {}, [
         el("span.uc-step__label", { text: label }),
         el("div.uc-step__ctrl", {}, [dec, valEl, inc]),
@@ -358,8 +404,8 @@ export function render(container, { game }) {
       el("div.card.center", {}, [
         el("h3", { text: "Composition de la partie" }),
         el("div.stack", { style: "margin:14px 0" }, [
-          stepper("imposteurs", () => imp, (v) => (imp = v)),
-          stepper("Mr White", () => white, (v) => (white = v)),
+          stepper("Imposteurs", () => imp, (v) => (imp = v), clampImp, impVal),
+          stepper("Mr White", () => white, (v) => (white = v), clampWhite, whiteVal),
         ]),
         summary,
         el("div", { style: "margin-top:16px" }, [startBtn]),
@@ -414,8 +460,8 @@ export function render(container, { game }) {
   }
 
   /* ---------- Discussion + actions ---------- */
-  function discussion(roles) {
-    const hasWhite = roles.some((r) => r.role === "blanc");
+  function discussion(roles, whiteElimine = false) {
+    const hasWhite = !whiteElimine && roles.some((r) => r.role === "blanc");
     const actions = [];
     if (hasWhite) {
       actions.push(el("button.btn.btn--full", { text: "🎤 Mr White devine le mot", onClick: () => whiteGuess(roles) }));
@@ -429,7 +475,7 @@ export function render(container, { game }) {
         el("p", {
           text:
             "Chacun décrit son mot avec UN mot, sans le dire. Débattez et votez à l'oral pour éliminer un suspect. " +
-            (hasWhite ? "Si Mr White est éliminé, il tente de deviner le mot des civils." : ""),
+            (hasWhite ? "Si Mr White est éliminé, il tente de deviner le mot des civils." : whiteElimine ? "Mr White est éliminé : continuez à débusquer les imposteurs." : ""),
           style: "color:var(--text-dim);margin:12px 0 20px",
         }),
         ...actions,
@@ -470,7 +516,10 @@ export function render(container, { game }) {
           text: win ? "Il a deviné le mot des civils." : "Mauvaise réponse — la partie continue sans lui.",
           style: "color:var(--text-dim);margin:12px 0 20px",
         }),
-        el("button.btn.btn--full", { text: "Révéler tous les rôles", onClick: () => reveal(roles) }),
+        // Avant : seul « Révéler » était proposé, alors que le texte annonce que
+        // la partie continue.
+        win ? null : el("button.btn.btn--full", { text: "🗣️ Reprendre le débat", onClick: () => discussion(roles, true) }),
+        el("button.btn.btn--full" + (win ? "" : ".btn--ghost"), { text: "Révéler tous les rôles", style: win ? "" : "margin-top:10px", onClick: () => reveal(roles) }),
       ])
     );
   }

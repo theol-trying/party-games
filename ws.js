@@ -111,14 +111,20 @@ function makeConnection(socket) {
         socket.write(encodeFrame(0x1, Buffer.from(String(text), "utf8")));
       } catch {}
     },
-    close() {
-      if (conn.closed) return;
+    // payload : code de fermeture à renvoyer (écho de celui du client), 1000 par défaut.
+    close(payload = Buffer.from([0x03, 0xe8])) {
+      if (closing) return;
+      closing = true;
       try {
-        socket.write(encodeFrame(0x8, Buffer.from([0x03, 0xe8]))); // 1000 normal
+        if (socket.writable) socket.write(encodeFrame(0x8, payload));
       } catch {}
       socket.end();
+      // Filet : un pair qui ne ferme jamais sa moitié de connexion ne doit pas
+      // garder le socket ouvert indéfiniment.
+      setTimeout(() => socket.destroy(), 5000).unref();
     },
   };
+  let closing = false;
 
   let buffer = Buffer.alloc(0);
   let fragments = null; // { chunks: [], size }
@@ -142,8 +148,12 @@ function makeConnection(socket) {
     lastSeen = Date.now();
     switch (f.opcode) {
       case 0x8: // close
+        // Le serveur DOIT répondre par sa propre trame close (RFC 6455 §5.5.1).
+        // Sans elle, le navigateur restait jusqu'à ~60 s en attente, connexion
+        // ouverte ; `finish()` passant `closed` à vrai, l'ancien close() ne
+        // répondait jamais.
         finish();
-        conn.close();
+        conn.close(f.payload.length >= 2 ? f.payload.subarray(0, 2) : Buffer.alloc(0));
         break;
       case 0x9: // ping -> pong
         if (!conn.closed && socket.writable) socket.write(encodeFrame(0xa, f.payload));
@@ -210,7 +220,13 @@ function makeConnection(socket) {
 
   socket.on("close", finish);
   socket.on("error", finish);
-  socket.on("end", finish);
+  // Le pair a fermé sa moitié de la connexion TCP : on ferme la nôtre, sinon
+  // le socket resterait à demi ouvert (le ping, arrêté par finish, ne le
+  // détruirait plus).
+  socket.on("end", () => {
+    finish();
+    socket.end();
+  });
 
   return conn;
 }

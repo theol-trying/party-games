@@ -9,12 +9,15 @@ import { tick, vibrate } from "../../sound.js";
 import { CATEGORIES_DEFAUT, LETTRES, DUREE_DEFAUT } from "./data.js";
 
 const GRACE_SECONDS = 12; // sprint final déclenché quand le 1er joueur crie « STOP »
+const DUREES = [60, 90, 120, 180];
+const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? "s" : ""}`;
 
 export function render(container, { game }) {
   let duree = DUREE_DEFAUT;
   let categories = [...CATEGORIES_DEFAUT];
   let activeTimer = null; // chrono en cours, réf. au niveau du jeu pour pouvoir l'arrêter
   let liveStop = null; // arrêt du salon multi si actif
+  let decompte = null; // décompte du multi : UN pour tout le jeu (arrêté à chaque écran et en sortie)
   const deck = createDeck(LETTRES); // tirage des lettres sans répétition
 
   container.append(screenHead(game.title, "Une lettre, des catégories, le chrono tourne", game.id));
@@ -23,14 +26,22 @@ export function render(container, { game }) {
 
   if (peekAutoLive()) startLive(); else setup(); // « suivre l'hôte » : salon direct
   // Catégories personnalisées mémorisées par soirée (sans écraser un salon en cours).
+  // On ne redessine l'écran de réglages que s'il est affiché et encore intact :
+  // avant, une partie « Classique » déjà lancée était remplacée (son chrono
+  // continuant en fond), et une saisie en cours était perdue.
   getData("bac-categories", null).then((saved) => {
-    if (Array.isArray(saved) && saved.length) { categories = saved; if (!liveStop) setup(); }
+    if (!Array.isArray(saved) || !saved.length) return;
+    const zone = stage.querySelector(".bc-setup textarea");
+    const intacte = zone && zone.value === categories.join("\n");
+    categories = nettoyerCategories(saved);
+    if (!liveStop && intacte) setup();
   });
 
   // Nettoyage appelé par le routeur quand on quitte le jeu : stoppe chrono + salon.
   return () => {
     if (activeTimer) clearInterval(activeTimer);
     activeTimer = null;
+    arreterDecompte();
     if (liveStop) { liveStop(); liveStop = null; }
   };
 
@@ -38,22 +49,23 @@ export function render(container, { game }) {
   function setup() {
     const catText = el("textarea.input", { rows: "6", style: "resize:vertical", text: categories.join("\n") });
     const dureeChips = el("div.row", { style: "margin-top:8px" });
-    [60, 90, 120, 180].forEach((d) => {
-      const c = el("button.chip", { text: `${d}s` });
+    DUREES.forEach((d) => {
+      const c = el("button.chip", { text: `${d} s` });
       if (d === duree) c.classList.add("is-active");
       c.addEventListener("click", () => {
         duree = d;
-        [...dureeChips.children].forEach((x) => x.classList.toggle("is-active", x.textContent === `${d}s`));
+        [...dureeChips.children].forEach((x) => x.classList.toggle("is-active", x.textContent === `${d} s`));
       });
       dureeChips.appendChild(c);
     });
     const readCats = () => {
-      categories = catText.value.split("\n").map((s) => s.trim()).filter(Boolean);
+      categories = nettoyerCategories(catText.value.split("\n"));
+      catText.value = categories.join("\n");
       setData("bac-categories", categories);
     };
 
     showPhase(stage,
-      el("div.card", {}, [
+      el("div.card.bc-setup", {}, [
         el("h3", { text: "Catégories (une par ligne)" }),
         catText,
         el("h3", { text: "Durée", style: "margin-top:16px" }),
@@ -95,7 +107,10 @@ export function render(container, { game }) {
      (déterministes) → aucune dérive entre appareils. */
   function startLive() {
     if (liveStop) liveStop();
+    arreterDecompte();
     const scores = {}; // deviceId -> total cumulé (converge sur tous les clients)
+    // Suivi des envois pour le ramassage avant correction (hôte).
+    const suivi = { finis: 0, attendus: 0, quandTousFinis: null, ramassage: false };
 
     liveStop = liveSession(stage, {
       gameId: "baccalaureat",
@@ -105,11 +120,22 @@ export function render(container, { game }) {
       revealLabel: "Corriger la manche",
       newRoundLabel: "Nouvelle manche",
       onExit: setup,
-      lobbyExtra: () =>
-        el("div", { style: "margin:10px 0" }, [
-          el("p.screen__subtitle", { text: `${categories.length} catégories · ${duree}s par manche`, style: "text-align:center" }),
-          el("p.screen__subtitle", { text: "Reviens aux Réglages pour les modifier avant de lancer.", style: "text-align:center;opacity:.75;font-size:.85em" }),
-        ]),
+      // Réglages modifiables depuis le salon : avant, le texte renvoyait aux
+      // « Réglages », accessibles seulement en quittant le salon (et jamais vus
+      // par un hôte arrivé via « Changer de jeu »).
+      lobbyExtra: () => reglagesSalon(),
+      // « Corriger la manche » pendant l'écriture : on ramasse d'abord les
+      // réponses de tout le monde (sinon ceux qui n'avaient pas appuyé sur STOP
+      // finissaient à 0 point, cases remplies).
+      beforeReveal: (api, reveler) => {
+        suivi.ramassage = true; // pas de sprint final déclenché par les copies ramassées
+        api.sendState({ ramasser: Date.now() });
+        let fait = false;
+        const go = () => { if (fait) return; fait = true; suivi.quandTousFinis = null; reveler(); };
+        if (suivi.finis >= suivi.attendus && suivi.attendus > 0) return go();
+        suivi.quandTousFinis = go;
+        setTimeout(go, 3000); // filet : un téléphone endormi ne bloque pas la correction
+      },
       assign: (ps) => {
         const letter = drawLetter();
         announce("Lettre : " + letter);
@@ -119,30 +145,54 @@ export function render(container, { game }) {
         ps.forEach((p) => (roles[p.id] = true)); // tout le monde reçoit la même lettre
         return { roles, meta: { letter, categories: [...categories], duree, base } };
       },
-      renderMine: (mine, ctx) => liveFill(ctx),
-      renderReveal: (live, ctx) => liveScore(live, scores, ctx),
+      renderMine: (mine, ctx) => liveFill(ctx, suivi),
+      renderReveal: (live, ctx) => { arreterDecompte(); return liveScore(live, scores, ctx); },
     });
   }
 
+  function reglagesSalon() {
+    const dureeChips = el("div.row", { style: "justify-content:center;margin-top:6px" }, DUREES.map((d) =>
+      el("button.chip" + (d === duree ? ".is-active" : ""), {
+        text: `${d} s`,
+        onClick: (e) => {
+          duree = d;
+          [...e.currentTarget.parentNode.children].forEach((x) => x.classList.toggle("is-active", x === e.currentTarget));
+        },
+      })
+    ));
+    const zone = el("textarea.input", { rows: "6", style: "resize:vertical;margin-top:8px", text: categories.join("\n") });
+    zone.addEventListener("input", () => { categories = nettoyerCategories(zone.value.split("\n"), false); });
+    zone.addEventListener("change", () => { categories = nettoyerCategories(zone.value.split("\n")); setData("bac-categories", categories); });
+    return el("div", { style: "margin:10px 0" }, [
+      el("p.screen__subtitle", { text: "Durée d'une manche", style: "text-align:center" }),
+      dureeChips,
+      el("details.ed-bulk", { style: "margin-top:10px" }, [
+        el("summary", { text: `📝 ${pluriel(categories.length, "catégorie")} (une par ligne)` }),
+        zone,
+      ]),
+    ]);
+  }
+
   // Écran de remplissage synchronisé (identique sur chaque téléphone).
-  function liveFill({ api, meta }) {
+  // Tout ce qui doit survivre à « Retour au salon → Revenir à la manche » (ou à
+  // un nouvel hôte) vit dans api.memo() : brouillon, envoi, sprint lancé.
+  function liveFill({ api, meta }, suivi) {
     const cats = meta.categories || [];
     const letter = meta.letter;
-    const total = api.players().length;
-    let submitted = false;
-    let mainLeft = meta.duree; // secondes restantes du chrono principal (suivi par l'hôte)
-    let graceStarted = false;
-    let cdStop = null;
+    const m = api.memo();
+    if (!m.brouillon) suivi.ramassage = false; // manche neuve
+    if (!m.brouillon) Object.assign(m, { brouillon: {}, envoye: false, envoiAuto: false, sprint: false, chronoLance: false, chronoRecu: false, restant: meta.duree });
+    let total = api.players().length;
     let barMax = null;
+    let dernierBip = null;
 
     const timeEl = el("div.bc-timer", { text: fmt(meta.duree) });
     const bar = el("div.bc-bar__fill");
-    const inputs = cats.map((cat) =>
-      el("label.bc-field", {}, [
-        el("span.bc-field__label", { text: cat }),
-        el("input.input", { placeholder: `en ${letter}…`, maxlength: "30", autocapitalize: "words" }),
-      ])
-    );
+    const inputs = cats.map((cat) => {
+      const champ = el("input.input", { placeholder: `en ${letter}…`, maxlength: "30", autocapitalize: "words", value: m.brouillon[cat] || "" });
+      champ.addEventListener("input", () => { m.brouillon[cat] = champ.value; });
+      return el("label.bc-field", {}, [el("span.bc-field__label", { text: cat }), champ]);
+    });
     const prog = el("p.screen__subtitle", { text: `0 / ${total} ont fini`, style: "margin-top:10px" });
     const status = el("div.qz-feedback", { style: "min-height:22px;margin-top:6px" });
     const stopBtn = el("button.btn.btn--full", { text: "STOP ! J'ai fini", style: "margin-top:16px" });
@@ -152,45 +202,66 @@ export function render(container, { game }) {
       cats.forEach((c, i) => (a[c] = inputs[i].querySelector("input").value.trim()));
       return a;
     }
-    function doSubmit(auto) {
-      if (submitted) return;
-      submitted = true;
+    function verrouiller() {
       inputs.forEach((l) => (l.querySelector("input").disabled = true));
       stopBtn.disabled = true;
-      api.submit({ answers: collect() });
-      status.textContent = auto ? "⏰ Temps écoulé — réponses envoyées." : "✋ Envoyé ! En attente des autres…";
+      status.textContent = m.envoiAuto ? "⏰ Temps écoulé — réponses envoyées." : "✋ Envoyé ! En attente des autres…";
+    }
+    function doSubmit(auto) {
+      if (m.envoye) return;
+      m.envoye = true;
+      m.envoiAuto = auto;
+      // stop : ce joueur a VRAIMENT appuyé sur STOP (sert au « a fini en premier »).
+      api.submit({ answers: collect(), stop: !auto });
+      verrouiller();
     }
     stopBtn.onclick = () => doSubmit(false);
+    if (m.envoye) verrouiller();
 
-    // Chrono synchronisé (principal puis, éventuellement, sprint final).
+    // Chrono synchronisé (principal puis, éventuellement, sprint final). Un seul
+    // décompte à la fois pour tout le jeu : celui d'un écran remplacé est arrêté.
     api.on("timer", (endsAt) => {
-      if (cdStop) cdStop();
+      m.chronoRecu = true;
+      arreterDecompte();
       barMax = null;
-      cdStop = syncCountdown(endsAt, {
+      decompte = syncCountdown(endsAt, {
         onTick: (s) => {
-          mainLeft = s;
+          m.restant = s;
           if (barMax === null) barMax = Math.max(s, 1);
           timeEl.textContent = fmt(s);
           bar.style.transform = `scaleX(${Math.max(0, s / barMax)})`;
           if (s <= 10) timeEl.classList.add("is-low");
-          if (s <= 3 && s > 0 && !submitted) tick(); // tension des dernières secondes
+          // Un bip par seconde (le décompte passe toutes les 250 ms).
+          if (s <= 3 && s > 0 && !m.envoye && s !== dernierBip) { dernierBip = s; tick(); }
         },
-        onEnd: () => { if (!submitted) vibrate(150); doSubmit(true); },
+        onEnd: () => { if (!m.envoye) vibrate(150); doSubmit(true); },
       });
     });
 
     // Progression + arbitrage de l'hôte : 1er « STOP » (assez tôt) → sprint final.
-    api.on("progress", (done) => {
+    api.on("progress", (done, attendus) => {
+      if (attendus) total = attendus;
       prog.textContent = `${done.length} / ${total} ont fini`;
-      if (api.isHost() && !graceStarted && done.length >= 1 && done.length < total && mainLeft > GRACE_SECONDS) {
-        graceStarted = true;
+      suivi.finis = done.length;
+      suivi.attendus = total;
+      if (suivi.quandTousFinis && done.length >= total) suivi.quandTousFinis();
+      if (api.isHost() && !m.sprint && !suivi.ramassage && done.length >= 1 && done.length < total && m.restant > GRACE_SECONDS) {
+        m.sprint = true;
         status.textContent = "⚡ Quelqu'un a fini ! Sprint final…";
         api.startTimer(GRACE_SECONDS);
       }
     });
 
-    // L'hôte lance le chrono principal au démarrage de la manche.
-    if (api.isHost()) api.startTimer(meta.duree);
+    // L'hôte ramasse les copies avant la correction.
+    api.on("state", (s) => { if (s && s.ramasser) doSubmit(true); });
+
+    // L'hôte lance le chrono principal UNE fois par manche. Un chrono déjà reçu
+    // (rejoué au re-rendu, ou transmis avec la manche à la reconnexion) ne se
+    // relance pas : avant, revenir à la manche le remettait à zéro pour tous.
+    if (api.isHost() && !m.chronoLance && !m.chronoRecu) {
+      m.chronoLance = true;
+      api.startTimer(meta.duree);
+    }
 
     return [
       el("div.card.center.bc-header", {}, [
@@ -220,9 +291,11 @@ export function render(container, { game }) {
     const names = live.names || {};
     const order = live.order || [];
     const ids = Object.keys(names);
-    const first = order[0];
+    // Premier à avoir VRAIMENT crié STOP (pas le premier envoi automatique).
+    const first = order.find((id) => inputs[id] && inputs[id].stop);
 
     let overrides = new Set(); // "id|cat" invalidés par contestation
+    let forces = new Set(); // "id|cat" validés d'office (lettre mal reconnue, mot accepté par la table)
     const wrap = el("div");
 
     function render() {
@@ -232,7 +305,8 @@ export function render(container, { game }) {
         const entries = ids.map((id) => {
           const raw = (inputs[id] && inputs[id].answers && inputs[id].answers[cat]) || "";
           const contested = overrides.has(id + "|" + cat);
-          return { id, raw, contested, valid: !contested && startsWithLetter(raw, letter) };
+          const force = forces.has(id + "|" + cat);
+          return { id, raw, contested, force, valid: force || (!contested && startsWithLetter(raw, letter)) };
         });
         const counts = {};
         entries.filter((e) => e.valid).forEach((e) => (counts[norm(e.raw)] = (counts[norm(e.raw)] || 0) + 1));
@@ -253,7 +327,7 @@ export function render(container, { game }) {
         el("p.screen__subtitle", { text: `Lettre : ${letter} · unique = 2 pts, partagée = 1 pt`, style: "margin-bottom:4px" }),
         first ? el("p.screen__subtitle", { text: `⚡ ${names[first]} a fini en premier`, style: "margin-bottom:8px" }) : el("span"),
         api.isHost()
-          ? el("p.screen__subtitle", { text: "⚖️ Contestation : touche une réponse pour l'invalider / la rétablir.", style: "margin-bottom:8px;opacity:.8" })
+          ? el("p.screen__subtitle", { text: "⚖️ Contestation : touche une réponse pour l'invalider, ou pour valider un mot refusé.", style: "margin-bottom:8px" })
           : el("span"),
         el("div.stack", {},
           catResults.map((cr) =>
@@ -262,16 +336,20 @@ export function render(container, { game }) {
               ...cr.entries.map((e) => {
                 const row = el("div.bc-score-row" + (e.valid ? "" : ".is-invalid"), {}, [
                   el("span", { text: names[e.id] + (e.id === api.me ? " (toi)" : "") }),
-                  el("span.bc-ans", { text: (e.raw || "—") + (e.contested ? " ⚖️" : "") }),
+                  el("span.bc-ans", { text: (e.raw || "—") + (e.contested || e.force ? " ⚖️" : "") }),
                   el("span.bc-pts", { text: "+" + e.pts }),
                 ]);
                 if (api.isHost() && e.raw) {
                   row.style.cursor = "pointer";
                   row.addEventListener("click", () => {
                     const k = e.id + "|" + cr.cat;
-                    if (overrides.has(k)) overrides.delete(k); else overrides.add(k);
+                    // Mot valide → invalidé ; mot refusé (lettre) → validé d'office ; sinon on annule.
+                    if (overrides.has(k)) overrides.delete(k);
+                    else if (forces.has(k)) forces.delete(k);
+                    else if (e.valid) overrides.add(k);
+                    else forces.add(k);
                     render();
-                    api.sendState({ bacOverrides: [...overrides] });
+                    api.sendState({ bacOverrides: [...overrides], bacForces: [...forces] });
                   });
                 }
                 return row;
@@ -284,7 +362,7 @@ export function render(container, { game }) {
           ranking.map((r, i) =>
             el("div.uc-role-row", {}, [
               el("span", { text: `${i + 1}. ${r.name}${r.id === api.me ? " (toi)" : ""}` }),
-              el("span", { text: `${r.total} pts (+${r.d})` }),
+              el("span", { text: `${pluriel(r.total, "pt")} (+${r.d})` }),
             ])
           )
         )
@@ -295,6 +373,7 @@ export function render(container, { game }) {
     api.on("state", (s) => {
       if (s && Array.isArray(s.bacOverrides)) {
         overrides = new Set(s.bacOverrides);
+        forces = new Set(Array.isArray(s.bacForces) ? s.bacForces : []);
         render();
       }
     });
@@ -465,7 +544,7 @@ export function render(container, { game }) {
       el("div.card", { style: "margin-top:14px" }, [
         el("div.row", { style: "justify-content:space-between;align-items:center;margin-bottom:10px" }, [
           el("h3", { text: "👑 Classement de la soirée" }),
-          el("button.chip", { text: "↺ Réinitialiser", onClick: () => { sc.reset(); scoreWrap.replaceChildren(scoreboard(sc.scores, { podium: true })); } }),
+          el("button.chip", { text: "↺ Réinitialiser", onClick: () => { if (!window.confirm("Remettre les scores de la soirée à zéro ?")) return; sc.reset(); scoreWrap.replaceChildren(scoreboard(sc.scores, { podium: true })); } }),
         ]),
         scoreWrap,
       ]),
@@ -506,12 +585,31 @@ export function render(container, { game }) {
     if (activeTimer) clearInterval(activeTimer);
     activeTimer = null;
   }
+  // œ/æ : « Œuf » commence bien par O (NFD ne les décompose pas).
   function norm(s) {
-    return (s || "").trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    return (s || "").trim().toLowerCase().replace(/œ/g, "oe").replace(/æ/g, "ae").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   }
   function startsWithLetter(ans, lettre) {
     const n = norm(ans);
     return n.length > 0 && n[0] === norm(lettre);
+  }
+  function arreterDecompte() {
+    if (decompte) { decompte(); decompte = null; }
+  }
+  // Catégories nettoyées : sans vide ni doublon (deux « Animal » se
+  // confondaient, les réponses étant rangées par nom de catégorie) ; jamais
+  // vide (retour aux catégories par défaut).
+  function nettoyerCategories(lignes, defautSiVide = true) {
+    const vues = new Set();
+    const out = [];
+    for (const l of lignes || []) {
+      const c = String(l || "").trim().slice(0, 40);
+      const k = norm(c);
+      if (!c || vues.has(k)) continue;
+      vues.add(k);
+      out.push(c);
+    }
+    return out.length || !defautSiVide ? out : [...CATEGORIES_DEFAUT];
   }
   function fmt(s) {
     s = Math.max(0, s);

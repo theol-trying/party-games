@@ -16,6 +16,7 @@
 }
 .av-tag[data-kind="action"] { color: #ff4d6d; }
 .av-tag[data-kind="verite"] { color: #4dd0e1; }
+.av-tag[data-kind="gage"] { color: #ffd43b; }
 .av-btn-verite { background: #4dd0e1; }
 .av-btn-action { background: #ff4d6d; }
 /* Le tirage retourne la carte : voir retournerCarte() dans src/fx.js. */

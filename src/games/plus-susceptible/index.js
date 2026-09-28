@@ -7,8 +7,9 @@ import { awardStanding } from "../../crown.js";
 import { bumpMany } from "../../stats.js";
 import { createScores, scoreboard } from "../../scoring.js";
 import { openEditor } from "../../content.js";
-import { passThePhone, contentSource } from "../../game-kit.js";
-import { liveSession, peekAutoLive } from "../../realtime.js";
+import { passThePhone, contentSource, paquetSuivi } from "../../game-kit.js";
+import { liveSession, peekAutoLive, dedupeNames } from "../../realtime.js";
+import { de } from "../../names.js";
 import { AFFIRMATIONS } from "./data.js";
 
 const SCHEMA = {
@@ -16,6 +17,14 @@ const SCHEMA = {
   fields: [{ key: "text", label: "… (commence par un verbe : « finir la soirée… »)", type: "text" }],
   summary: (e) => e.text,
 };
+
+/** « Qui est le plus susceptible d'oublier son téléphone ? » : élision devant
+    une voyelle (63 cartes donnaient « de oublier »), et une vraie question
+    (les cartes finissent par un point). */
+function question(affirmation) {
+  const s = String(affirmation || "…").trim().replace(/\s*\.$/, "");
+  return `Qui est le plus susceptible ${de(s)}\u00a0?`;
+}
 
 export function render(container, { game }) {
   const src = contentSource("plus-susceptible", { builtIn: AFFIRMATIONS });
@@ -68,8 +77,9 @@ export function render(container, { game }) {
   function startLive() {
     if (!affirmations().length) return modeSelect();
     if (liveStop) liveStop();
-    const deck = createDeck(affirmations(), { seen });
+    const deck = paquetSuivi(src, { seen }); // suit les cartes perso, même arrivées après l'ouverture du salon
     const crowns = {}; // deviceId -> couronnes cumulées (converge : base + delta déterministe)
+    let statsManche = -1; // manche déjà comptée dans les superlatifs (« Revoir » ne recompte pas)
 
     liveStop = liveSession(stage, {
       gameId: "plus-susceptible",
@@ -86,37 +96,45 @@ export function render(container, { game }) {
         ps.forEach((p) => (base[p.id] = crowns[p.id] || 0));
         const roles = {};
         ps.forEach((p) => (roles[p.id] = true));
-        return { roles, meta: { statement: s, base } };
+        // Candidats = joueurs de la manche, prénoms distincts (deux « Léa »).
+        return { roles, meta: { statement: s, base, noms: dedupeNames(ps) } };
       },
       renderMine: (mine, { api, meta }) => {
-        let voted = false;
-        const others = api.players().filter((p) => p.id !== api.me);
+        const m = api.memo(); // vote conservé au retour sur la manche
+        const noms = meta.noms || {};
+        const cibles = Object.keys(noms).length ? Object.keys(noms) : api.players().map((p) => p.id);
+        const nomDe = (id) => noms[id] || (api.players().find((p) => p.id === id) || {}).name || "?";
         const status = el("p.screen__subtitle", { text: "Vote en secret 🤫", style: "margin-top:12px" });
-        const btns = others.map((p) =>
-          el("button.btn.btn--ghost.btn--full", {
-            text: p.name,
+        const btns = cibles.filter((id) => id !== api.me).map((id) => {
+          const b = el("button.btn.btn--ghost.btn--full", {
+            text: nomDe(id),
             style: "margin-top:8px",
-            onClick: (e) => {
-              if (voted) return;
-              voted = true;
-              api.submit({ vote: p.id });
-              btns.forEach((b) => (b.disabled = true));
-              e.currentTarget.style.borderColor = "var(--accent)";
-              status.textContent = "✅ Vote envoyé — en attente des autres…";
+            onClick: () => {
+              if (m.vote) return;
+              m.vote = id;
+              api.submit({ vote: id });
+              peindre();
             },
-          })
-        );
+          });
+          b.dataset.id = id;
+          return b;
+        });
+        function peindre() {
+          btns.forEach((b) => { b.disabled = true; b.classList.toggle("is-choisi", b.dataset.id === m.vote); });
+          status.textContent = "✅ Vote envoyé — en attente des autres…";
+        }
+        if (m.vote) peindre();
         api.on("progress", (done, total) => {
-          if (!voted) return;
+          if (!m.vote) return;
           status.textContent = `✅ Voté · ${done.length} / ${total} ont voté`;
         });
         return [
-          el("p.ps-statement", { text: `Qui est le plus susceptible de ${meta.statement}` }),
+          el("p.ps-statement", { text: question(meta.statement) }),
           el("div.stack.ps-choices", { style: "margin-top:14px" }, btns),
           status,
         ];
       },
-      renderReveal: (live, { api }) => {
+      renderReveal: (live, { api, n }) => {
         const names = live.names || {};
         const ids = Object.keys(names);
         const tally = {};
@@ -132,14 +150,15 @@ export function render(container, { game }) {
         // 👑 Contribue au Roi de la soirée (classement par couronnes).
         if (api.isHost()) {
           const cranked = ids.filter((id) => crowns[id] > 0).sort((a, b) => crowns[b] - crowns[a]);
-          if (cranked.length) awardStanding("plus-susceptible", cranked, names, live.avatars || {});
-          // Superlatif « le plus désigné » : ceux que le groupe vient d'élire.
-          if (winners.length) bumpMany(winners, "designe");
+          // scores : deux ex æquo reçoivent les mêmes points de couronne.
+          if (cranked.length) awardStanding("plus-susceptible", cranked, names, live.avatars || {}, { scores: crowns });
+          // Superlatif « le plus désigné » : une fois par manche.
+          if (winners.length && n !== statsManche) { statsManche = n; bumpMany(winners, "designe"); }
         }
         const ranking = ids.map((id) => ({ id, v: tally[id] })).sort((a, b) => b.v - a.v);
         const wNames = winners.map((id) => names[id]);
         return el("div", {}, [
-          el("p.ps-statement", { text: `Qui est le plus susceptible de ${(live.meta || {}).statement || "…"}` }),
+          el("p.ps-statement", { text: question((live.meta || {}).statement) }),
           el("h2.ps-winner", {
             text: wNames.length ? (wNames.length > 1 ? wNames.join(" & ") + " 🍻" : wNames[0] + " boit ! 🍻") : "Personne n'a voté 🤷",
             style: "margin:14px 0",
@@ -207,7 +226,7 @@ export function render(container, { game }) {
 
         showPhase(stage,
           el("div.card.center", {}, [
-            el("p.ps-statement", { text: `Qui est le plus susceptible de ${statement}` }),
+            el("p.ps-statement", { text: question(statement) }),
             el("h2.ps-winner", {
               text: winners.length > 1 ? winners.join(" & ") + " 🍻" : winners[0] + " boit ! 🍻",
               style: "margin:14px 0",
@@ -230,6 +249,7 @@ export function render(container, { game }) {
               el("button.chip", {
                 text: "↺ Réinitialiser",
                 onClick: () => {
+                  if (!window.confirm("Remettre les couronnes de la soirée à zéro ?")) return;
                   sc.reset();
                   scoreWrap.replaceChildren(scoreboard(sc.scores, { podium: true }));
                 },
@@ -247,10 +267,12 @@ export function render(container, { game }) {
         onPlayer: (current, i, next) =>
           showPhase(stage,
             el("div.card.center", {}, [
-              el("p.ps-statement", { text: `Qui est le plus susceptible de ${statement}` }),
-              el("p.screen__subtitle", { text: `Au tour de ${current} de voter` }),
+              el("p.ps-statement", { text: question(statement) }),
+              el("p.screen__subtitle", { text: `Au tour ${de(current)} de voter` }),
               el("div.stack.ps-choices", { style: "margin-top:18px" },
-                players.filter((p) => p !== current).map((p) =>
+                // À 2 équipes, ne voter que pour « l'autre » donnait une égalité à
+                // chaque manche : on peut alors voter pour n'importe laquelle.
+                players.filter((p) => players.length <= 2 || p !== current).map((p) =>
                   el("button.btn.btn--ghost.btn--full", { text: p, onClick: () => { votes[p] = (votes[p] || 0) + 1; next(); } })
                 )
               ),
