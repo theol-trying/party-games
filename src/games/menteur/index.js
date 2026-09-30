@@ -3,7 +3,7 @@ import { createDeck } from "../../deck.js";
 import { makeSeen } from "../../seen.js";
 import { playersCard } from "../../players.js";
 import { openEditor } from "../../content.js";
-import { passThePhone, contentSource } from "../../game-kit.js";
+import { passThePhone, contentSource, tuilesVote } from "../../game-kit.js";
 import { liveSession, peekAutoLive, dedupeNames } from "../../realtime.js";
 import { de } from "../../names.js";
 import { compterGorgees } from "../../gorgees.js";
@@ -135,25 +135,18 @@ export function render(container, { game }) {
         const noms = (meta && meta.noms) || {};
         const cibles = Object.keys(noms).length ? Object.keys(noms) : api.players().map((p) => p.id);
         const nomDe = (id) => noms[id] || (api.players().find((p) => p.id === id) || {}).name || "?";
-        const btns = cibles.filter((id) => id !== api.me).map((id) => {
-          const b = el("button.btn.btn--ghost.btn--full", {
-            text: nomDe(id),
-            style: "margin-top:8px",
-            onClick: () => {
-              if (m.vote) return;
-              m.vote = id;
-              envoyer();
-              peindreVote();
-            },
-          });
-          b.dataset.id = id;
-          return b;
-        });
+        const avs = api.avatars();
+        const ontVote = [];
+        const grille = tuilesVote(
+          cibles.filter((id) => id !== api.me).map((id) => ({ id, nom: nomDe(id), avatar: avs[id] })),
+          { onChoisir: (id) => { if (m.vote) return; m.vote = id; envoyer(); peindreVote(); } }
+        );
         function peindreVote() {
-          btns.forEach((b) => { b.disabled = true; b.classList.toggle("is-choisi", b.dataset.id === m.vote); });
-          status.textContent = "✅ Accusation enregistrée.";
+          grille.peindre({ choisi: m.vote, verrouille: !!m.vote, ontVote });
+          if (m.vote) status.textContent = "✅ Accusation enregistrée.";
         }
-        if (m.vote) peindreVote();
+        peindreVote();
+        // (Pas de ✓ « a voté » ici : prendre la mission bonus compte aussi comme un envoi.)
         api.on("progress", (done, total) => {
           if (m.vote) status.textContent = `✅ Accusé · ${done.length} / ${total} ont accusé`;
         });
@@ -173,7 +166,7 @@ export function render(container, { game }) {
             : null,
           el("h3", { text: "🕵️ Qui accuses-tu ?", style: "margin-top:18px" }),
           el("p.screen__subtitle", { text: "Vote secret : qui s'est fait griller selon toi ? ⚠️ Accuser à tort se paie…" }),
-          el("div.stack", {}, btns),
+          grille.node,
           status,
         ];
       },

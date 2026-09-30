@@ -29,3 +29,18 @@
   .tp-board { grid-template-columns: 1fr; }
   .tp-or { padding: 4px 0; }
 }
+
+/* Barre bicolore A / B (révélation multi) */
+.tp-barre { display: flex; height: 36px; border-radius: 999px; overflow: hidden; margin: 12px 0 4px; background: var(--bg-soft); font-weight: 800; font-size: 13px; }
+.tp-barre > div { display: flex; align-items: center; min-width: 0; overflow: hidden; white-space: nowrap; }
+.tp-barre__a { background: #4dd0e1; color: #0c2a30; justify-content: flex-start; padding-left: 12px; }
+.tp-barre__b { background: #ff4d6d; color: #2a0c12; justify-content: flex-end; padding-right: 12px; }
+.tp-barre > .is-vide { padding: 0; }
+.tp-barre.is-anime > div { animation: tp-part 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes tp-part { from { flex-grow: 1; } }
+.tp-camp.is-min { border-color: var(--accent); }
+/* B en rose, comme sa moitié de barre (A reste cyan, la couleur du jeu). */
+.tp-option__lettre.is-b { background: #ff4d6d; color: #2a0c12; }
+.tp-pile { display: flex; flex-wrap: wrap; margin-top: 8px; padding-left: 8px; }
+.tp-pile__av { margin-left: -8px; }
+.tp-pile__av .av-badge { width: 34px; height: 34px; font-size: 19px; font-weight: 900; color: #16161f; box-shadow: 0 0 0 3px var(--bg-card); }

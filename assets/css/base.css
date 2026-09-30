@@ -909,3 +909,51 @@ select:focus-visible {
 /* L'attribut hidden doit gagner sur les display des composants (.chip,
    .btn…) : sans cette règle, un bouton « caché » restait affiché. */
 [hidden] { display: none !important; }
+
+/* =================== ⏱️ Chrono en anneau (game-kit.js) =================== */
+.chrono { position: relative; display: grid; place-items: center; width: max-content; margin: 10px auto 0; }
+.chrono svg { transform: rotate(-90deg); display: block; }
+.chrono__piste { fill: none; stroke: rgba(255, 255, 255, 0.1); stroke-width: 8; }
+.chrono__arc {
+  fill: none; stroke: var(--accent); stroke-width: 8; stroke-linecap: round;
+  transition: stroke-dashoffset 0.25s linear, stroke 0.4s;
+}
+.chrono.is-moitie .chrono__arc { stroke: #ffa94d; }
+.chrono.is-urgent .chrono__arc { stroke: #ff4d6d; }
+.chrono__chiffre {
+  position: absolute; font-family: var(--font-display); font-weight: 900; font-size: 26px;
+  font-variant-numeric: tabular-nums;
+}
+.chrono.is-urgent .chrono__chiffre { color: #ff6b81; animation: chrono-pouls 1s ease-in-out infinite; }
+@keyframes chrono-pouls { 50% { transform: scale(1.18); } }
+
+/* =================== 🗳️ Vote en tuiles avatar (game-kit.js) =================== */
+.vote-grille { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.vote-tuile {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; min-height: 104px; padding: 14px 8px 12px; border-radius: 16px;
+  background: var(--bg-soft); border: 2px solid var(--border); color: var(--text);
+  font: inherit; cursor: pointer; transition: transform 0.08s, border-color 0.15s, opacity 0.2s;
+}
+.vote-tuile:active { transform: scale(0.97); }
+.vote-tuile__av {
+  width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 30px; font-weight: 900; color: #16161f; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+.vote-tuile__nom { font-weight: 800; font-size: 15px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vote-tuile__coche { position: absolute; top: 6px; right: 8px; font-size: 11px; font-weight: 800; color: #69db7c; }
+.vote-tuile.is-choisi { border-color: var(--accent); background: rgba(255, 255, 255, 0.06); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); }
+.vote-tuile.is-choisi::after { content: "✅"; position: absolute; top: 6px; left: 8px; font-size: 14px; }
+.vote-tuile:disabled { cursor: default; opacity: 0.5; }
+.vote-tuile.is-choisi:disabled { opacity: 1; }
+
+/* Salon : un joueur qui arrive « entre » dans la liste (realtime.js). */
+/* Deux colonnes (joueur | hôte ou boutons) : la grille à 3 colonnes de .sb-row
+   logeait le prénom dans la colonne « rang » de 34 px, d'où « B… » tronqué. Pas
+   d'animation d'entrée pour les lignes déjà là (seulement .is-arrivee). */
+.salon-joueur { grid-template-columns: minmax(0, 1fr) auto; animation: none; }
+.salon-joueur > span:first-child > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.salon-joueur.is-arrivee { animation: salon-arrivee 0.5s cubic-bezier(0.2, 1.3, 0.4, 1) both; animation-delay: calc(var(--i, 0) * 80ms); }
+.salon-joueur.is-arrivee .av-badge { animation: salon-badge 0.6s cubic-bezier(0.2, 1.6, 0.4, 1) both; animation-delay: calc(var(--i, 0) * 80ms + 120ms); }
+@keyframes salon-arrivee { from { opacity: 0; transform: translateY(12px) scale(0.96); } }
+@keyframes salon-badge { from { transform: scale(0.3) rotate(-25deg); } }

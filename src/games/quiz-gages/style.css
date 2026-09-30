@@ -83,3 +83,21 @@
 
 /* Fin de tour : le podium au centre de l'écran. */
 .qz-fin-tour h3 { margin-bottom: 4px; }
+
+/* 📊 Répartition des réponses (révélation multi) */
+.qz-repartition { display: grid; gap: 8px; margin: 12px 0 16px; text-align: left; }
+.qz-rep { display: grid; grid-template-columns: 30px 1fr 22px; align-items: center; gap: 8px; opacity: 0.55; }
+.qz-rep.is-bonne { opacity: 1; }
+.qz-rep__corps { position: relative; min-height: 36px; border-radius: 10px; background: var(--bg-soft); overflow: hidden; }
+.qz-rep__barre {
+  position: absolute; left: 0; top: 0; bottom: 0; width: calc(var(--part) * 100%);
+  background: rgba(255, 255, 255, 0.12); transform-origin: left;
+}
+.qz-rep.is-bonne .qz-rep__barre { background: rgba(105, 219, 124, 0.38); }
+.qz-repartition.is-anime .qz-rep__barre { animation: qz-barre 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: calc(var(--i) * 90ms); }
+@keyframes qz-barre { from { transform: scaleX(0); } }
+.qz-rep__qui { position: relative; display: flex; flex-wrap: wrap; gap: 4px; padding: 5px 6px; }
+.qz-rep__av { position: relative; display: inline-flex; }
+.qz-rep__av .av-badge { width: 26px; height: 26px; font-size: 15px; font-weight: 900; color: #16161f; }
+.qz-rep__eclair { position: absolute; top: -7px; right: -7px; font-size: 13px; }
+.qz-rep__n { font-weight: 800; text-align: right; }

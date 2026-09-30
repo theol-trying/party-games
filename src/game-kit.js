@@ -123,3 +123,87 @@ export function passThePhone(stage, players, { onPlayer, onDone, icon = "📱", 
   }
   step();
 }
+
+/* =========================== Composants visuels =========================== */
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+function svg(tag, attrs = {}) {
+  const n = document.createElementNS(SVG_NS, tag);
+  for (const [a, v] of Object.entries(attrs)) n.setAttribute(a, String(v));
+  return n;
+}
+/** Couleur stable d'un prénom (pastilles sans avatar). */
+export function couleurDe(texte) {
+  let h = 0;
+  for (let i = 0; i < (texte || "").length; i++) h = (h * 31 + texte.charCodeAt(i)) >>> 0;
+  return `hsl(${h % 360} 70% 55%)`;
+}
+/** Avatar d'un joueur : son émoji, ou l'initiale de son prénom (partie sur un seul téléphone). */
+export function pastille(nom, avatar, classe = "av-badge") {
+  return el("span." + classe, { text: avatar || String(nom || "?").trim().charAt(0).toUpperCase() || "?", style: `background:${couleurDe(nom)}` });
+}
+
+/**
+ * ⏱️ Chrono en anneau : l'arc se vide, passe à l'orange à mi-temps puis au
+ * rouge (et bat) dans les 5 dernières secondes. Caché tant qu'aucun chrono
+ * ne tourne. maj(restant, total) à chaque tic ; les bips restent au jeu.
+ */
+export function anneauChrono({ taille = 78 } = {}) {
+  const C = 2 * Math.PI * 44;
+  const arc = svg("circle", { cx: 50, cy: 50, r: 44, class: "chrono__arc", "stroke-dasharray": C.toFixed(2), "stroke-dashoffset": 0 });
+  const dessin = svg("svg", { viewBox: "0 0 100 100", width: taille, height: taille, "aria-hidden": "true" });
+  dessin.append(svg("circle", { cx: 50, cy: 50, r: 44, class: "chrono__piste" }), arc);
+  const chiffre = el("span.chrono__chiffre");
+  const node = el("div.chrono", { role: "timer", hidden: true }, [dessin, chiffre]);
+  return {
+    node,
+    maj(restant, total) {
+      node.hidden = false;
+      const f = total > 0 ? Math.max(0, Math.min(1, restant / total)) : 0;
+      arc.setAttribute("stroke-dashoffset", (C * (1 - f)).toFixed(2));
+      chiffre.textContent = restant > 0 ? String(restant) : "⏰";
+      node.classList.toggle("is-moitie", f <= 0.5 && restant > 5);
+      node.classList.toggle("is-urgent", restant <= 5);
+      node.setAttribute("aria-label", restant > 0 ? `${restant} secondes` : "Temps écoulé");
+    },
+  };
+}
+
+/** Durée totale d'un chrono vu en cours de route (écran re-rendu) : la 1re
+    valeur vue pour cette échéance, mémorisée dans la mémoire de manche. */
+export function totalChrono(memo, endsAt, restant) {
+  if (memo.chronoFin !== endsAt) { memo.chronoFin = endsAt; memo.chronoTotal = Math.max(1, restant); }
+  return memo.chronoTotal;
+}
+
+/**
+ * 🗳️ Vote en grosses tuiles : avatar + prénom, deux colonnes. Plus rapide à
+ * viser au doigt qu'une liste de boutons, et deux homonymes restent
+ * distinguables par leur avatar. peindre({ choisi, verrouille, ontVote })
+ * met à jour sans reconstruire : ontVote = ceux qui ont déjà voté (✓, sans
+ * dévoiler pour qui).
+ */
+export function tuilesVote(candidats, { onChoisir }) {
+  const tuiles = new Map();
+  const grille = el("div.vote-grille", { role: "group", "aria-label": "Voter" });
+  for (const c of candidats) {
+    const t = el("button.vote-tuile", { type: "button", "aria-pressed": "false", onClick: () => onChoisir(c.id) }, [
+      pastille(c.nom, c.avatar, "vote-tuile__av"),
+      el("span.vote-tuile__nom", { text: c.nom }),
+      el("span.vote-tuile__coche", { text: "✓ a voté", hidden: true }),
+    ]);
+    tuiles.set(c.id, t);
+    grille.appendChild(t);
+  }
+  return {
+    node: grille,
+    peindre({ choisi = null, verrouille = false, ontVote = [] } = {}) {
+      for (const [id, t] of tuiles) {
+        t.disabled = verrouille;
+        t.classList.toggle("is-choisi", id === choisi);
+        t.setAttribute("aria-pressed", String(id === choisi));
+        t.querySelector(".vote-tuile__coche").hidden = !ontVote.includes(id);
+      }
+    },
+  };
+}

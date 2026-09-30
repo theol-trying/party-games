@@ -70,3 +70,30 @@ test("le serveur répond à la fermeture d'un WebSocket (fermeture propre et rap
   assert.equal(fin.wasClean, true);
   assert.ok(Date.now() - t0 < 2000, "fermeture trop lente");
 });
+
+test("icône iPhone : un vrai PNG 180 × 180, dessiné par le serveur (aucun binaire dans le dépôt)", async () => {
+  const r = await fetch(`http://127.0.0.1:${PORT}/assets/icon-180.png`);
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get("content-type"), "image/png");
+  const b = Buffer.from(await r.arrayBuffer());
+  assert.deepEqual([...b.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], "signature PNG");
+  assert.equal(b.readUInt32BE(16), 180, "largeur");
+  assert.equal(b.readUInt32BE(20), 180, "hauteur");
+  // Chaque bloc porte un CRC exact (un seul octet faux et iOS ignore l'image).
+  const { crc32 } = await import("../icone.js");
+  for (let i = 8; i < b.length; ) {
+    const long = b.readUInt32BE(i);
+    const corps = b.subarray(i + 4, i + 8 + long);
+    assert.equal(b.readUInt32BE(i + 8 + long), crc32(corps), "CRC du bloc " + corps.subarray(0, 4).toString());
+    i += 12 + long;
+  }
+  // Pixels : le coin est le dégradé (rose), le centre de la coupe est blanc.
+  const zlib = await import("node:zlib");
+  const idat = b.subarray(b.indexOf("IDAT") + 4, b.indexOf("IEND") - 8);
+  const brut = zlib.inflateSync(idat);
+  const px = (x, y) => [...brut.subarray(y * (180 * 3 + 1) + 1 + x * 3, y * (180 * 3 + 1) + 4 + x * 3)];
+  assert.ok(px(2, 2)[0] > 200 && px(2, 2)[2] < 140, "coin rose : " + px(2, 2));
+  assert.deepEqual(px(90, 64), [255, 255, 255], "coupe blanche");
+  const r404 = await fetch(`http://127.0.0.1:${PORT}/assets/icon-77.png`);
+  assert.equal(r404.status, 404, "taille inconnue");
+});

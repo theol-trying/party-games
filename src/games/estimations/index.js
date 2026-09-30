@@ -16,7 +16,7 @@ import { createDeck } from "../../deck.js";
 import { makeSeen } from "../../seen.js";
 import { createScores, scoreboard, podium, compteur } from "../../scoring.js";
 import { openEditor } from "../../content.js";
-import { contentSource, passThePhone, themeSelector, paquetSuivi } from "../../game-kit.js";
+import { contentSource, passThePhone, themeSelector, paquetSuivi, anneauChrono, totalChrono, pastille } from "../../game-kit.js";
 import { liveSession, syncCountdown, peekAutoLive } from "../../realtime.js";
 import { tick, vibrate, vibrateTap } from "../../sound.js";
 import { celebrate, stampGage } from "../../fx.js";
@@ -241,6 +241,7 @@ export function render(container, { game }) {
       showPhase(stage,
         el("div.card.center", {}, [
           blocReponse(item, true),
+          droiteEstimations(r, item, { nom, anime: true }),
           lignesEstimations(r, item, nom, { boire, avecGorgees }),
           bilan.noeud,
         ]),
@@ -312,7 +313,9 @@ export function render(container, { game }) {
     let total = api.players().length;
     let dernierBip = null;
     const prog = el("p.screen__subtitle", { text: `0 / ${total} ont répondu`, style: "margin-top:14px" });
-    const timerLine = el("p.es-chrono");
+    const chrono = anneauChrono(); // ⏱️ anneau qui se vide, orange puis rouge
+    const timerLine = chrono.node;
+    const m = api.memo();
     const zone = el("div");
     const dejaEnvoye = envoye.n === n; // re-rendu de la même manche : on ne redemande rien
 
@@ -332,7 +335,7 @@ export function render(container, { game }) {
       stopCountdown();
       cdStop = syncCountdown(endsAt, {
         onTick: (s) => {
-          timerLine.textContent = s > 0 ? `⏱️ ${s}` : "⏰";
+          chrono.maj(s, totalChrono(m, endsAt, s));
           if (s <= 3 && s > 0 && envoye.n !== n && s !== dernierBip) { dernierBip = s; tick(); } // un bip par seconde
         },
         onEnd: () => {
@@ -387,6 +390,7 @@ export function render(container, { game }) {
     const bilan = verdict(r, nom, boire, avecGorgees);
     return el("div.center", {}, [
       blocReponse(meta, defile),
+      droiteEstimations(r, meta, { nom, avatars: live.avatars || {}, moi: me, anime: defile }),
       lignesEstimations(r, meta, nom, { moi: me, boire, avecGorgees }),
       bilan.noeud,
       el("h3", { text: "Classement", style: "margin-top:18px" }),
@@ -436,6 +440,46 @@ export function render(container, { game }) {
     const ids = Object.keys(boire);
     if (!avecGorgees) return `${ids.map(nom).join(" et ")} ${ids.length > 1 ? "boivent" : "boit"} une gorgée 🍺`;
     return ids.map((id) => `${nom(id)} boit ${pluriel(boire[id], "gorgée")}`).join(", ") + " 🍺";
+  }
+
+  /* 📏 Droite graduée : chaque avatar tombe à son estimation, puis la bonne
+     réponse se plante en 🎯. Échelle logarithmique quand les estimations
+     s'étalent sur plusieurs ordres de grandeur (sinon tout s'écrase d'un côté).
+     Les avatars trop proches montent d'un cran pour rester lisibles. */
+  function droiteEstimations(r, item, { nom, avatars = {}, moi = null, anime = false }) {
+    if (!r.lignes.length) return null;
+    const annee = estAnnee(item.q, item.unite);
+    const valeurs = [item.reponse, ...r.lignes.map((l) => l.v)];
+    const mini = Math.min(...valeurs);
+    const maxi = Math.max(...valeurs);
+    const log = !annee && mini > 0 && maxi / mini > 20;
+    const f = log ? Math.log10 : (x) => x;
+    const a = f(mini), b = f(maxi);
+    const marge = (b - a) * 0.08 || 1;
+    const pos = (v) => Math.max(0, Math.min(100, ((f(v) - (a - marge)) / (b - a + 2 * marge)) * 100));
+    const rangs = []; // dernière position occupée par rang
+    const points = [...r.lignes].sort((x, y) => x.v - y.v).map((l, i) => {
+      const x = pos(l.v);
+      let rang = 0;
+      while (rangs[rang] !== undefined && x - rangs[rang] < 11 && rang < 3) rang++;
+      rangs[rang] = x;
+      return el("span.es-droite__pt" + (r.points[l.id] ? ".is-gagnant" : "") + (l.id === moi ? ".is-moi" : ""), {
+        style: `left:${x.toFixed(1)}%;--rang:${rang};--i:${i}`,
+        title: `${nom(l.id)} : ${nombre(l.v, item.unite)}`,
+      }, [pastille(nom(l.id), avatars[l.id])]);
+    });
+    return el("div.es-droite" + (anime ? ".is-anime" : ""), {
+      style: `--rangs:${Math.max(1, rangs.length)};--n:${points.length}`,
+      "aria-label": "Les estimations sur une droite graduée",
+    }, [
+      el("div.es-droite__ligne"),
+      ...points,
+      el("div.es-droite__rep", { style: `left:${pos(item.reponse).toFixed(1)}%` }, [
+        el("span", { text: "🎯", "aria-hidden": "true" }),
+        el("small", { text: nombre(item.reponse, item.unite) }),
+      ]),
+      log ? el("small.es-droite__echelle", { text: "échelle logarithmique" }) : null,
+    ].filter(Boolean));
   }
 
   /** Les estimations, de la plus proche à la plus lointaine. */

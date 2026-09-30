@@ -9,3 +9,9 @@
 .jj-counter { color: var(--text-dim); font-size: 13px; min-height: 18px; margin-bottom: 8px; }
 .jj-btn { background: #ffb84d; color: #241a00; }
 /* Le tirage retourne la carte : voir retournerCarte() dans src/fx.js. */
+
+/* Révélation multi : compteur de coupables + cascade */
+.jj-compte { font-family: var(--font-display); font-size: 46px; font-weight: 900; color: var(--accent); line-height: 1; margin: 4px 0 10px; }
+.jj-compte small { font-size: 15px; color: var(--text-dim); font-weight: 700; }
+.jj-cascade.is-anime > * { animation: jj-cascade 0.4s ease-out both; animation-delay: calc(var(--i) * 140ms); }
+@keyframes jj-cascade { from { opacity: 0; transform: translateX(-18px); } }

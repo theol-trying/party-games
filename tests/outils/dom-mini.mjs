@@ -31,7 +31,7 @@ class Element {
     this.childNodes = [];
     this.parentNode = null;
     this.attrs = new Map();
-    this.style = {};
+    this.style = { setProperty(k, v) { this[k] = String(v); }, removeProperty(k) { delete this[k]; }, getPropertyValue(k) { return this[k] || ""; } };
     this.dataset = {};
     this.classList = new Classes();
     this.ecouteurs = {};
@@ -70,6 +70,21 @@ class Element {
     this.childNodes.unshift(...nodes);
   }
   removeChild(n) { const i = this.childNodes.indexOf(n); if (i >= 0) this.childNodes.splice(i, 1); n.parentNode = null; return n; }
+  insertBefore(n, ref) {
+    if (!ref) return this.appendChild(n);
+    if (n.parentNode) n.parentNode.removeChild(n);
+    const i = this.childNodes.indexOf(ref);
+    n.parentNode = this;
+    this.childNodes.splice(i < 0 ? this.childNodes.length : i, 0, n);
+    return n;
+  }
+  replaceWith(n) {
+    const p = this.parentNode;
+    if (!p) return;
+    p.insertBefore(n, this);
+    p.removeChild(this);
+  }
+  contains(n) { for (let x = n; x; x = x.parentNode) if (x === this) return true; return false; }
   remove() { if (this.parentNode) this.parentNode.removeChild(this); }
   replaceChildren(...ns) { this.childNodes.slice().forEach((c) => this.removeChild(c)); this.append(...ns); }
   setAttribute(k, v) {

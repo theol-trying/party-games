@@ -6,6 +6,7 @@ import { createScores, scoreboard } from "../../scoring.js";
 import { getData, setData } from "../../store.js";
 import { liveSession, syncCountdown, peekAutoLive } from "../../realtime.js";
 import { tick, vibrate } from "../../sound.js";
+import { anneauChrono, totalChrono } from "../../game-kit.js";
 import { CATEGORIES_DEFAUT, LETTRES, DUREE_DEFAUT } from "./data.js";
 
 const GRACE_SECONDS = 12; // sprint final déclenché quand le 1er joueur crie « STOP »
@@ -199,19 +200,19 @@ export function render(container, { game }) {
     if (!m.brouillon) suivi.ramassage = false; // manche neuve
     if (!m.brouillon) Object.assign(m, { brouillon: {}, envoye: false, envoiAuto: false, sprint: false, chronoLance: false, chronoRecu: false, restant: meta.duree });
     let total = api.players().length;
-    let barMax = null;
     let dernierBip = null;
 
-    const timeEl = el("div.bc-timer", { text: fmt(meta.duree) });
-    const bar = el("div.bc-bar__fill");
     const inputs = cats.map((cat) => {
-      const champ = el("input.input", { placeholder: `en ${letter}…`, maxlength: "30", autocapitalize: "words", value: m.brouillon[cat] || "" });
+      const champ = el("input.input", { placeholder: "…", maxlength: "30", autocapitalize: "words", value: m.brouillon[cat] || "" });
       champ.addEventListener("input", () => { m.brouillon[cat] = champ.value; });
       return el("label.bc-field", {}, [el("span.bc-field__label", { text: cat }), champ]);
     });
     const prog = el("p.screen__subtitle", { text: `0 / ${total} ont fini`, style: "margin-top:10px" });
     const status = el("div.qz-feedback", { style: "min-height:22px;margin-top:6px" });
     const stopBtn = el("button.btn.btn--full", { text: "STOP ! J'ai fini", style: "margin-top:16px" });
+    // Roulette une seule fois par manche (pas au retour sur la manche).
+    const entete = enteteBac(letter, { anime: !m.rouletteVue, champs: inputs });
+    m.rouletteVue = true;
 
     function collect() {
       const a = {};
@@ -239,14 +240,10 @@ export function render(container, { game }) {
     api.on("timer", (endsAt) => {
       m.chronoRecu = true;
       arreterDecompte();
-      barMax = null;
       decompte = syncCountdown(endsAt, {
         onTick: (s) => {
           m.restant = s;
-          if (barMax === null) barMax = Math.max(s, 1);
-          timeEl.textContent = fmt(s);
-          bar.style.transform = `scaleX(${Math.max(0, s / barMax)})`;
-          if (s <= 10) timeEl.classList.add("is-low");
+          entete.chrono.maj(s, totalChrono(m, endsAt, s));
           // Un bip par seconde (le décompte passe toutes les 250 ms).
           if (s <= 3 && s > 0 && !m.envoye && s !== dernierBip) { dernierBip = s; tick(); }
         },
@@ -280,12 +277,7 @@ export function render(container, { game }) {
     }
 
     return [
-      el("div.card.center.bc-header", {}, [
-        el("p.screen__subtitle", { text: "Lettre" }),
-        el("div.bc-letter", { text: letter }),
-        timeEl,
-        el("div.bc-bar", {}, [bar]),
-      ]),
+      entete.node,
       el("div.card", { style: "margin-top:14px" }, [
         el("div.stack", {}, inputs),
         stopBtn,
@@ -403,15 +395,13 @@ export function render(container, { game }) {
     const lettre = drawLetter();
     announce("Lettre : " + lettre);
     let remaining = duree;
-    const timeEl = el("div.bc-timer", { text: fmt(remaining) });
-    const bar = el("div.bc-bar__fill");
     const inputs = fieldInputs(lettre);
+    const entete = enteteBac(lettre, { champs: inputs });
+    entete.chrono.maj(remaining, duree);
 
     function tick() {
       remaining--;
-      timeEl.textContent = fmt(remaining);
-      bar.style.transform = `scaleX(${remaining / duree})`;
-      if (remaining <= 10) timeEl.classList.add("is-low");
+      entete.chrono.maj(remaining, duree);
       if (remaining <= 0) stop(true);
     }
     function stop(timeUp) {
@@ -421,7 +411,7 @@ export function render(container, { game }) {
     startTimer(tick);
 
     showPhase(stage,
-      letterHeader(lettre, timeEl, bar),
+      entete.node,
       el("div.card", { style: "margin-top:14px" }, [
         el("div.stack", {}, inputs),
         el("button.btn.btn--full", { text: "STOP ! J'ai fini", style: "margin-top:16px", onClick: () => stop(false) }),
@@ -471,7 +461,12 @@ export function render(container, { game }) {
         el("div.card.center", {}, [
           el("p.big-prompt", { text: "📱" }),
           el("p", { text: `Passe le téléphone à ${players[pi]}` }),
-          el("div.bc-letter", { text: lettre, style: "font-size:clamp(40px,12vw,64px)" }),
+          (() => {
+            // Roulette pour le 1er joueur ; les suivants voient la lettre directement.
+            const l = el("div.bc-letter", { text: pi === 0 ? "?" : lettre, style: "font-size:clamp(40px,12vw,64px)" });
+            if (pi === 0 && !mouvementReduit()) roulette(l, lettre); else l.textContent = lettre;
+            return l;
+          })(),
           el("button.btn.btn--full", { text: `${players[pi]} est prêt·e`, style: "margin-top:12px", onClick: fillScreen }),
         ])
       );
@@ -480,15 +475,13 @@ export function render(container, { game }) {
     function fillScreen() {
       const player = players[pi];
       let remaining = duree;
-      const timeEl = el("div.bc-timer", { text: fmt(remaining) });
-      const bar = el("div.bc-bar__fill");
       const inputs = fieldInputs(lettre);
+      const entete = enteteBac(lettre, { titre: `${player} · à toi !`, anime: false, champs: inputs });
+      entete.chrono.maj(remaining, duree);
 
       function tick() {
         remaining--;
-        timeEl.textContent = fmt(remaining);
-        bar.style.transform = `scaleX(${remaining / duree})`;
-        if (remaining <= 10) timeEl.classList.add("is-low");
+        entete.chrono.maj(remaining, duree);
         if (remaining <= 0) done();
       }
       function done() {
@@ -501,12 +494,7 @@ export function render(container, { game }) {
       startTimer(tick);
 
       showPhase(stage,
-        el("div.card.center.bc-header", {}, [
-          el("p.screen__subtitle", { text: `${player} · à toi !` }),
-          el("div.bc-letter", { text: lettre }),
-          timeEl,
-          el("div.bc-bar", {}, [bar]),
-        ]),
+        entete.node,
         el("div.card", { style: "margin-top:14px" }, [
           el("div.stack", {}, inputs),
           el("button.btn.btn--full", { text: "Fini →", style: "margin-top:16px", onClick: done }),
@@ -581,17 +569,48 @@ export function render(container, { game }) {
     return categories.map((cat) =>
       el("label.bc-field", {}, [
         el("span.bc-field__label", { text: cat }),
-        el("input.input", { placeholder: `en ${lettre}…`, maxlength: "30", autocapitalize: "words" }),
+        el("input.input", { placeholder: "…", maxlength: "30", autocapitalize: "words" }), // « en X… » posé après la roulette
       ])
     );
   }
-  function letterHeader(lettre, timeEl, bar) {
-    return el("div.card.center.bc-header", {}, [
-      el("p.screen__subtitle", { text: "Lettre" }),
-      el("div.bc-letter", { text: lettre }),
-      timeEl,
-      el("div.bc-bar", {}, [bar]),
-    ]);
+  /* 🎰 En-tête de manche : la lettre tombe au bout d'une courte roulette, à
+     côté du chrono en anneau. Les champs ne reçoivent « en X… » qu'à l'arrêt
+     de la roulette (sinon ils vendaient la mèche). */
+  function enteteBac(lettre, { titre = "Lettre", anime = true, champs = [] } = {}) {
+    const lettreEl = el("div.bc-letter", { text: "?" });
+    const chrono = anneauChrono({ taille: 92 });
+    const poser = () => champs.forEach((l) => { const i = l.querySelector("input"); if (i) i.placeholder = `en ${lettre}…`; });
+    if (anime && !mouvementReduit()) roulette(lettreEl, lettre, poser);
+    else { lettreEl.textContent = lettre; poser(); }
+    return {
+      chrono,
+      node: el("div.card.bc-header", {}, [
+        el("div.bc-entete__lettre", {}, [el("p.screen__subtitle", { text: titre }), lettreEl]),
+        chrono.node,
+      ]),
+    };
+  }
+  // Défilement de lettres au hasard qui ralentit puis s'arrête (~1 s). Des
+  // setTimeout, pas d'animation : la lettre finale arrive quoi qu'il arrive.
+  function roulette(noeud, finale, onFin) {
+    const pas = [45, 50, 55, 65, 75, 90, 110, 135, 165, 200];
+    let i = 0;
+    noeud.classList.add("is-roulette");
+    const suivant = () => {
+      if (i >= pas.length) {
+        noeud.textContent = finale;
+        noeud.classList.remove("is-roulette");
+        noeud.classList.add("is-arret");
+        if (onFin) onFin();
+        return;
+      }
+      noeud.textContent = LETTRES[Math.floor(Math.random() * LETTRES.length)];
+      setTimeout(suivant, pas[i++]);
+    };
+    suivant();
+  }
+  function mouvementReduit() {
+    try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; }
   }
   function startTimer(tick) {
     clearTimer(); // sécurité : pas deux chronos à la fois

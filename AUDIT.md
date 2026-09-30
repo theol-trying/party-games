@@ -22,7 +22,11 @@ personnalisables, **Roi de la soirée** (classement agrégé multi-jeux, parties
 téléphone comprises, + cérémonie podium jouée en même temps sur tous les appareils ; accessible
 depuis l'accueil : 👑 Palmarès), **compteur de gorgées** de la soirée et option **sans alcool**
 (mêmes jeux, gorgées de soft), **écran TV / spectateur** (`#/tv`), PWA installable,
-support hors-ligne, sons et confettis.
+support hors-ligne, sons et confettis. Révélations animées (répartition A-D du quiz, droite
+graduée d'Estimations, barre bicolore de Tu préfères, coupables en cascade, roue des joueurs
+d'Action ou Vérité), votes en tuiles avatar, chrono en anneau, roulette de lettres au Bac, salon
+mis à jour en place, et vraie icône PNG d'écran d'accueil iPhone (dessinée par `icone.js`, sans
+fichier binaire dans le dépôt).
 
 ## 2. Contenu (mesuré, pas estimé)
 

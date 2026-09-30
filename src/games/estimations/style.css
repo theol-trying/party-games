@@ -48,3 +48,28 @@
 .es-ligne__pts { font-weight: 900; color: var(--accent); white-space: nowrap; }
 .es-ligne__pts.is-boit { color: #ff8fa3; } /* gorgées à boire (option « selon l'écart ») */
 .es-verdict { font-weight: 800; margin-top: 14px; line-height: 1.4; }
+
+/* 📏 Droite graduée des estimations */
+.es-droite { position: relative; height: calc(74px + var(--rangs) * 32px); margin: 6px 16px 16px; }
+.es-droite__ligne {
+  position: absolute; left: 0; right: 0; bottom: 38px; height: 4px; border-radius: 2px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.35));
+}
+.es-droite__pt { position: absolute; bottom: calc(50px + var(--rang) * 32px); transform: translateX(-50%); }
+.es-droite__pt::after {
+  content: ""; position: absolute; left: 50%; top: 100%; width: 2px;
+  height: calc(10px + var(--rang) * 32px); background: rgba(255, 255, 255, 0.25); transform: translateX(-50%);
+}
+.es-droite__pt .av-badge { width: 28px; height: 28px; font-size: 16px; font-weight: 900; color: #16161f; }
+.es-droite__pt.is-gagnant .av-badge { box-shadow: 0 0 0 3px #a9e34b, 0 0 14px rgba(169, 227, 75, 0.6); }
+.es-droite__pt.is-moi .av-badge { outline: 2px solid #fff; outline-offset: 1px; }
+.es-droite__rep {
+  position: absolute; bottom: 0; transform: translateX(-50%); display: flex; flex-direction: column;
+  align-items: center; gap: 2px; font-size: 22px; line-height: 1; white-space: nowrap;
+}
+.es-droite__rep small { font-size: 12px; font-weight: 800; color: #a9e34b; }
+.es-droite__echelle { position: absolute; right: 0; top: -2px; font-size: 10px; color: var(--text-dim); }
+.es-droite.is-anime .es-droite__pt { animation: es-tombe 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both; animation-delay: calc(var(--i) * 110ms); }
+.es-droite.is-anime .es-droite__rep { animation: es-drapeau 0.5s ease-out both; animation-delay: calc(var(--n) * 110ms + 250ms); }
+@keyframes es-tombe { from { opacity: 0; transform: translate(-50%, -22px); } }
+@keyframes es-drapeau { from { opacity: 0; transform: translate(-50%, 12px) scale(0.6); } }

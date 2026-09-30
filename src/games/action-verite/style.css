@@ -20,3 +20,19 @@
 .av-btn-verite { background: #4dd0e1; }
 .av-btn-action { background: #ff4d6d; }
 /* Le tirage retourne la carte : voir retournerCarte() dans src/fx.js. */
+
+/* 🎡 Roue des joueurs (multi) */
+.av-roue { position: relative; width: 230px; height: 230px; margin: 4px auto 12px; }
+.av-roue__disque {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.05) 0 52%, rgba(255, 255, 255, 0.12) 53% 100%);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.1);
+  transition: transform 2.8s cubic-bezier(0.12, 0.7, 0.18, 1);
+}
+.av-roue__place { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+.av-roue__badge {
+  position: absolute; left: -23px; top: -23px; width: 46px; height: 46px; font-size: 25px; font-weight: 900; color: #16161f;
+  transition: transform 2.8s cubic-bezier(0.12, 0.7, 0.18, 1), box-shadow 0.3s;
+}
+.av-roue__badge.is-cible { box-shadow: 0 0 0 4px var(--accent), 0 0 26px var(--accent); }
+.av-roue__fleche { position: absolute; left: 50%; top: -10px; transform: translateX(-50%); font-size: 24px; color: var(--accent); z-index: 1; }

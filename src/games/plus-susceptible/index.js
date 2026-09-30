@@ -7,7 +7,7 @@ import { awardStanding } from "../../crown.js";
 import { bumpMany } from "../../stats.js";
 import { createScores, scoreboard } from "../../scoring.js";
 import { openEditor } from "../../content.js";
-import { passThePhone, contentSource, paquetSuivi } from "../../game-kit.js";
+import { passThePhone, contentSource, paquetSuivi, tuilesVote } from "../../game-kit.js";
 import { liveSession, peekAutoLive, dedupeNames } from "../../realtime.js";
 import { de } from "../../names.js";
 import { compterGorgees } from "../../gorgees.js";
@@ -106,32 +106,25 @@ export function render(container, { game }) {
         const cibles = Object.keys(noms).length ? Object.keys(noms) : api.players().map((p) => p.id);
         const nomDe = (id) => noms[id] || (api.players().find((p) => p.id === id) || {}).name || "?";
         const status = el("p.screen__subtitle", { text: "Vote en secret 🤫", style: "margin-top:12px" });
-        const btns = cibles.filter((id) => id !== api.me).map((id) => {
-          const b = el("button.btn.btn--ghost.btn--full", {
-            text: nomDe(id),
-            style: "margin-top:8px",
-            onClick: () => {
-              if (m.vote) return;
-              m.vote = id;
-              api.submit({ vote: id });
-              peindre();
-            },
-          });
-          b.dataset.id = id;
-          return b;
-        });
+        const avs = api.avatars();
+        let ontVote = [];
+        const grille = tuilesVote(
+          cibles.filter((id) => id !== api.me).map((id) => ({ id, nom: nomDe(id), avatar: avs[id] })),
+          { onChoisir: (id) => { if (m.vote) return; m.vote = id; api.submit({ vote: id }); peindre(); } }
+        );
         function peindre() {
-          btns.forEach((b) => { b.disabled = true; b.classList.toggle("is-choisi", b.dataset.id === m.vote); });
-          status.textContent = "✅ Vote envoyé — en attente des autres…";
+          grille.peindre({ choisi: m.vote, verrouille: !!m.vote, ontVote });
+          if (m.vote) status.textContent = "✅ Vote envoyé — en attente des autres…";
         }
-        if (m.vote) peindre();
+        peindre();
         api.on("progress", (done, total) => {
-          if (!m.vote) return;
-          status.textContent = `✅ Voté · ${done.length} / ${total} ont voté`;
+          ontVote = done; // ✓ sur ceux qui ont voté, sans dire pour qui
+          peindre();
+          if (m.vote) status.textContent = `✅ Voté · ${done.length} / ${total} ont voté`;
         });
         return [
           el("p.ps-statement", { text: question(meta.statement) }),
-          el("div.stack.ps-choices", { style: "margin-top:14px" }, btns),
+          grille.node,
           status,
         ];
       },

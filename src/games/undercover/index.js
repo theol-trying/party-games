@@ -2,7 +2,7 @@ import { el, screenHead, shuffle, announce, showPhase } from "../../ui.js";
 import { playersCard } from "../../players.js";
 import { createDeck } from "../../deck.js";
 import { openEditor } from "../../content.js";
-import { passThePhone, contentSource } from "../../game-kit.js";
+import { passThePhone, contentSource, tuilesVote } from "../../game-kit.js";
 import { liveSession, peekAutoLive } from "../../realtime.js";
 import { bumpMany } from "../../stats.js";
 import { flipReveal, celebrate } from "../../fx.js";
@@ -272,12 +272,14 @@ export function render(container, { game }) {
           } else if (m.myVoteK === cur.k) {
             bits.push(el("p", { text: "✅ Vote envoyé — en attente des autres…", style: "margin-top:10px" }));
           } else {
-            vivants.filter((id) => id !== api.me).forEach((id) =>
-              bits.push(el("button.btn.btn--ghost.btn--full", {
-                text: nameOf(id), style: "margin-top:8px",
-                onClick: () => { m.myVoteK = cur.k; m.myVote = id; api.submit({ k: cur.k, vote: id, clue: m.myClue || undefined }); renderPhase(); },
-              }))
+            // Tuiles avatar ; ✓ sur ceux qui ont déjà voté à ce tour (sans dire pour qui).
+            const avs = api.avatars();
+            const grille = tuilesVote(
+              vivants.filter((id) => id !== api.me).map((id) => ({ id, nom: nameOf(id), avatar: avs[id] })),
+              { onChoisir: (id) => { m.myVoteK = cur.k; m.myVote = id; api.submit({ k: cur.k, vote: id, clue: m.myClue || undefined }); renderPhase(); } }
             );
+            grille.peindre({ ontVote: vivants.filter((id) => inputsCache[id] && inputsCache[id].k === cur.k) });
+            bits.push(grille.node);
           }
         } else if (cur.phase === "result") {
           bits.push(el("h3", { text: `❌ ${nameOf(cur.out)} est éliminé !` }));

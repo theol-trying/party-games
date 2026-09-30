@@ -158,3 +158,24 @@ test("réglages de l'hôte : chaque téléphone les recopie, un nouvel hôte rep
   m.stop();
   alice.fermer();
 });
+
+test("salon : une arrivée ajoute sa ligne sans redessiner le reste (réglages, focus, lignes déjà là)", async () => {
+  const room = "TMD" + Math.floor(Math.random() * 90 + 10);
+  let rendusExtra = 0;
+  const m = moteur(room, "dmoi4", { lobbyExtra: () => { rendusExtra++; return el("details", {}, [el("summary", { text: "Réglages" })]); } });
+  await attendre(() => m.stage.querySelector(".salon-joueur"), "salon du moteur");
+  const carte = m.stage.firstElementChild;
+  const maLigne = m.stage.querySelector(".salon-joueur");
+  m.stage.querySelector("details").open = true;
+  const bob = await telephone(room, "dbob4", "Bob");
+  await attendre(() => m.stage.querySelectorAll(".salon-joueur").length === 2, "Bob arrive");
+  assert.equal(m.stage.firstElementChild, carte, "l'écran n'est pas redessiné");
+  assert.equal(m.stage.querySelector(".salon-joueur"), maLigne, "la ligne déjà affichée est la même");
+  const nouvelle = m.stage.querySelectorAll(".salon-joueur")[1];
+  assert.ok(nouvelle.classList.contains("is-arrivee"), "la nouvelle ligne s'anime");
+  assert.equal(m.stage.querySelector("details").open, true, "les réglages dépliés le restent");
+  assert.ok(bouton(m.stage, "(2)"), "le bouton de lancement compte Bob");
+  bob.fermer();
+  await attendre(() => m.stage.querySelectorAll(".salon-joueur").length === 1, "Bob repart");
+  m.stop();
+});

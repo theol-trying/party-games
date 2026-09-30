@@ -5,7 +5,13 @@
   --g2: rgba(77, 208, 225, 0.12);
   --wm: "⏱️";
 }
-.bc-letter { font-size: clamp(56px, 18vw, 96px); font-weight: 900; color: #63e6be; line-height: 1; margin: 4px 0; }
+.bc-letter { font-size: clamp(56px, 18vw, 96px); font-weight: 900; color: #63e6be; line-height: 1; margin: 4px 0; min-width: 1.1em; }
+/* En-tête : la lettre à gauche, le chrono en anneau à droite. */
+.bc-header { display: flex; align-items: center; justify-content: space-around; gap: 12px; text-align: center; }
+.bc-header .chrono { margin: 0; }
+.bc-letter.is-roulette { color: var(--text-dim); }
+.bc-letter.is-arret { animation: bc-arret 0.4s cubic-bezier(0.2, 1.6, 0.4, 1); }
+@keyframes bc-arret { from { transform: scale(1.6); } to { transform: scale(1); } }
 .bc-timer { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .bc-timer.is-low { color: #ff4d6d; animation: pulse 1s infinite; }
 @keyframes pulse { 50% { opacity: 0.4; } }

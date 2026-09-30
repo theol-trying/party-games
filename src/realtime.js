@@ -294,6 +294,8 @@ export function liveSession(stage, {
   let ceremonyCleanup = null; // arrêt de la cérémonie en cours (timers)
   let tournoi = null; // tournoi en cours (rafraîchi à l'affichage du salon)
   let tournoiLu = 0; // date de la dernière lecture du tournoi (limite les requêtes)
+  let salon = null; // salon affiché : { sig, carte, liste, extra, action } (mise à jour en place)
+  const vusSalon = new Set(); // joueurs déjà montrés (seuls les nouveaux s'animent)
 
   // Au retour au premier plan (téléphone déverrouillé) : reconnexion immédiate
   // au lieu d'attendre les timers de retry, et ré-acquisition du wake lock
@@ -436,29 +438,32 @@ export function liveSession(stage, {
       }).catch(() => {});
     }
     const isHost = host === me;
-    const disp = dedupeNames(players);
-    const list = players.length
-      ? el("div.stack", {}, players.map((p) => el("div.sb-row", {}, [
-          el("span", { style: "display:flex;align-items:center;gap:8px" }, [
-            el("span.av-badge", { text: p.avatar || avatars[p.id] || "🎲", style: `background:${colorOf(p.name)}` }),
-            el("span", { text: disp[p.id] + (p.id === me ? " (toi)" : "") }),
-          ]),
-          p.id === host
-            ? el("span", { text: "🎬 hôte" })
-            : isHost
-              ? el("div.row", { style: "gap:6px" }, [
-                  el("button.chip", {
-                    text: "🎬", title: "Passer la main", "aria-label": `Donner le rôle d'hôte à ${p.name}`,
-                    onClick: () => {
-                      if (window.confirm(`Donner le rôle d'hôte à ${p.name} ?`)) net && net.host(p.id);
-                    },
-                  }),
-                  // Confirmation : un ✕ touché par erreur éjectait un ami en pleine partie.
-                  el("button.chip", { text: "✕", "aria-label": `Retirer ${p.name} du salon`, onClick: () => { if (window.confirm(`Retirer ${p.name} du salon ?`)) net && net.kick(p.id); } }),
-                ])
-              : el("span", { text: "" }),
-        ])))
-      : el("p.screen__subtitle", { text: "En attente de joueurs…" });
+    // Simple arrivée ou départ, rien d'autre de changé : on met à jour la liste
+    // (seules les nouvelles lignes apparaissent, en s'animant), les réglages de
+    // l'hôte et le bouton de lancement — sans redessiner l'écran. Le champ en
+    // cours de saisie garde son focus, rien ne clignote ni ne remonte.
+    const sigSalon = [isHost, status, tournoi ? `${tournoi.index}/${tournoi.jeux.length}` : "", !!(round && shownRound === round.n), shownReveal, estSansAlcool()].join("|");
+    if (dejaAffiche && salon && salon.sig === sigSalon && stage.contains(salon.carte)) {
+      peindreListe(salon.liste, isHost);
+      if (isHost && lobbyExtra && salon.extra && !salon.extra.contains(document.activeElement)) {
+        const neuf = lobbyExtra(players);
+        if (neuf) {
+          // (le bloc lui-même peut être un <details>)
+          const blocs = (x) => [x, ...x.querySelectorAll("details")].filter((d) => d.tagName === "DETAILS");
+          const ouverts = blocs(salon.extra).map((d) => d.open);
+          blocs(neuf).forEach((d, i) => { if (ouverts[i]) d.open = true; });
+          salon.extra.replaceWith(neuf);
+          salon.extra = neuf;
+        }
+      }
+      if (isHost && salon.action) {
+        salon.action.textContent = `${startLabel || "Distribuer les rôles"} (${players.length})`;
+        salon.action.disabled = players.length < minPlayers;
+      }
+      return;
+    }
+    const list = el("div.stack.salon-liste");
+    peindreListe(list, isHost);
     const extra = isHost && lobbyExtra ? lobbyExtra(players) : null;
     const action = isHost
       ? el("button.btn.btn--full", { text: `${startLabel || "Distribuer les rôles"} (${players.length})`, disabled: players.length < minPlayers, onClick: distribute })
@@ -479,7 +484,7 @@ export function liveSession(stage, {
       qr.style.cssText = "display:block;border-radius:14px";
       qr.setAttribute("aria-label", "QR code d'invitation à la soirée");
     } catch {}
-    (dejaAffiche ? refreshPhase : showPhase)(stage, el("div.card.center", {}, [
+    const carte = el("div.card.center", {}, [
       el("h3", { text: title }),
       // Bloc d'invitation : le code et le QR sont ce que les invités cherchent
       // en premier, ils méritent mieux qu'une ligne de sous-titre.
@@ -515,7 +520,61 @@ export function liveSession(stage, {
         el("button.chip", { text: "🚪 Quitter", onClick: leave }),
       ]),
       statusLine(),
-    ]));
+    ]);
+    (dejaAffiche ? refreshPhase : showPhase)(stage, carte);
+    salon = { sig: sigSalon, carte, liste: list, extra, action: isHost ? action : null };
+  }
+
+  /* Liste des joueurs du salon, mise à jour EN PLACE : une ligne inchangée est
+     gardée telle quelle, une nouvelle arrive en s'animant, un départ disparaît. */
+  function ligneJoueur(p, disp, isHost) {
+    return el("div.sb-row.salon-joueur", {}, [
+      el("span", { style: "display:flex;align-items:center;gap:8px" }, [
+        el("span.av-badge", { text: p.avatar || avatars[p.id] || "🎲", style: `background:${colorOf(p.name)}` }),
+        el("span", { text: disp[p.id] + (p.id === me ? " (toi)" : "") }),
+      ]),
+      p.id === host
+        ? el("span", { text: "🎬 hôte" })
+        : isHost
+          ? el("div.row", { style: "gap:6px" }, [
+              el("button.chip", {
+                text: "🎬", title: "Passer la main", "aria-label": `Donner le rôle d'hôte à ${p.name}`,
+                onClick: () => {
+                  if (window.confirm(`Donner le rôle d'hôte à ${p.name} ?`)) net && net.host(p.id);
+                },
+              }),
+              // Confirmation : un ✕ touché par erreur éjectait un ami en pleine partie.
+              el("button.chip", { text: "✕", "aria-label": `Retirer ${p.name} du salon`, onClick: () => { if (window.confirm(`Retirer ${p.name} du salon ?`)) net && net.kick(p.id); } }),
+            ])
+          : el("span", { text: "" }),
+    ]);
+  }
+  function peindreListe(conteneur, isHost) {
+    if (!players.length) {
+      conteneur.replaceChildren(el("p.screen__subtitle", { text: "En attente de joueurs…" }));
+      return;
+    }
+    const disp = dedupeNames(players);
+    const avant = new Map([...conteneur.children].filter((n) => n.dataset.id).map((n) => [n.dataset.id, n]));
+    let rang = 0;
+    const lignes = players.map((p) => {
+      const sig = [p.name, disp[p.id], p.avatar || avatars[p.id] || "", p.id === host, isHost].join("|");
+      const ancienne = avant.get(p.id);
+      if (ancienne && ancienne.dataset.sig === sig) return ancienne;
+      const n = ligneJoueur(p, disp, isHost);
+      n.dataset.id = p.id;
+      n.dataset.sig = sig;
+      if (!vusSalon.has(p.id)) {
+        n.classList.add("is-arrivee");
+        n.style.setProperty("--i", String(rang++));
+        // Classe retirée ensuite : une ligne déplacée ne rejoue pas son entrée.
+        setTimeout(() => n.classList.remove("is-arrivee"), 1500);
+      }
+      return n;
+    });
+    players.forEach((p) => vusSalon.add(p.id));
+    lignes.forEach((n, i) => { if (conteneur.children[i] !== n) conteneur.insertBefore(n, conteneur.children[i] || null); });
+    [...conteneur.children].slice(lignes.length).forEach((n) => n.remove()); // partis, lignes remplacées
   }
 
   // 👑 Palmarès « Roi de la soirée » — cumul des jeux à score du salon.

@@ -9,6 +9,8 @@ import { PHRASES } from "./data.js";
 import { playersCard } from "../../players.js";
 import { de } from "../../names.js";
 import { compterGorgees } from "../../gorgees.js";
+import { compteur } from "../../scoring.js";
+import { pastille } from "../../game-kit.js";
 
 const LEVEL_LABEL = { soft: "Soft", soiree: "Soirée", x18: "18+" };
 const SCHEMA = {
@@ -62,6 +64,7 @@ export function render(container, { game }) {
     // Mémoire de la manche (keyée sur n) : survit au re-render « Revenir à la manche »
     // → on restaure la réponse + le pari au lieu de les écraser en re-répondant.
     let jjN = -1, jjDone = null, jjGuess = null;
+    let cascadeVue = -1; // manche dont les coupables sont déjà apparus en cascade
 
     liveStop = liveSession(stage, {
       gameId: "jamais-jamais",
@@ -202,20 +205,30 @@ export function render(container, { game }) {
 
         // 🍺 Compteur de la soirée : coupables + le plus loin du pari (hôte, une fois par manche).
         if (api.isHost()) compterGorgees([...did.map((id) => ({ id, nom: names[id], avatar: (live.avatars || {})[id], n: 1 })), ...wrongest.map((id) => ({ id, nom: names[id], avatar: (live.avatars || {})[id], n: 1 }))], { manche: "jamais-jamais:" + n });
+        const avs = live.avatars || {};
         const row = (id, tag) =>
           el("div.uc-role-row", {}, [
-            el("span", { text: names[id] + (id === api.me ? " (toi)" : "") }),
+            el("span", { style: "display:flex;align-items:center;gap:8px" }, [pastille(names[id], avs[id]), names[id] + (id === api.me ? " (toi)" : "")]),
             el("span", { text: tag }),
           ]);
+        // Les coupables tombent un par un et le compteur défile (1re vue seulement).
+        const anime = n !== cascadeVue;
+        cascadeVue = n;
+        const lignes = [
+          ...did.map((id) => row(id, "🙋🍺" + (inputs[id].guess != null ? ` · 🔮 ${inputs[id].guess}` : ""))),
+          ...not.map((id) => row(id, "😇" + (inputs[id].guess != null ? ` · 🔮 ${inputs[id].guess}` : ""))),
+          ...ids.filter((id) => !inputs[id]).map((id) => row(id, "⏳")),
+        ];
+        lignes.forEach((l, i) => l.style.setProperty("--i", String(i)));
         return el("div", {}, [
           el("p.screen__subtitle", { text: "Je n'ai jamais…" }),
           el("p", { text: (live.meta || {}).phrase || "…", style: "font-weight:800;margin:6px 0 12px" }),
-          el("p", { text: verdict, style: "font-weight:700;margin-bottom:12px" }),
-          el("div.stack", {}, [
-            ...did.map((id) => row(id, "🙋🍺" + (inputs[id].guess != null ? ` · 🔮 ${inputs[id].guess}` : ""))),
-            ...not.map((id) => row(id, "😇" + (inputs[id].guess != null ? ` · 🔮 ${inputs[id].guess}` : ""))),
-            ...ids.filter((id) => !inputs[id]).map((id) => row(id, "⏳")),
+          el("div.jj-compte", { "aria-hidden": "true" }, [
+            compteur(did.length, anime ? 0 : did.length, { duree: 250 + did.length * 140 }),
+            el("small", { text: ` / ${ids.length} l'ont fait` }),
           ]),
+          el("p", { text: verdict, style: "font-weight:700;margin-bottom:12px" }),
+          el("div.stack.jj-cascade" + (anime ? ".is-anime" : ""), {}, lignes),
           guessers.length
             ? el("div", { style: "margin-top:12px" }, [
                 el("p", { text: `🔮 Pari : ${actual} coupable${actual > 1 ? "s" : ""} au total.`, style: "font-weight:700" }),

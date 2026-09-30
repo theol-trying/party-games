@@ -7,7 +7,7 @@ import { pickGage, chargerGages, ouvrirMesGages } from "../../gages.js";
 import { levelSelector, LEVELS } from "../../levels.js";
 import { teamBuilder } from "../../teams.js";
 import { openEditor } from "../../content.js";
-import { contentSource, themeSelector, paquetSuivi } from "../../game-kit.js";
+import { contentSource, themeSelector, paquetSuivi, anneauChrono, totalChrono, pastille } from "../../game-kit.js";
 import { liveSession, syncCountdown, peekAutoLive } from "../../realtime.js";
 import { tick, vibrate, vibrateSuccess, vibrateTap } from "../../sound.js";
 import { confettiBurst, celebrate, stampGage } from "../../fx.js";
@@ -241,7 +241,8 @@ export function render(container, { game }) {
     let total = api.players().length;
     let dernierBip = null;
     const prog = el("p.screen__subtitle", { text: `0 / ${total} ont répondu`, style: "margin-top:14px" });
-    const timerLine = el("p", { style: "min-height:22px;font-weight:800;font-size:1.2rem;margin-top:10px" });
+    const chrono = anneauChrono(); // ⏱️ anneau qui se vide, orange puis rouge
+    const timerLine = chrono.node;
     const feedback = el("div.qz-feedback", { style: "min-height:24px;margin-top:8px" });
 
     // 🎯 Tout ou rien : à activer AVANT de répondre.
@@ -301,7 +302,7 @@ export function render(container, { game }) {
       stopCountdown();
       cdStop = syncCountdown(endsAt, {
         onTick: (s) => {
-          timerLine.textContent = s > 0 ? `⏱️ ${s}` : "⏰";
+          chrono.maj(s, totalChrono(m, endsAt, s));
           // Un bip par seconde (le décompte passe toutes les 250 ms : 12 bips avant).
           if (s <= 3 && s > 0 && !m.repondu && s !== dernierBip) { dernierBip = s; tick(); }
         },
@@ -418,6 +419,7 @@ export function render(container, { game }) {
         ? el("div.qz-bonne", {}, [el("span.qz-lettre", { text: LETTRES[correct] || "?", "aria-hidden": "true" }), el("span", { text: choices[correct] })])
         : el("div", { text: "?" }),
       myCallout,
+      repartitionReponses({ choices, correct, inputs, order, names, avatars: live.avatars || {}, ids, anime: defile }),
       podium(rows.map((r) => ({ nom: r.name + (r.id === me ? " (toi)" : ""), points: r.total, avant: depuis(r) }))),
       // Style commun des tableaux de scores (.sb-row) : l'ancienne classe venait
       // d'Undercover, dont la feuille de style n'est pas chargée ici — le nom
@@ -430,6 +432,31 @@ export function render(container, { game }) {
         ])
       )),
     ]);
+  }
+
+  /* 📊 Qui a répondu quoi : une barre par lettre (proportionnelle au nombre de
+     réponses), les avatars de ceux qui l'ont choisie, ⚡ sur la bonne réponse
+     la plus rapide. Les barres ne poussent qu'au 1er affichage de la manche. */
+  function repartitionReponses({ choices, correct, inputs, order, names, avatars, ids, anime }) {
+    if (!choices) return null;
+    const parChoix = choices.map((_, i) => ids.filter((id) => inputs[id] && inputs[id].choice === i));
+    const maxi = Math.max(1, ...parChoix.map((l) => l.length));
+    const rapide = order.find((id) => inputs[id] && inputs[id].choice === correct);
+    return el("div.qz-repartition" + (anime ? ".is-anime" : ""), { "aria-label": "Répartition des réponses" }, parChoix.map((qui, i) =>
+      el("div.qz-rep" + (i === correct ? ".is-bonne" : ""), { style: `--i:${i}` }, [
+        el("span.qz-lettre", { text: LETTRES[i] || "?", "aria-hidden": "true" }),
+        el("div.qz-rep__corps", {}, [
+          el("div.qz-rep__barre", { style: `--part:${qui.length / maxi}` }),
+          el("div.qz-rep__qui", {}, qui.map((id) =>
+            el("span.qz-rep__av", { title: names[id] || "" }, [
+              pastille(names[id], avatars[id]),
+              id === rapide ? el("span.qz-rep__eclair", { text: "⚡", title: "Le plus rapide" }) : null,
+            ].filter(Boolean))
+          )),
+        ]),
+        el("span.qz-rep__n", { text: String(qui.length) }),
+      ])
+    ));
   }
 
   function startGame(players, scoreKey = "quiz-gages") {

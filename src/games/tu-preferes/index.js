@@ -1,7 +1,7 @@
 import { el, screenHead, announce, showPhase } from "../../ui.js";
 import { createDeck } from "../../deck.js";
 import { openEditor } from "../../content.js";
-import { contentSource, paquetSuivi } from "../../game-kit.js";
+import { contentSource, paquetSuivi, pastille } from "../../game-kit.js";
 import { compterGorgees } from "../../gorgees.js";
 import { liveSession, peekAutoLive } from "../../realtime.js";
 import { makeSeen } from "../../seen.js";
@@ -117,6 +117,7 @@ export function render(container, { game }) {
     const liveDeck = paquetSuivi(src, { seen, keyOf: dKey }); // suit les cartes perso, même arrivées après l'ouverture du salon
     const predScores = {}; // deviceId -> bonnes prédictions cumulées (base + delta)
     const stats = { rounds: 0, agreeSum: 0, unanimous: 0, derniere: -1 }; // stats de soirée (identiques partout)
+    let barreVue = -1; // manche dont la barre a déjà glissé (pas de rejeu à « Revoir »)
 
     liveStop = liveSession(stage, {
       gameId: "tu-preferes",
@@ -146,7 +147,7 @@ export function render(container, { game }) {
         // Lettres A / B visibles : la prédiction « Camp A / Camp B » y renvoie.
         const mk = (side, label) =>
           el("button.tp-option", { style: "width:100%" }, [
-            el("span.tp-option__lettre", { text: side.toUpperCase(), "aria-hidden": "true" }),
+            el("span.tp-option__lettre" + (side === "b" ? ".is-b" : ""), { text: side.toUpperCase(), "aria-hidden": "true" }),
             el("div.tp-option__label", { text: label }),
           ]);
         const btnA = mk("a", meta.a);
@@ -243,16 +244,33 @@ export function render(container, { game }) {
         }
         const agreePct = stats.rounds ? Math.round((stats.agreeSum / stats.rounds) * 100) : 0;
 
-        const bloc = (label, camp, isMin) =>
-          el("div.card", { style: `margin-top:10px;${isMin ? "border-color:var(--accent)" : ""}` }, [
-            el("p", { text: label, style: "font-weight:800" }),
-            el("p.screen__subtitle", { text: `${camp.length} voix${camp.length ? " · " + camp.map((id) => names[id] + (id === api.me ? " (toi)" : "")).join(", ") : ""}` }),
+        // Camps : lettre, intitulé, avatars empilés de ceux qui l'ont choisi.
+        const avs = live.avatars || {};
+        const bloc = (lettre, label, camp, isMin) =>
+          el("div.card.tp-camp" + (isMin ? ".is-min" : ""), { style: "margin-top:10px" }, [
+            el("p", { style: "font-weight:800;display:flex;align-items:center;gap:8px" }, [
+              el("span.tp-option__lettre" + (lettre === "B" ? ".is-b" : ""), { text: lettre, "aria-hidden": "true" }), label,
+            ]),
+            el("div.tp-pile", {}, camp.length
+              ? camp.map((id) => el("span.tp-pile__av", { title: names[id] + (id === api.me ? " (toi)" : "") }, [pastille(names[id], avs[id])]))
+              : [el("span.screen__subtitle", { text: "Personne" })]),
+            el("p.screen__subtitle", { text: `${camp.length} voix${camp.length ? " · " + camp.map((id) => names[id] + (id === api.me ? " (toi)" : "")).join(", ") : ""}`, style: "margin-top:6px" }),
           ]);
+        // Barre bicolore : elle part de 50/50 et glisse vers le vrai partage (1re vue seulement).
+        const anime = n !== barreVue;
+        barreVue = n;
+        const cote = (cls, nbVoix, texte) =>
+          el(`div.${cls}${nbVoix ? "" : ".is-vide"}`, { style: `flex-grow:${na + nb ? nbVoix : 1}` }, [el("span", { text: texte })]);
+        const barre = el("div.tp-barre" + (anime ? ".is-anime" : ""), { role: "img", "aria-label": `${na} voix pour A, ${nb} pour B` }, [
+          cote("tp-barre__a", na, `A · ${na}`),
+          cote("tp-barre__b", nb, `${nb} · B`),
+        ]);
         return el("div", {}, [
           el("h3", { text: "Résultats" }),
+          barre,
           el("p", { text: verdict, style: "font-weight:700;margin:10px 0" }),
-          bloc(live.meta.a, campA, na < nb),
-          bloc(live.meta.b, campB, nb < na),
+          bloc("A", live.meta.a, campA, na < nb),
+          bloc("B", live.meta.b, campB, nb < na),
           prophets.length
             ? el("p", { text: `🔮 Bien vu : ${prophets.map((id) => names[id]).join(", ")} (+1)`, style: "font-weight:700;margin-top:12px" })
             : el("p.screen__subtitle", { text: majority ? "🔮 Personne n'avait prédit le bon camp." : "🔮 Égalité : pas de prophète cette manche.", style: "margin-top:12px" }),

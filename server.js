@@ -25,6 +25,7 @@ const fs = require("fs");
 const path = require("path");
 const { attachWebSocket } = require("./ws.js");
 const { handleSocket, jeuDeLaRoom } = require("./live.js");
+const { iconePng } = require("./icone.js");
 
 const PORT = process.env.PORT || 5178;
 const ROOT = __dirname;
@@ -416,6 +417,20 @@ async function handleRequest(req, res) {
 
   // /api/* inconnu
   if (pathname.startsWith("/api/")) return sendJson(res, 404, { error: "route inconnue" });
+
+  // Icônes PNG (écran d'accueil iPhone, PWA Android) : dessinées en mémoire par
+  // icone.js — le dépôt ne contient aucun fichier binaire.
+  const iconeMatch = pathname.match(/^\/assets\/icon-(\d+)\.png$/);
+  if (iconeMatch) {
+    const png = iconePng(Number(iconeMatch[1]));
+    if (png) {
+      const etag = `W/"icone-${iconeMatch[1]}-${png.length.toString(36)}"`;
+      const headers = { "Content-Type": "image/png", "Cache-Control": "public, max-age=86400", ETag: etag, ...SECURITY_HEADERS };
+      if (req.headers["if-none-match"] === etag) { res.writeHead(304, headers); return res.end(); }
+      res.writeHead(200, { ...headers, "Content-Length": png.length });
+      return res.end(png);
+    }
+  }
 
   serveStatic(req, res, pathname);
 }

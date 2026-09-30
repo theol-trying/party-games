@@ -9,6 +9,8 @@ import { stampGage, retournerCarte } from "../../fx.js";
 import { VERITES, ACTIONS } from "./data.js";
 import { playersCard } from "../../players.js";
 import { de } from "../../names.js";
+import { pastille } from "../../game-kit.js";
+import { vibrate } from "../../sound.js";
 import { compterGorgees } from "../../gorgees.js";
 
 const LEVEL_LABEL = { soft: "Soft", soiree: "Soirée", x18: "18+" };
@@ -69,6 +71,7 @@ export function render(container, { game }) {
     // Mémoire de la manche (keyée sur n) : survit au re-render « Revenir à la manche »
     // → on restaure la carte / le pari déjà posé au lieu de rouvrir la mise.
     let avN = -1, avBet = null, avCard = null;
+    let roueVue = -1; // manche dont la roue a déjà tourné
 
     liveStop = liveSession(stage, {
       gameId: "action-verite",
@@ -103,8 +106,13 @@ export function render(container, { game }) {
       renderMine: (mine, { api, meta, n }) => {
         if (n !== avN) { avN = n; avBet = null; avCard = null; } // nouvelle manche : mémoire fraîche
         const isTarget = api.me === meta.target;
-        const head = el("h3", { text: `🎯 Au tour de ${meta.targetName}${isTarget ? " (toi !)" : ""}` });
+        const head = el("h3", { text: `🎯 Au tour ${de(meta.targetName)}${isTarget ? " (toi !)" : ""}` });
         const zone = el("div", { style: "margin-top:14px" });
+        // 🎡 La roue des avatars tourne et s'arrête sur le joueur désigné, une
+        // fois par manche ; le nom et les boutons n'apparaissent qu'à l'arrêt.
+        const roue = n !== roueVue ? roueDesJoueurs(api.players(), api.avatars(), meta.target, () => { head.hidden = false; zone.hidden = false; }) : null;
+        roueVue = n;
+        if (roue) { head.hidden = true; zone.hidden = true; }
 
         function showCard(data) {
           avCard = data; // mémorisé → au re-render (« Revenir à la manche ») on restaure la carte, pas la mise
@@ -195,7 +203,7 @@ export function render(container, { game }) {
           if (d && d.choice) showCard(d);
         });
 
-        return [head, zone];
+        return [roue, head, zone].filter(Boolean);
       },
       renderReveal: (live, { api, n }) => {
         const meta = live.meta || {};
@@ -230,6 +238,37 @@ export function render(container, { game }) {
         ]);
       },
     });
+  }
+
+  /* 🎡 Roue des joueurs. Le disque tourne (5 tours et un peu) pour finir avec
+     le désigné sous la flèche ; chaque avatar contre-tourne pour rester droit.
+     Tout est piloté par setTimeout : même sans animation (onglet masqué,
+     mouvements réduits), le résultat apparaît à l'heure. */
+  function roueDesJoueurs(joueurs, avatars, cibleId, onArret) {
+    const i0 = joueurs.findIndex((p) => p.id === cibleId);
+    if (joueurs.length < 2 || i0 < 0) return null;
+    const pas = 360 / joueurs.length;
+    const tour = 360 * 5 - i0 * pas; // l'angle de la cible + tour ≡ 0 (en haut)
+    const reduit = (() => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } })();
+    const disque = el("div.av-roue__disque");
+    const badges = joueurs.map((p, i) => {
+      const b = pastille(p.name, avatars[p.id], "av-badge av-roue__badge");
+      b.style.transform = `rotate(${-i * pas}deg)`;
+      disque.appendChild(el("div.av-roue__place", { style: `transform:rotate(${i * pas}deg) translateY(-84px)` }, [b]));
+      return b;
+    });
+    const noeud = el("div.av-roue", { role: "img", "aria-label": "La roue désigne le prochain joueur" }, [el("span.av-roue__fleche", { text: "▼" }), disque]);
+    const duree = reduit ? 0 : 2800;
+    setTimeout(() => {
+      disque.style.transform = `rotate(${tour}deg)`;
+      badges.forEach((b, i) => (b.style.transform = `rotate(${-i * pas - tour}deg)`));
+    }, 40);
+    setTimeout(() => {
+      badges[i0].classList.add("is-cible");
+      if (!reduit) vibrate(40);
+      onArret();
+    }, duree + 80);
+    return noeud;
   }
 
   async function reload() {
