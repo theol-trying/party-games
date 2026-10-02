@@ -53,6 +53,13 @@ html, body { height: 100%; }
 html { overflow-x: clip; }
 
 body {
+  /* Sur la racine, `clip` est propagé au viewport sous forme de `hidden` : plus
+     de barre, mais le débordement reste (scrollWidth 394 au lieu de 375) et un
+     téléphone peut encore glisser de côté. Il touche ce qui n'est plus fixé au
+     viewport — le filigrane, dès que l'animation d'entrée pose un transform sur
+     `.screen` (lire la note de `.screen[data-game]::after`). Ici, c'est un vrai
+     clip, et toujours sans conteneur de défilement (header collant intact). */
+  overflow-x: clip;
   font-family: var(--font);
   background: var(--bg);
   color: var(--text);
@@ -310,10 +317,13 @@ body::after {
     radial-gradient(700px 420px at 0% 105%, var(--g2, transparent), transparent 55%);
 }
 .screen[data-game]::after {
-  content: var(--wm, "");
-  /* Ce filigrane déborde volontairement par le coin bas-droit ; le
-     `overflow-x: clip` de <html> l'empêche d'ouvrir un scroll horizontal
-     (~16 px de trop sur iPhone 13 avant correction). */
+  /* `none` et non "" : l'accueil (data-game="home") n'a pas de --wm, et une
+     chaîne vide créait quand même une boîte de 130 px, tournée, qui débordait. */
+  content: var(--wm, none);
+  /* Ce filigrane déborde volontairement par le coin bas-droit. Il n'est fixé au
+     viewport que si aucun ancêtre n'a de transform : pendant l'animation
+     d'entrée (`ecran-entre`), c'est `.screen` qui le contient, et il débordait
+     de 19 px. Le `overflow-x: clip` de <body> le coupe dans les deux cas. */
   position: fixed; right: 0; bottom: 0; z-index: -1; pointer-events: none;
   font-size: clamp(130px, 32vw, 260px); line-height: 1;
   opacity: 0.07; transform: rotate(-12deg) translate(0.15em, 0.1em);

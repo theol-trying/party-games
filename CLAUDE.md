@@ -55,5 +55,6 @@ Site **modulaire** : les jeux s'enrichissent un par un. Audit et état : `AUDIT.
 ## Lancer
 
 ```
-npm start                     # ou preview_start "soiree" (.claude/launch.json, :5178)
+npm start                     # ou preview_start "soiree-node" (.claude/launch.json, :5178)
+                              # ("soiree" = serve.ps1, sans WebSocket)
 ```
