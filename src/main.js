@@ -139,7 +139,7 @@ function renderHome() {
   ]);
 
   // Filtres par ambiance : une seule grille au lieu d'une section par
-  // catégorie — sur téléphone, les 11 jeux tiennent ainsi en un écran et demi.
+  // catégorie — sur téléphone, les 12 jeux tiennent ainsi en un écran et demi.
   const categories = CATEGORIES.filter((c) => gamesByCategory(c.id).length);
   const options = [{ id: "tout", chip: "✨ Tous" }, ...categories];
   let filtre = lireLocal(CLE_FILTRE);

@@ -10,12 +10,13 @@
    API :
    liveSession(stage, {
      gameId, title, minPlayers,
-     assign(players) -> { roles:{deviceId: payload}, meta? },  // hôte : prépare la manche
+     assign(players) -> { roles:{deviceId: payload}, meta?, open?, anonymise? },  // hôte : prépare la manche
+                        // (anonymise : réponses de la manche précédente mélangées, sans auteur — voir live.js)
      renderMine(payload, {name, api, meta, n}) -> Node|Node[], // écran privé du joueur
-     renderReveal(live, {api}) -> Node,     // live.roles/names/meta/inputs/order
+     renderReveal(live, {api, n, masquerSuite}) -> Node,  // live.roles/names/meta/inputs/order
      lobbyExtra?(players) -> Node,          // réglages hôte (niveau, options…)
      onExit?(),                             // sortie propre du salon
-     revealLabel?, newRoundLabel?, startLabel?,  // libellés des boutons hôte
+     revealLabel?, newRoundLabel?, startLabel?,  // libellés des boutons hôte (revealLabel : texte ou fonction(meta))
    }) -> stop()
 
    api (passé à renderMine/renderReveal pour les manches interactives) :
@@ -351,7 +352,7 @@ export function liveSession(stage, {
   }
 
   // Barre de réactions : présente sur l'écran de manche et de révélation, donc
-  // dans les 11 jeux sans qu'ils aient à s'en occuper. Masquée en repli
+  // dans les 12 jeux sans qu'ils aient à s'en occuper. Masquée en repli
   // polling : à 4 s de latence, une réaction n'a plus aucun intérêt.
   function reactionBar() {
     if (!net || net.mode !== "ws") return null;
@@ -659,7 +660,7 @@ export function liveSession(stage, {
       const reveler = () => net && net.reveal();
       const nManche = round.n;
       actions.push(el("button.btn.btn--full", {
-        text: revealLabel,
+        text: typeof revealLabel === "function" ? revealLabel(round.meta) : revealLabel,
         onClick: () => (beforeReveal ? beforeReveal(apiDeManche(nManche), reveler) : reveler()),
       }));
       actions.push(el("button.btn.btn--full.btn--ghost", { text: newRoundLabel, style: "margin-top:10px", onClick: distribute }));
@@ -678,12 +679,16 @@ export function liveSession(stage, {
     view = "reveal";
     listeners = { progress: [], state: [], timer: [], tvaudio: [] }; // idem roleScreen
     const actions = [];
-    if (host === me) actions.push(el("button.btn.btn--full", { text: newRoundLabel, onClick: distribute }));
+    const suite = host === me ? el("button.btn.btn--full", { text: newRoundLabel, onClick: distribute }) : null;
+    if (suite) actions.push(suite);
     actions.push(el("button.btn.btn--ghost.btn--full", { text: "Retour au salon", style: "margin-top:10px", onClick: lobbyScreen }));
+    // masquerSuite(true) : le jeu cache « manche suivante » le temps d'un défilé
+    // (Qui a dit ça ? : un tap de travers sautait le reste de la révélation).
+    const masquerSuite = (v) => { if (suite) suite.hidden = !!v; };
     showPhase(stage, el("div.card.center", {}, [
       // n : identité de manche stable → les jeux keyent leurs FX dessus (une seule
       // salve par manche, pas de re-tir à « Revoir la révélation »).
-      renderReveal(revealed, { api: apiDeManche(revealed && revealed.n), n: revealed && revealed.n }),
+      renderReveal(revealed, { api: apiDeManche(revealed && revealed.n), n: revealed && revealed.n, masquerSuite }),
       el("div", { style: "margin-top:16px" }, actions),
       reactionBar(),
       statusLine(),
@@ -702,10 +707,12 @@ export function liveSession(stage, {
 
   function distribute() {
     if (!net || players.length < minPlayers) return;
-    const { roles, meta, open } = assign(players.map((p) => ({ id: p.id, name: p.name })));
+    const prevu = assign(players.map((p) => ({ id: p.id, name: p.name })));
+    if (!prevu) return; // le jeu a renoncé (rien à lancer)
+    const { roles, meta, open, anonymise } = prevu;
     let m = meta;
     if (reglages) { try { m = { ...(meta || {}), __reglages: reglages.lire() }; } catch {} }
-    net.start(roles, m, open === true);
+    net.start(roles, m, open === true, anonymise === true);
   }
 
   function leave() {
@@ -901,7 +908,7 @@ export function liveSession(stage, {
       // after : dernière manche affichée ici. Si le serveur a redémarré (chaque
       // déploiement), il repart de 0 ; sans ce repère, la manche suivante
       // portait un numéro déjà vu et aucun téléphone ne l'affichait.
-      start(roles, meta, open) { sendJson({ t: "start", roles, meta, open: open === true, after: Math.max(0, shownRound) }); },
+      start(roles, meta, open, anonymise) { sendJson({ t: "start", roles, meta, open: open === true, after: Math.max(0, shownRound), ...(anonymise ? { anonymise: true } : {}) }); },
       input(data, n) { sendJson({ t: "input", data, n }); },
       timer(seconds, n) { sendJson({ t: "timer", seconds, n }); },
       state(data, n) { sendJson({ t: "state", data, n }); },
@@ -1016,15 +1023,25 @@ export function liveSession(stage, {
 
     return {
       mode: "poll",
-      async start(roles, meta, open) {
+      async start(roles, meta, open, anonymise) {
         const prev = (await getData(LIVE, null)) || { round: 0 };
+        // Anonymisation (voir live.js) : ici sans serveur pour garder le secret —
+        // en mode dégradé, le mélange se fait chez l'hôte.
+        if (anonymise) {
+          if (prev.anonyme) return;
+          const auteurs = (prev.order || []).filter((id) => prev.inputs && prev.inputs[id] != null);
+          const ids = auteurs.slice();
+          for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }
+          ids.forEach((id, i) => { roles[id] = { ...(roles[id] && typeof roles[id] === "object" ? roles[id] : {}), mien: i }; });
+          meta = { ...(meta || {}), anonymes: ids.map((id) => prev.inputs[id]), auteurs };
+        }
         const names = {};
         const avs = {};
         players.forEach((p) => { names[p.id] = p.name; if (p.avatar) avs[p.id] = p.avatar; });
         await setData(LIVE, {
           round: (prev.round || 0) + 1, roles, names, avatars: avs, meta: meta ?? null,
           revealed: false, inputs: {}, order: [], state: null, timerEndsAt: null,
-          open: open === true,
+          open: open === true, anonyme: anonymise === true,
           // On garde le déclencheur de cérémonie : sans écho serveur, un client
           // lent pourrait sinon rater le podium si l'hôte relance vite une manche
           // (il le rejouera au prochain poll, puis basculera sur la manche).

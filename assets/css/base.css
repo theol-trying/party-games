@@ -156,7 +156,9 @@ body::after {
 .room-banner__actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .room-banner__input { width: 120px; text-transform: uppercase; letter-spacing: 3px; font-weight: 700; }
 @media (max-width: 480px) {
-  .room-banner { flex-direction: column; align-items: stretch; gap: 10px; padding: 12px 14px; margin-bottom: 18px; }
+  /* nowrap : en colonne, « wrap » taille chaque ligne sur son contenu — la rangée
+     de puces débordait alors de l'écran et toute la page défilait de côté. */
+  .room-banner { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 10px; padding: 12px 14px; margin-bottom: 18px; }
   /* Une seule rangée qui défile (comme les filtres de l'accueil) au lieu de
      renvoyer « Nouvelle » seule sur une deuxième ligne. */
   .room-banner__actions {

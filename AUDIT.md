@@ -10,7 +10,7 @@ Dernière vérification complète : **2026-09-28** (audit : serveur, moteur mult
 
 ## 1. Ce que fait le site
 
-11 jeux, chacun jouable de deux façons :
+12 jeux, chacun jouable de deux façons :
 
 - **Sur un seul téléphone** posé au milieu de la table ;
 - **Multi-appareils** — chacun son téléphone, synchronisé en temps réel.
@@ -39,6 +39,7 @@ fichier binaire dans le dépôt).
 | Undercover | 239 paires, dont 26 d'actu 2025-2026 |
 | Tu préfères | 232 dilemmes, dont 23 d'actu 2025-2026 |
 | Le Menteur | 207 missions, dont 18 d'actu 2025-2026 |
+| Qui a dit ça ? | 155 questions (58 soft / 57 soirée / 40 18+) |
 | Cadavre exquis | 27 ouvertures · 95 amorces · 25 clôtures · 6 thèmes |
 | Estimations | 212 questions « combien de… ? » en 8 thèmes au choix (réponses numériques et positives, testées) |
 | Baccalauréat | 8 catégories · 20 lettres |
@@ -55,6 +56,10 @@ Gages partagés : 178, plus les gages du groupe (🎭 Mes gages : ajout, désact
 - `src/realtime.js` : client joueur, avec repli automatique en polling si le WebSocket échoue.
 - `src/tv.js` : client spectateur (ne joue pas, ne compte pas comme joueur).
 - `src/games/<id>/{index.js, data.js, style.css}` : un jeu = un module isolé.
+- **Qui a dit ça ?** : l'auteur de chaque réponse reste secret jusqu'à la révélation, même pour
+  l'hôte. La manche de vote part avec `anonymise` : le serveur mélange les réponses de la manche
+  d'écriture et ne confie à chacun que l'indice de la sienne, dans son rôle privé (`live.js`,
+  `anonymiser()`). La correspondance ne sort qu'avec les rôles, à la révélation.
 
 **Invariant à respecter** : tout état ou effet ponctuel doit vivre au scope du jeu et être
 indexé sur le numéro de manche — jamais dans une closure de rendu. Les écrans sont re-rendus
@@ -91,4 +96,4 @@ En multi, deux outils du moteur (`src/realtime.js`) servent précisément à cel
 - Service worker : ne met en cache que les réponses saines, précache l'ensemble des modules
   transverses.
 - Aucun module mort ; aucun écouteur global laissé en place par les jeux.
-- Les 11 jeux se chargent sans erreur console.
+- Les 12 jeux se chargent sans erreur console.

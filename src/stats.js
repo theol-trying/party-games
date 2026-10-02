@@ -24,6 +24,7 @@ const SUPERLATIFS = [
   { cle: "demasque", emoji: "🕵️", titre: "Fin limier", phrase: (n) => `${n} imposteurs démasqués` },
   { cle: "impuni", emoji: "🤥", titre: "Meilleur menteur", phrase: (n) => `${n} missions réussies` },
   { cle: "gage", emoji: "🍻", titre: "Roi du gage", phrase: (n) => `${n} gages encaissés` },
+  { cle: "fantome", emoji: "👻", titre: "Insaisissable", phrase: (n) => `${n} réponse${n > 1 ? "s" : ""} que personne n'a devinée${n > 1 ? "s" : ""}` },
 ];
 
 /** Incrémente un compteur. À n'appeler QUE depuis l'hôte. */

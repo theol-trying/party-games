@@ -33,6 +33,7 @@ const TITLES = {
   "blind-test": "🎧 Oreille d'or",
   "plus-susceptible": "👀 Star",
   "tu-preferes": "🔮 Prophète",
+  "qui-a-dit": "🎭 Mentaliste",
 };
 
 function colorOf(text) {

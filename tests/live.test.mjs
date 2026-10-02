@@ -400,3 +400,36 @@ test("l'hôte qui recharge sa page reprend la main, sauf s'il l'avait donnée", 
   join(r2, "quiz-gages", "carl", "Carl");
   assert.equal(last(d, "lobby").host, "dan", "un transfert volontaire n'est pas annulé au retour");
 });
+
+test("« anonymise » : réponses mélangées sans auteur, chacun ne connaît que la sienne", () => {
+  const r = newRoom();
+  const a = join(r, "qui-a-dit", "alice", "Alice");
+  const b = join(r, "qui-a-dit", "bob", "Bob");
+  const c = join(r, "qui-a-dit", "cleo", "Cléo");
+  const roles = { alice: true, bob: true, cleo: true };
+  send(a, { t: "start", roles, meta: { phase: "ecrire" } });
+  send(b, { t: "input", data: { texte: "B" } });
+  send(a, { t: "input", data: { texte: "A" } }); // Cléo n'écrit rien
+  send(a, { t: "start", roles, meta: { phase: "vote" }, anonymise: true });
+
+  const [ra, rb, rc] = [last(a, "round"), last(b, "round"), last(c, "round")];
+  assert.equal(ra.meta.phase, "vote", "la meta de l'hôte est conservée");
+  assert.deepEqual(ra.meta.auteurs, ["bob", "alice"], "auteurs dans l'ordre d'arrivée, pas celui du mélange");
+  assert.equal(ra.meta.anonymes.length, 2);
+  assert.deepEqual(ra.meta.anonymes[ra.you.mien], { texte: "A" }, "Alice retrouve la sienne");
+  assert.deepEqual(rb.meta.anonymes[rb.you.mien], { texte: "B" }, "Bob aussi");
+  assert.equal(rc.you, true, "pas d'indice pour qui n'a rien écrit");
+  // Avant la révélation, aucun téléphone ne reçoit l'indice d'un autre.
+  assert.ok(!JSON.stringify(c.sent).includes('"mien"'), "Cléo ne voit aucun indice");
+  assert.ok(!JSON.stringify(b.sent).includes(`"mien":${ra.you.mien}`), "Bob ignore celui d'Alice");
+
+  // Double envoi (double tap) : ignoré, sinon on mélangerait les votes.
+  send(a, { t: "start", roles, meta: { phase: "vote" }, anonymise: true });
+  assert.equal(last(a, "round").n, ra.n);
+
+  // La révélation livre enfin la correspondance, via les rôles.
+  send(a, { t: "reveal" });
+  const rev = last(c, "revealed");
+  assert.equal(rev.meta.anonymes[rev.roles.alice.mien].texte, "A");
+  assert.equal(rev.meta.anonymes[rev.roles.bob.mien].texte, "B");
+});

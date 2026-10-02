@@ -60,6 +60,11 @@ const DESSINS = {
   baccalaureat: `<circle cx="24" cy="27" r="16" ${T}/><path d="M24 27V17" ${T}/><path d="M24 27l7 5" ${T}/>
     <path d="M18 6h12" ${T}/><path d="M24 6v5" ${T}/><path d="M38 13l4-4" ${T} opacity=".5"/>`,
 
+  // Bulle de parole qui demande « qui ? », et l'écho d'une deuxième voix.
+  "qui-a-dit": `<path d="M9 5h28a5 5 0 0 1 5 5v18a5 5 0 0 1-5 5H22l-9 8v-8H9a5 5 0 0 1-5-5V10a5 5 0 0 1 5-5z" ${T}/>
+    <path d="M19 14a5 5 0 1 1 7 4.6c-1.4.6-2 1.5-2 3v.4" ${T}/><circle cx="24" cy="27" r="2.6" fill="currentColor"/>
+    <path d="M44 38v5l-5-4" ${T} opacity=".45"/>`,
+
   // Feuille pliée + plume.
   "cadavre-exquis": `<path d="M12 6h16l8 8v28H12z" ${T}/><path d="M28 6v8h8" ${T}/>
     <path d="M18 24h12M18 32h8" ${T} opacity=".55"/><path d="M40 20l6 6-10 10-6-6z" ${T}/>`,

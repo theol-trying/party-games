@@ -70,6 +70,15 @@ export const GAMES = [
     load: () => import("./games/menteur/index.js"),
   },
   {
+    id: "qui-a-dit",
+    title: "Qui a dit ça ?",
+    icon: "🗣️",
+    accent: "#ff922b",
+    category: "deduction",
+    desc: "Chacun répond en secret à la même question. Devinez qui a écrit quoi !",
+    load: () => import("./games/qui-a-dit/index.js"),
+  },
+  {
     id: "blind-test",
     title: "Blind Test",
     icon: "🎵",

@@ -6,9 +6,12 @@
      { t:"join", room, game, id, name, avatar?, wasHost? }   (wasHost : ce téléphone était l'hôte)
      { t:"join", room, id, spectator:true, game? }    (écran TV : regarde sans jouer ;
                        game absent/inconnu → jeu courant de la room, sinon "nogame")
-     { t:"start", roles:{deviceId:payload}, meta?, open?, after? }  (hôte ; open=true →
+     { t:"start", roles:{deviceId:payload}, meta?, open?, after?, anonymise? }  (hôte ; open=true →
                        les inputs sont diffusés en cours de manche via progress ;
-                       after = dernière manche vue par l'hôte, pour ne jamais réutiliser un numéro)
+                       after = dernière manche vue par l'hôte, pour ne jamais réutiliser un numéro ;
+                       anonymise=true → les réponses de la manche précédente, mélangées et sans
+                       auteur, dans meta.anonymes ; chacun reçoit l'indice de la sienne dans son
+                       rôle privé (roles[id].mien) — voir anonymiser())
      { t:"input", data, n? }                           (réponse du joueur, manche en cours)
      { t:"timer", seconds, n? }                        (hôte : chrono synchronisé)
      { t:"state", data, n? }                           (hôte : update diffusé en cours de manche,
@@ -167,6 +170,26 @@ function removePlayer(key, id, ws) {
   }
 }
 
+// « Qui a dit ça ? » : les réponses de la manche d'écriture deviennent la matière
+// de la manche de vote — mélangées, SANS leurs auteurs. Chacun ne reçoit que
+// l'indice de la sienne, dans son rôle privé : le lien réponse → auteur ne
+// quitte le serveur qu'à la révélation, avec les rôles. Aucun téléphone (pas
+// même celui de l'hôte) ne le connaît avant ; un hôte promu en cours de route
+// peut donc mener la partie jusqu'au bout.
+function anonymiser(prec, roles, meta) {
+  const auteurs = prec ? prec.order.filter((id) => prec.inputs[id] != null) : [];
+  const ids = auteurs.slice();
+  for (let i = ids.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+  }
+  ids.forEach((id, i) => {
+    roles[id] = { ...(roles[id] && typeof roles[id] === "object" ? roles[id] : {}), mien: i };
+  });
+  // auteurs : dans l'ordre d'arrivée, sans rapport avec le mélange → ne trahit rien.
+  return { ...(meta && typeof meta === "object" ? meta : {}), anonymes: ids.map((id) => prec.inputs[id]), auteurs };
+}
+
 // Un envoi qui vise une autre manche que celle en cours (écran oublié, décompte
 // d'une manche passée) est ignoré. Sans n (ancien client) : accepté.
 function horsManche(msg, r) {
@@ -278,12 +301,18 @@ function handleSocket(ws) {
     if (msg.t === "start") {
       if (myId !== ensureHost(r)) return;
       const roles = msg.roles && typeof msg.roles === "object" ? msg.roles : {};
+      const anonyme = msg.anonymise === true;
+      // Double envoi (double tap, deux téléphones hôtes l'espace d'un instant) :
+      // les « réponses » à mélanger seraient alors les votes. On l'ignore.
+      if (anonyme && r.round && r.round.anonyme) return;
+      const meta = anonyme ? anonymiser(r.round, roles, msg.meta) : msg.meta ?? null;
       r.round = {
         n: Math.max(r.round ? r.round.n : 0, Number.isInteger(msg.after) && msg.after > 0 && msg.after < 1e6 ? msg.after : 0) + 1,
         roles,
         names: namesOf(r),
         avatars: avatarsOf(r),
-        meta: msg.meta ?? null,
+        meta,
+        anonyme,
         revealed: false,
         inputs: {}, // deviceId -> réponse soumise
         order: [], // ordre d'arrivée des premières soumissions (fait office de buzzer)

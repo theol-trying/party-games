@@ -179,3 +179,32 @@ test("salon : une arrivée ajoute sa ligne sans redessiner le reste (réglages, 
   await attendre(() => m.stage.querySelectorAll(".salon-joueur").length === 1, "Bob repart");
   m.stop();
 });
+
+test("« Qui a dit ça ? » : libellé du bouton selon la phase, et vote anonymisé par le serveur", async () => {
+  const room = "TMQ" + Math.floor(Math.random() * 90 + 10);
+  let phase = "ecrire";
+  const m = moteur(room, "dmoiq", {
+    revealLabel: (meta) => (meta && meta.phase === "ecrire" ? "Passer au vote" : "Révéler qui"),
+    assign: (ps) => ({ roles: Object.fromEntries(ps.map((p) => [p.id, true])), meta: { phase }, anonymise: phase === "vote" }),
+  });
+  await attendre(() => bouton(m.stage, "Distribuer"), "salon du moteur");
+  const bob = await telephone(room, "dbobq", "Bob");
+  await attendre(() => bouton(m.stage, "Distribuer les rôles (2)"), "Bob visible");
+  bouton(m.stage, "Distribuer les rôles (2)").click();
+  await attendre(() => m.rendus.length === 1 && bob.dernier("round"), "manche d'écriture");
+  assert.ok(bouton(m.stage, "Passer au vote"), "libellé de la phase d'écriture");
+  bob.envoyer({ t: "input", n: bob.dernier("round").n, data: { texte: "B" } });
+  m.rendus[0].api.submit({ texte: "M" });
+  await attendre(() => bob.dernier("progress") && bob.dernier("progress").done.length === 2, "deux réponses");
+
+  phase = "vote";
+  m.rendus[0].api.newRound();
+  await attendre(() => m.rendus.length === 2, "manche de vote");
+  const r = bob.dernier("round");
+  assert.equal(r.meta.anonymes.length, 2, "les deux réponses, mélangées");
+  assert.equal(r.meta.anonymes[r.you.mien].texte, "B", "Bob ne connaît que la sienne");
+  assert.ok(bouton(m.stage, "Révéler qui"), "libellé de la phase de vote");
+
+  m.stop();
+  bob.fermer();
+});
