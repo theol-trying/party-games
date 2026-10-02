@@ -11,6 +11,12 @@ import { VERITES, ACTIONS } from "../src/games/action-verite/data.js";
 import { AFFIRMATIONS } from "../src/games/plus-susceptible/data.js";
 import { DILEMMES } from "../src/games/tu-preferes/data.js";
 import { MISSIONS } from "../src/games/menteur/data.js";
+import { PAIRES } from "../src/games/undercover/data.js";
+import { QUESTIONS as ESTIMATIONS } from "../src/games/estimations/data.js";
+import { QUESTIONS as QUI_A_DIT } from "../src/games/qui-a-dit/data.js";
+import { AMORCES, OUVERTURES, CLOTURES } from "../src/games/cadavre-exquis/data.js";
+import { TRACKS } from "../src/games/blind-test/data.js";
+import { GAGES } from "../src/gages.js";
 import { typo } from "../src/ui.js";
 
 // « Qui a peint « La Joconde » ? » = « Qui a peint la Joconde ? »
@@ -33,6 +39,22 @@ test("aucun doublon, même à la ponctuation ou aux guillemets près", () => {
   sansDoublon("Plus susceptible", AFFIRMATIONS);
   sansDoublon("Tu préfères", DILEMMES.map((d) => `${d.a} | ${d.b}`));
   sansDoublon("Menteur", MISSIONS);
+  // 2e vague de contenu (2026-10) : tous les jeux sont désormais couverts.
+  sansDoublon("Undercover", PAIRES.map((p) => [p.civils, p.imposteur].sort().join(" | ")));
+  sansDoublon("Estimations", ESTIMATIONS.map((q) => q.q));
+  sansDoublon("Qui a dit ça", tout(QUI_A_DIT));
+  sansDoublon("Cadavre exquis", [...AMORCES, ...OUVERTURES, ...CLOTURES]);
+  sansDoublon("Blind Test", TRACKS.map((t) => `${t.title} | ${t.artist}`));
+  sansDoublon("Gages", GAGES.map((g) => g.text));
+});
+
+test("quiz : quatre choix distincts et une bonne réponse valide pour chaque question", () => {
+  for (const q of QUESTIONS) {
+    assert.equal(q.choices.length, 4, `« ${q.q} » : ${q.choices.length} choix`);
+    assert.equal(new Set(q.choices.map((c) => c.trim().toLowerCase())).size, 4, `« ${q.q} » : choix en double`);
+    assert.ok(Number.isInteger(q.correct) && q.correct >= 0 && q.correct < 4, `« ${q.q} » : bonne réponse invalide`);
+  }
+  assert.ok(QUESTIONS.length >= 3800, "banque du quiz anormalement réduite");
 });
 
 test("pas de carte orpheline : le paquet est mélangé, aucune ne peut supposer la précédente", () => {

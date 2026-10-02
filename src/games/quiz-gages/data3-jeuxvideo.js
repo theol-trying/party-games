@@ -1,0 +1,31 @@
+/* Quiz — JEUX VIDÉO, 2e vague. Format compact : [question, BONNE RÉPONSE, leurre ×3]
+   (ordre des choix tiré au hasard à l'affichage). */
+const Q = [
+  ["Quel jeu de battle royale d'Epic Games est sorti en 2017 ?", "Fortnite", "PUBG", "Apex Legends", "Warzone"],
+  ["Quel jeu de tir en équipe oppose terroristes et antiterroristes ?", "Counter-Strike", "Call of Duty", "Overwatch", "Rainbow Six"],
+  ["Quel jeu de Riot Games organise chaque année un championnat du monde géant ?", "League of Legends", "Dota 2", "Valorant", "Overwatch"],
+  ["Dans quelle saga incarne-t-on Kratos, un guerrier spartiate devenu dieu de la guerre ?", "God of War", "Devil May Cry", "Dark Souls", "Bayonetta"],
+  ["Quel jeu de Rockstar suit le hors-la-loi Arthur Morgan dans l'Ouest américain ?", "Red Dead Redemption 2", "GTA V", "Mafia III", "L.A. Noire"],
+  ["Dans quelle ville fictive se déroule « GTA V » ?", "Los Santos", "Liberty City", "Vice City", "San Fierro"],
+  ["Qui a inventé Tetris ?", "Alekseï Pajitnov", "Shigeru Miyamoto", "Hideo Kojima", "Satoru Iwata"],
+  ["Quel créateur japonais a imaginé Mario et Zelda ?", "Shigeru Miyamoto", "Hideo Kojima", "Satoshi Tajiri", "Yū Suzuki"],
+  ["Quel créateur japonais a imaginé les Pokémon ?", "Satoshi Tajiri", "Shigeru Miyamoto", "Akira Toriyama", "Hideo Kojima"],
+  ["Quel jeu d'Electronic Arts permet de contrôler la vie de personnages virtuels ?", "Les Sims", "SimCity", "Second Life", "Animal Crossing"],
+  ["En quelle année est sortie la PlayStation 5 ?", "2020", "2018", "2019", "2022"],
+  ["Quel jeu de Larian Studios a été élu jeu de l'année aux Game Awards 2023 ?", "Baldur's Gate 3", "Zelda : Tears of the Kingdom", "Starfield", "Alan Wake 2"],
+  ["Quel jeu français du studio Sandfall Interactive a fait sensation en 2025 ?", "Clair Obscur : Expedition 33", "Rayman Legends", "A Plague Tale", "Dishonored"],
+  ["Quel jeu de FromSoftware a été élu jeu de l'année aux Game Awards 2022 ?", "Elden Ring", "Sekiro", "Bloodborne", "Dark Souls III"],
+  ["Quel épisode de Zelda sur Nintendo 64 (1998) est souvent cité comme l'un des meilleurs jeux de l'histoire ?", "Ocarina of Time", "Majora's Mask", "Twilight Princess", "A Link to the Past"],
+  ["Dans Pokémon Rouge et Bleu, quel est le starter de type Feu ?", "Salamèche", "Carapuce", "Bulbizarre", "Goupix"],
+  ["Quel Pokémon porte le numéro 1 du Pokédex national ?", "Bulbizarre", "Pikachu", "Mew", "Arceus"],
+  ["Quelle saga de course de Nintendo utilise des carapaces et des peaux de banane ?", "Mario Kart", "F-Zero", "Crash Team Racing", "Gran Turismo"],
+  ["Quel jeu de ferme et de vie de village a été créé seul par Eric Barone ?", "Stardew Valley", "Animal Crossing", "Harvest Moon", "Terraria"],
+  ["Quel jeu de Nintendo propose de vivre sur une île peuplée d'animaux, sorti pendant le confinement de 2020 ?", "Animal Crossing : New Horizons", "Stardew Valley", "Pokémon Épée", "Splatoon 2"],
+  ["Dans quelle saga apparaît Knuckles, un échidné rouge, rival puis ami du héros ?", "Sonic the Hedgehog", "Crash Bandicoot", "Spyro", "Rayman"],
+  ["Quel marsupial orange est la mascotte d'une saga de plateforme sur PlayStation ?", "Crash Bandicoot", "Spyro", "Rayman", "Ratchet"],
+  ["Quel héros sans bras ni jambes est né chez Ubisoft en 1995 ?", "Rayman", "Crash", "Spyro", "Klonoa"],
+  ["Quelle saga de Bethesda se déroule dans un monde post-apocalyptique après une guerre nucléaire ?", "Fallout", "The Elder Scrolls", "Doom", "Wolfenstein"],
+  ["Quel jeu en ligne de Blizzard, sorti en 2004, est un monde persistant de fantasy ?", "World of Warcraft", "Diablo", "StarCraft", "Hearthstone"],
+  ["Quel jeu de Valve oppose deux équipes de héros sur trois voies ?", "Dota 2", "League of Legends", "Smite", "Heroes of the Storm"],
+];
+export const Q3_JEUXVIDEO = Q.map(([q, ...choices]) => ({ q, choices, correct: 0 }));

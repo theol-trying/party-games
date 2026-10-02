@@ -31,6 +31,15 @@ export const OUVERTURES = [
   "Derrière la porte close du numéro 7,",
   "Il n'y avait pourtant rien d'extraordinaire jusqu'à ce que",
   "Bien avant que quiconque s'en aperçoive,",
+  // — 2e vague (2026-10) —
+  "Ce matin-là, le café avait un drôle de goût, et",
+  "Il pleuvait des grenouilles sur Paris quand",
+  "Le jour où la tour Eiffel a disparu,",
+  "Dans un petit village où il ne se passait jamais rien,",
+  "Personne ne savait que la boulangère était en réalité",
+  "Le premier jour des soldes,",
+  "À bord du dernier métro de la nuit,",
+  "Le jour de mes 30 ans,",
 ];
 
 export const AMORCES = [
@@ -129,6 +138,31 @@ export const AMORCES = [
   "Coup de théâtre :",
   "En dernier recours,",
   "L'histoire aurait pu s'arrêter là, mais",
+  // — 2e vague (2026-10) —
+  "Pendant ce temps, dans la cuisine,",
+  "Le chat, qui avait tout vu,",
+  "Au bout de trois heures d'attente,",
+  "La police, alertée par les voisins,",
+  "Pour une raison que personne n'a jamais comprise,",
+  "Le lendemain matin, avec une gueule de bois monumentale,",
+  "Un pigeon passa et",
+  "Quelque part entre deux rayons de supermarché,",
+  "C'est à ce moment précis que la grand-mère",
+  "Le maire du village, en pyjama,",
+  "Le GPS annonça soudain",
+  "Une voix grave s'éleva du frigo :",
+  "Pour se donner du courage,",
+  "Les extraterrestres, eux,",
+  "Pendant la coupure de courant,",
+  "Le serveur revint avec",
+  "Au beau milieu du mariage,",
+  "En fouillant dans le grenier,",
+  "Pour fêter ça,",
+  "Le voisin du dessous, excédé,",
+  "Malgré les avertissements de sa mère,",
+  "Trois secondes plus tard,",
+  "Sur le parking du centre commercial,",
+  "Le perroquet répéta alors",
 ];
 
 /* Thèmes d'histoire : consigne d'écriture + ouvertures/clôtures dédiées.
@@ -233,4 +267,12 @@ export const CLOTURES = [
   "Comme dans tout bon conte,",
   "Et la morale de cette histoire, s'il y en a une, c'est que",
   "FIN. Ou presque, car",
+  // — 2e vague (2026-10) —
+  "Au final, la seule leçon à retenir, c'est que",
+  "Des années plus tard, on raconte encore que",
+  "Et quand tout fut enfin terminé,",
+  "Pour conclure en beauté,",
+  "Le journal du lendemain titrait :",
+  "Et c'est ainsi que naquit la tradition de",
+  "Quant au chat,",
 ];

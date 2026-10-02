@@ -1,0 +1,37 @@
+/* Quiz — FRANCE, 2e vague (territoire, villes, outre-mer, institutions).
+   Format compact : [question, BONNE RÉPONSE, leurre ×3] (ordre des choix tiré au
+   hasard à l'affichage). */
+const Q = [
+  ["Quelle est la plus grande région de France métropolitaine ?", "La Nouvelle-Aquitaine", "L'Occitanie", "Auvergne-Rhône-Alpes", "Le Grand Est"],
+  ["Quel est le département le plus peuplé de France ?", "Le Nord", "Paris", "Les Bouches-du-Rhône", "Le Rhône"],
+  ["Quel code porte le département de la Corse-du-Sud ?", "2A", "20", "2B", "96"],
+  ["Quelle ville est surnommée « la cité des Papes » ?", "Avignon", "Rome", "Reims", "Arles"],
+  ["Dans quelle ville se trouve la Cité de l'espace ?", "Toulouse", "Bordeaux", "Kourou", "Marseille"],
+  ["Près de quelle ville se trouve le parc du Futuroscope ?", "Poitiers", "Tours", "Limoges", "Angers"],
+  ["Dans quel département se trouve le Puy du Fou ?", "La Vendée", "La Loire-Atlantique", "Les Deux-Sèvres", "Le Maine-et-Loire"],
+  ["Quel est le parc de loisirs le plus visité d'Europe ?", "Disneyland Paris", "Europa-Park", "Le Puy du Fou", "Port Aventura"],
+  ["Quelle est l'altitude du mont Blanc (environ) ?", "4 806 m", "4 478 m", "4 102 m", "5 642 m"],
+  ["Lequel de ces territoires est un département d'outre-mer ?", "Mayotte", "La Polynésie française", "La Nouvelle-Calédonie", "Wallis-et-Futuna"],
+  ["Quelle collectivité française se trouve au large du Canada ?", "Saint-Pierre-et-Miquelon", "Saint-Barthélemy", "Clipperton", "Wallis-et-Futuna"],
+  ["Quel est le chef-lieu de la Guadeloupe ?", "Basse-Terre", "Pointe-à-Pitre", "Les Abymes", "Le Gosier"],
+  ["Quel est le chef-lieu de la Martinique ?", "Fort-de-France", "Saint-Pierre", "Le Lamentin", "Schœlcher"],
+  ["Quel est le chef-lieu de la Nouvelle-Calédonie ?", "Nouméa", "Papeete", "Mamoudzou", "Mata-Utu"],
+  ["Quel est le chef-lieu de Mayotte ?", "Mamoudzou", "Dzaoudzi", "Moroni", "Saint-Denis"],
+  ["Combien de présidents a eus la Ve République jusqu'à Emmanuel Macron inclus ?", "8", "6", "7", "10"],
+  ["Quel fort du Var sert de résidence d'été officielle au président ?", "Le fort de Brégançon", "Le fort Boyard", "Le fort Saint-Jean", "Le château d'If"],
+  ["Dans quel palais siège l'Assemblée nationale ?", "Le palais Bourbon", "Le palais du Luxembourg", "Le palais de l'Élysée", "Le palais Royal"],
+  ["Dans quel hôtel parisien réside et travaille le Premier ministre ?", "L'hôtel de Matignon", "L'hôtel de Brienne", "L'hôtel de Lassay", "L'hôtel de Beauvau"],
+  ["Quel ministère occupe l'hôtel de Beauvau ?", "Le ministère de l'Intérieur", "Le ministère des Armées", "Le ministère de la Justice", "Le ministère de la Culture"],
+  ["Dans quel département se trouve la dune du Pilat, la plus haute d'Europe ?", "La Gironde", "Les Landes", "La Charente-Maritime", "Les Pyrénées-Atlantiques"],
+  ["Quelles gorges de Provence sont surnommées « le Grand Canyon de l'Europe » ?", "Les gorges du Verdon", "Les gorges du Tarn", "Les gorges de l'Ardèche", "Les gorges du Gardon"],
+  ["Quel cirque des Pyrénées est classé au patrimoine mondial avec sa grande cascade ?", "Le cirque de Gavarnie", "Le cirque de Troumouse", "Le cirque de Mafate", "Le cirque d'Estaubé"],
+  ["Quelle île de l'Atlantique est la plus grande de France métropolitaine après la Corse ?", "L'île d'Oléron", "L'île de Ré", "Belle-Île-en-Mer", "Noirmoutier"],
+  ["Quelle ville est la préfecture de la région Bretagne ?", "Rennes", "Brest", "Nantes", "Quimper"],
+  ["Quelle ville est la préfecture de la région Occitanie ?", "Toulouse", "Montpellier", "Nîmes", "Perpignan"],
+  ["Quelle ville est la préfecture de la région Hauts-de-France ?", "Lille", "Amiens", "Arras", "Calais"],
+  ["Quelle ville est la préfecture de la région Normandie ?", "Rouen", "Caen", "Le Havre", "Cherbourg"],
+  ["Quelle ville est la préfecture de la région Bourgogne-Franche-Comté ?", "Dijon", "Besançon", "Auxerre", "Mâcon"],
+  ["Quelle ville est la préfecture de la région Centre-Val de Loire ?", "Orléans", "Tours", "Bourges", "Blois"],
+  ["Quel département porte le numéro 01 ?", "L'Ain", "L'Aisne", "L'Allier", "Les Ardennes"],
+];
+export const Q3_FRANCE = Q.map(([q, ...choices]) => ({ q, choices, correct: 0 }));

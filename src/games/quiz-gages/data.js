@@ -24,6 +24,35 @@ import { Q_LANGUE } from "./data2-langue.js";
 import { Q_CITATIONS } from "./data2-citations.js";
 import { Q_INSOLITE } from "./data2-insolite.js";
 import { Q_ACTU } from "./data2-actu.js";
+// 2e vague (2026-10) : nouveaux thèmes (data2-*) et compléments des thèmes existants
+// (data3-*), au format compact [question, bonne réponse, leurres…] — voir chaque fichier.
+import { Q_MYTHOLOGIE } from "./data2-mythologie.js";
+import { Q_ESPACE } from "./data2-espace.js";
+import { Q_TERRE } from "./data2-terre.js";
+import { Q_MATHS } from "./data2-maths.js";
+import { Q_LITTERATURE } from "./data2-litterature.js";
+import { Q_PEINTURE } from "./data2-peinture.js";
+import { Q_MONUMENTS } from "./data2-monuments.js";
+import { Q_PHILO } from "./data2-philo.js";
+import { Q_DRAPEAUX } from "./data2-drapeaux.js";
+import { Q_MONDE } from "./data2-monde.js";
+import { Q_ANIMATION } from "./data2-animation.js";
+import { Q_TELE } from "./data2-tele.js";
+import { Q_NOSTALGIE } from "./data2-nostalgie.js";
+import { Q_MODE } from "./data2-mode.js";
+import { Q_TRANSPORTS } from "./data2-transports.js";
+import { Q3_GEO } from "./data3-geo.js";
+import { Q3_HISTOIRE } from "./data3-histoire.js";
+import { Q3_SCIENCES } from "./data3-sciences.js";
+import { Q3_SPORT } from "./data3-sport.js";
+import { Q3_NATURE } from "./data3-nature.js";
+import { Q3_GASTRO } from "./data3-gastro.js";
+import { Q3_CINEMA } from "./data3-cinema.js";
+import { Q3_MUSIQUE } from "./data3-musique.js";
+import { Q3_SERIES } from "./data3-series.js";
+import { Q3_JEUXVIDEO } from "./data3-jeuxvideo.js";
+import { Q3_FRANCE } from "./data3-france.js";
+import { Q3_SANTE } from "./data3-sante.js";
 
 /* Quiz culture générale. correct = index de la bonne réponse (0-based).
    Banque rédigée à la main (90). Les gages sont centralisés dans src/gages.js. */
@@ -32,93 +61,58 @@ const BASE = [
   { q: "Combien de côtés a un hexagone ?", choices: ["5", "6", "7", "8"], correct: 1 },
   { q: "Quel est l'élément chimique O ?", choices: ["Or", "Osmium", "Oxygène", "Oganesson"], correct: 2 },
   { q: "En quelle année a eu lieu la chute du mur de Berlin ?", choices: ["1987", "1989", "1991", "1993"], correct: 1 },
-  { q: "Quel océan est le plus grand ?", choices: ["Atlantique", "Indien", "Arctique", "Pacifique"], correct: 3 },
-  { q: "Combien de joueurs dans une équipe de foot sur le terrain ?", choices: ["9", "10", "11", "12"], correct: 2 },
   { q: "Quelle planète est la plus proche du Soleil ?", choices: ["Vénus", "Mercure", "Mars", "Terre"], correct: 1 },
   { q: "Qui a écrit « Les Misérables » ?", choices: ["Zola", "Balzac", "Hugo", "Flaubert"], correct: 2 },
   { q: "Quel pays a gagné la Coupe du monde 2018 ?", choices: ["Croatie", "France", "Allemagne", "Brésil"], correct: 1 },
   { q: "Quelle est la capitale du Canada ?", choices: ["Toronto", "Vancouver", "Ottawa", "Montréal"], correct: 2 },
   { q: "Combien y a-t-il de continents ?", choices: ["5", "6", "7", "8"], correct: 2 },
   { q: "Quel fleuve traverse Paris ?", choices: ["La Loire", "Le Rhône", "La Seine", "La Garonne"], correct: 2 },
-  { q: "Quel est le plus long fleuve du monde ?", choices: ["L'Amazone", "Le Nil", "Le Mississippi", "Le Yangzi"], correct: 1 },
   { q: "Dans quel pays se trouve le Machu Picchu ?", choices: ["Mexique", "Bolivie", "Pérou", "Chili"], correct: 2 },
-  { q: "Quelle mer borde Marseille ?", choices: ["Mer du Nord", "Méditerranée", "Atlantique", "Mer Noire"], correct: 1 },
-  { q: "Quel désert est le plus grand désert chaud du monde ?", choices: ["Gobi", "Kalahari", "Sahara", "Atacama"], correct: 2 },
   { q: "Combien d'états composent les États-Unis ?", choices: ["48", "50", "52", "54"], correct: 1 },
-  { q: "Quelle est la monnaie du Japon ?", choices: ["Le won", "Le yuan", "Le yen", "Le baht"], correct: 2 },
-  { q: "Quel pays a la forme d'une botte ?", choices: ["Espagne", "Grèce", "Italie", "Portugal"], correct: 2 },
   { q: "Quelle est la plus haute montagne du monde ?", choices: ["K2", "Mont Blanc", "Everest", "Kilimandjaro"], correct: 2 },
   { q: "En quelle année l'homme a-t-il marché sur la Lune pour la première fois ?", choices: ["1965", "1969", "1971", "1975"], correct: 1 },
   { q: "Qui était surnommé le Roi-Soleil ?", choices: ["Louis XIV", "Louis XVI", "Napoléon", "François Ier"], correct: 0 },
   { q: "En quelle année a commencé la Première Guerre mondiale ?", choices: ["1912", "1914", "1916", "1918"], correct: 1 },
   { q: "Qui a découvert l'Amérique en 1492 ?", choices: ["Magellan", "Vasco de Gama", "Christophe Colomb", "Marco Polo"], correct: 2 },
-  { q: "Quelle reine d'Égypte a séduit César ?", choices: ["Néfertiti", "Cléopâtre", "Hatchepsout", "Isis"], correct: 1 },
-  { q: "Quel monument parisien a été construit pour l'Exposition de 1889 ?", choices: ["L'Arc de Triomphe", "Le Louvre", "La tour Eiffel", "Le Panthéon"], correct: 2 },
   { q: "Quelle civilisation a construit les pyramides de Gizeh ?", choices: ["Les Mayas", "Les Égyptiens", "Les Aztèques", "Les Grecs"], correct: 1 },
   { q: "En quelle année la Révolution française a-t-elle éclaté ?", choices: ["1789", "1792", "1799", "1804"], correct: 0 },
   { q: "Quel navire « insubmersible » a coulé en 1912 ?", choices: ["Le Lusitania", "Le Britannic", "Le Titanic", "Le Queen Mary"], correct: 2 },
   { q: "Combien d'os compte environ le corps humain adulte ?", choices: ["106", "206", "306", "406"], correct: 1 },
-  { q: "Quelle est la vitesse de la lumière (environ) ?", choices: ["300 km/s", "3 000 km/s", "300 000 km/s", "3 millions km/s"], correct: 2 },
   { q: "Quel gaz les plantes absorbent-elles ?", choices: ["Oxygène", "Azote", "CO2", "Hydrogène"], correct: 2 },
   { q: "Combien de cœurs possède une pieuvre ?", choices: ["1", "2", "3", "4"], correct: 2 },
-  { q: "Quel est l'organe le plus lourd du corps humain ?", choices: ["Le cerveau", "Le foie", "La peau", "Les poumons"], correct: 2 },
   { q: "À quelle température l'eau bout-elle au niveau de la mer ?", choices: ["90 °C", "95 °C", "100 °C", "110 °C"], correct: 2 },
-  { q: "Quel animal est le plus rapide au monde en course ?", choices: ["Le lion", "Le guépard", "L'antilope", "Le lévrier"], correct: 1 },
-  { q: "Combien de pattes a une araignée ?", choices: ["6", "8", "10", "12"], correct: 1 },
   { q: "Quel est le plus grand mammifère du monde ?", choices: ["L'éléphant", "Le rorqual bleu", "L'orque", "La girafe"], correct: 1 },
   { q: "Les dauphins sont des… ?", choices: ["Poissons", "Mammifères", "Reptiles", "Amphibiens"], correct: 1 },
-  { q: "Quel métal est liquide à température ambiante ?", choices: ["Le plomb", "Le mercure", "L'étain", "Le zinc"], correct: 1 },
-  { q: "Combien de dents a un adulte (avec les dents de sagesse) ?", choices: ["28", "30", "32", "36"], correct: 2 },
   { q: "Quelle est la formule chimique de l'eau ?", choices: ["CO2", "H2O", "O2", "NaCl"], correct: 1 },
   { q: "Quel sport pratique Teddy Riner ?", choices: ["La boxe", "Le judo", "La lutte", "Le karaté"], correct: 1 },
-  { q: "Combien de temps dure un match de foot (hors arrêts de jeu) ?", choices: ["80 min", "90 min", "100 min", "120 min"], correct: 1 },
   { q: "Dans quel sport parle-t-on de « grand chelem » ?", choices: ["Le golf", "Le tennis", "L'escrime", "Le cyclisme"], correct: 1 },
   { q: "Combien d'anneaux sur le drapeau olympique ?", choices: ["4", "5", "6", "7"], correct: 1 },
   { q: "Quelle course cycliste se termine sur les Champs-Élysées ?", choices: ["Paris-Roubaix", "Le Giro", "Le Tour de France", "La Vuelta"], correct: 2 },
-  { q: "Au basket, combien de points vaut un panier derrière la ligne ?", choices: ["1", "2", "3", "4"], correct: 2 },
   { q: "Quel pays a inventé le judo ?", choices: ["Chine", "Corée", "Japon", "Thaïlande"], correct: 2 },
   { q: "Combien de joueurs dans une équipe de volley sur le terrain ?", choices: ["5", "6", "7", "8"], correct: 1 },
   { q: "Quelle nage est la plus lente en compétition ?", choices: ["Le crawl", "Le dos", "La brasse", "Le papillon"], correct: 2 },
   { q: "Où se déroule le tournoi de Roland-Garros ?", choices: ["Londres", "New York", "Paris", "Melbourne"], correct: 2 },
   { q: "Qui a chanté « Thriller » ?", choices: ["Prince", "Michael Jackson", "Stevie Wonder", "Lionel Richie"], correct: 1 },
-  { q: "Quel groupe a composé « Bohemian Rhapsody » ?", choices: ["The Beatles", "Queen", "Pink Floyd", "The Rolling Stones"], correct: 1 },
-  { q: "Quel instrument a 88 touches ?", choices: ["L'orgue", "Le piano", "L'accordéon", "Le clavecin"], correct: 1 },
-  { q: "Qui interprète « Alors on danse » ?", choices: ["Maître Gims", "Stromae", "Soprano", "Black M"], correct: 1 },
-  { q: "Combien de cordes a une guitare classique ?", choices: ["4", "5", "6", "7"], correct: 2 },
-  { q: "Quel film détient le record du box-office mondial ?", choices: ["Titanic", "Avatar", "Avengers: Endgame", "Star Wars VII"], correct: 1 },
-  { q: "Qui joue Jack dans « Titanic » ?", choices: ["Brad Pitt", "Johnny Depp", "Leonardo DiCaprio", "Matt Damon"], correct: 2 },
-  { q: "Dans « Star Wars », qui est le père de Luke ?", choices: ["Obi-Wan", "Yoda", "Dark Vador", "Palpatine"], correct: 2 },
-  { q: "Quel studio a créé « Toy Story » ?", choices: ["DreamWorks", "Pixar", "Ghibli", "Illumination"], correct: 1 },
   { q: "Dans « Harry Potter », quelle est la maison de Harry ?", choices: ["Serpentard", "Poufsouffle", "Gryffondor", "Serdaigle"], correct: 2 },
   { q: "Quel super-héros vient de la planète Krypton ?", choices: ["Batman", "Superman", "Thor", "Flash"], correct: 1 },
   { q: "Combien de saisons compte « Friends » ?", choices: ["8", "9", "10", "12"], correct: 2 },
   { q: "Quel personnage habite dans un ananas sous la mer ?", choices: ["Nemo", "Bob l'éponge", "Dory", "Patrick"], correct: 1 },
-  { q: "De quel pays vient la paella ?", choices: ["Italie", "Portugal", "Espagne", "Mexique"], correct: 2 },
   { q: "Dans quel pays la raclette est-elle née ?", choices: ["La France", "La Suisse", "L'Italie", "L'Autriche"], correct: 1 },
-  { q: "Le sushi est originaire de quel pays ?", choices: ["Chine", "Japon", "Corée", "Vietnam"], correct: 1 },
-  { q: "Quel alcool sert de base au mojito ?", choices: ["Vodka", "Rhum", "Gin", "Tequila"], correct: 1 },
   { q: "Quel moine bénédictin est traditionnellement associé à l'essor du champagne ?", choices: ["Dom Pérignon", "Saint Benoît", "Frère Tuck", "Dom Bosco"], correct: 0 },
   { q: "Qu'est-ce que le guacamole ?", choices: ["Une sauce tomate", "Une purée d'avocat", "Une crème de maïs", "Un fromage fondu"], correct: 1 },
   { q: "Quel est l'ingrédient principal du houmous ?", choices: ["Lentilles", "Pois chiches", "Haricots", "Fèves"], correct: 1 },
   { q: "La tarte Tatin est une tarte… ?", choices: ["Au citron", "Renversée aux pommes", "Au chocolat", "Aux noix"], correct: 1 },
-  { q: "Combien de lettres dans l'alphabet français ?", choices: ["24", "25", "26", "27"], correct: 2 },
-  { q: "Quelle langue compte le plus de locuteurs natifs ?", choices: ["Anglais", "Espagnol", "Mandarin", "Hindi"], correct: 2 },
-  { q: "Que signifie « www » ?", choices: ["World Wide Web", "World Web Wide", "Wide World Web", "Web World Wide"], correct: 0 },
   { q: "Quel réseau social a un fantôme pour logo ?", choices: ["TikTok", "Snapchat", "Twitch", "Discord"], correct: 1 },
-  { q: "Qui a fondé Tesla et SpaceX ?", choices: ["Jeff Bezos", "Elon Musk", "Bill Gates", "Steve Jobs"], correct: 1 },
   { q: "Combien font 7 × 8 ?", choices: ["54", "56", "58", "64"], correct: 1 },
   { q: "Quel est le chiffre romain pour 50 ?", choices: ["C", "D", "L", "M"], correct: 2 },
   { q: "Combien de minutes dans une journée ?", choices: ["1 240", "1 440", "1 640", "2 440"], correct: 1 },
   { q: "Quel animal figure sur le logo de Lacoste ?", choices: ["Un requin", "Un crocodile", "Un lézard", "Un serpent"], correct: 1 },
-  { q: "De quelle couleur est la boîte noire d'un avion ?", choices: ["Noire", "Orange", "Rouge", "Jaune"], correct: 1 },
   { q: "Quel pays est célèbre pour ses champs de tulipes et ses moulins ?", choices: ["France", "Pays-Bas", "Belgique", "Danemark"], correct: 1 },
-  { q: "Combien de zéros dans un million ?", choices: ["5", "6", "7", "9"], correct: 1 },
   { q: "Quelle est la devise de la France ?", choices: ["Unité, Progrès, Justice", "Liberté, Égalité, Fraternité", "Dieu et mon droit", "Paix et Travail"], correct: 1 },
   { q: "Le Colisée se trouve dans quelle ville ?", choices: ["Athènes", "Rome", "Naples", "Milan"], correct: 1 },
 
   // --- lot 2 : géographie ---
   { q: "Quelle est la capitale de l'Égypte ?", choices: ["Alexandrie", "Le Caire", "Gizeh", "Louxor"], correct: 1 },
-  { q: "Quel est le plus petit pays du monde ?", choices: ["Monaco", "Vatican", "Saint-Marin", "Liechtenstein"], correct: 1 },
   { q: "Quel pays a pour capitale Bangkok ?", choices: ["Vietnam", "Cambodge", "Thaïlande", "Laos"], correct: 2 },
   { q: "Quel continent abrite le désert du Sahara ?", choices: ["Asie", "Afrique", "Australie", "Amérique du Sud"], correct: 1 },
   { q: "Quel détroit sépare l'Espagne du Maroc ?", choices: ["Le Bosphore", "Gibraltar", "Malacca", "Ormuz"], correct: 1 },
@@ -141,21 +135,16 @@ const BASE = [
   { q: "Quelle civilisation a inventé l'écriture cunéiforme ?", choices: ["Les Égyptiens", "Les Sumériens", "Les Phéniciens", "Les Perses"], correct: 1 },
 
   // --- lot 2 : sciences ---
-  { q: "Quelle est la plus grande planète du système solaire ?", choices: ["Saturne", "Jupiter", "Neptune", "Uranus"], correct: 1 },
   { q: "Combien de chromosomes possède un être humain ?", choices: ["44", "46", "48", "50"], correct: 1 },
   { q: "Quel est le symbole chimique du fer ?", choices: ["Fe", "Fr", "F", "Fn"], correct: 0 },
-  { q: "Quelle est l'unité de mesure de la puissance électrique ?", choices: ["Le volt", "L'ampère", "Le watt", "L'ohm"], correct: 2 },
-  { q: "Qui a formulé la théorie de la relativité ?", choices: ["Isaac Newton", "Albert Einstein", "Niels Bohr", "Galilée"], correct: 1 },
   { q: "Combien de temps met la lumière du Soleil pour atteindre la Terre ?", choices: ["8 secondes", "8 minutes", "8 heures", "8 jours"], correct: 1 },
   { q: "Quel est le plus petit os du corps humain ?", choices: ["Le fémur", "L'étrier (oreille)", "Le tibia", "La clavicule"], correct: 1 },
-  { q: "Quel gaz représente environ 78 % de l'atmosphère terrestre ?", choices: ["L'oxygène", "L'azote", "Le CO2", "L'hydrogène"], correct: 1 },
   { q: "Quelle est la vitesse du son dans l'air (environ) ?", choices: ["34 m/s", "340 m/s", "3 400 m/s", "34 000 m/s"], correct: 1 },
   { q: "Combien de dents de lait un enfant possède-t-il en général ?", choices: ["16", "20", "24", "32"], correct: 1 },
 
   // --- lot 2 : sport ---
   { q: "Combien de jeux faut-il gagner pour remporter un set au tennis (en général) ?", choices: ["4", "6", "8", "10"], correct: 1 },
   { q: "Dans quel pays sont nés les Jeux olympiques modernes, en 1896 ?", choices: ["La France", "La Grèce", "L'Italie", "Le Royaume-Uni"], correct: 1 },
-  { q: "Quel pays a remporté le plus de Coupes du monde de football ?", choices: ["L'Allemagne", "L'Italie", "Le Brésil", "L'Argentine"], correct: 2 },
   { q: "Quel sport se joue avec un « volant » ?", choices: ["Le tennis", "Le squash", "Le badminton", "Le tennis de table"], correct: 2 },
   { q: "Combien de médailles d'or olympiques Usain Bolt a-t-il remportées en carrière ?", choices: ["6", "8", "10", "12"], correct: 1 },
   { q: "Quel est le stade de Manchester United ?", choices: ["Anfield", "Old Trafford", "Stamford Bridge", "Emirates"], correct: 1 },
@@ -167,21 +156,15 @@ const BASE = [
   // --- lot 2 : cinéma / musique ---
   { q: "Qui a réalisé la trilogie « Le Seigneur des Anneaux » ?", choices: ["James Cameron", "Peter Jackson", "Ridley Scott", "Steven Spielberg"], correct: 1 },
   { q: "Quel groupe britannique a chanté « Hey Jude » ?", choices: ["The Rolling Stones", "The Beatles", "Queen", "Pink Floyd"], correct: 1 },
-  { q: "Dans quelle saga entend-on « Que la Force soit avec toi » ?", choices: ["Star Trek", "Star Wars", "Dune", "Interstellar"], correct: 1 },
   { q: "Qui incarne Iron Man dans les films Marvel ?", choices: ["Chris Evans", "Chris Hemsworth", "Robert Downey Jr.", "Mark Ruffalo"], correct: 2 },
   { q: "Quel est le premier long-métrage d'animation des studios Disney ?", choices: ["Pinocchio", "Blanche-Neige et les Sept Nains", "Fantasia", "Bambi"], correct: 1 },
-  { q: "Qui a chanté « Billie Jean » ?", choices: ["Prince", "Michael Jackson", "George Michael", "Lionel Richie"], correct: 1 },
-  { q: "Quelle actrice joue dans « Pulp Fiction » et « Kill Bill » ?", choices: ["Uma Thurman", "Scarlett Johansson", "Cameron Diaz", "Angelina Jolie"], correct: 0 },
   { q: "Quel opéra de Mozart met en scène le mythe de Don Juan ?", choices: ["La Flûte enchantée", "Don Giovanni", "Les Noces de Figaro", "Cosi fan tutte"], correct: 1 },
-  { q: "Quel film a remporté l'Oscar du meilleur film en 2020 ?", choices: ["1917", "Joker", "Parasite", "Once Upon a Time in Hollywood"], correct: 2 },
   { q: "Dans quelle ville fictive vivent Les Simpson ?", choices: ["Springfield", "Shelbyville", "Ogdenville", "Capital City"], correct: 0 },
 
   // --- lot 2 : gastronomie ---
   { q: "Le croissant est traditionnellement originaire de quel pays ?", choices: ["France", "Autriche", "Italie", "Belgique"], correct: 1 },
   { q: "Quel fromage porte le nom d'une ville normande ?", choices: ["Le Brie", "Le Camembert", "Le Roquefort", "Le Cantal"], correct: 1 },
-  { q: "Quelle épice est extraite du pistil d'une fleur de crocus ?", choices: ["Le curcuma", "Le safran", "Le paprika", "Le cumin"], correct: 1 },
   { q: "Quel plat est composé de viande crue hachée et assaisonnée ?", choices: ["Le carpaccio", "Le tartare", "Le ceviche", "Le steak"], correct: 1 },
-  { q: "De quel pays vient le kimchi ?", choices: ["La Chine", "La Corée", "Le Japon", "Le Vietnam"], correct: 1 },
   { q: "Quel fruit est utilisé pour produire le vin ?", choices: ["La pomme", "Le raisin", "La poire", "La prune"], correct: 1 },
   { q: "Quelle boisson est obtenue par fermentation du houblon et du malt ?", choices: ["Le cidre", "La bière", "L'hydromel", "Le saké"], correct: 1 },
   { q: "Quel est l'ingrédient principal du tofu ?", choices: ["Le riz", "Le soja", "Le blé", "Le maïs"], correct: 1 },
@@ -193,20 +176,14 @@ const BASE = [
   { q: "Que signifie l'acronyme « GIF » ?", choices: ["General Image File", "Graphics Interchange Format", "Global Internet Format", "Graphic Info File"], correct: 1 },
   { q: "Quel réseau social a popularisé le format « tweet » ?", choices: ["Instagram", "X (ex-Twitter)", "TikTok", "LinkedIn"], correct: 1 },
   { q: "Qui a cofondé Facebook ?", choices: ["Bill Gates", "Mark Zuckerberg", "Elon Musk", "Steve Jobs"], correct: 1 },
-  { q: "Que signifie « HTML » ?", choices: ["HyperText Markup Language", "High Tech Modern Language", "Home Tool Markup Language", "Hyperlink Text Model Language"], correct: 0 },
   { q: "Quelle entreprise possède YouTube ?", choices: ["Meta", "Google", "Amazon", "Microsoft"], correct: 1 },
   { q: "Quelle entreprise a créé le système Android ?", choices: ["Apple", "Google", "Samsung", "Microsoft"], correct: 1 },
-  { q: "Combien de bits y a-t-il dans un octet ?", choices: ["4", "8", "16", "32"], correct: 1 },
   { q: "Quel navigateur web est développé par Google ?", choices: ["Firefox", "Safari", "Chrome", "Edge"], correct: 2 },
   { q: "Quelle application est symbolisée par une icône d'appareil photo colorée ?", choices: ["Snapchat", "Instagram", "Pinterest", "TikTok"], correct: 1 },
 
   // --- lot 2 : littérature / art ---
-  { q: "Qui a écrit « Roméo et Juliette » ?", choices: ["Molière", "Shakespeare", "Victor Hugo", "Racine"], correct: 1 },
-  { q: "Quel auteur français a écrit « Le Petit Prince » ?", choices: ["Albert Camus", "Antoine de Saint-Exupéry", "Jean-Paul Sartre", "Marcel Proust"], correct: 1 },
   { q: "Qui a peint « La Nuit étoilée » ?", choices: ["Claude Monet", "Vincent Van Gogh", "Paul Cézanne", "Edgar Degas"], correct: 1 },
   { q: "Quel mouvement artistique est associé à Salvador Dalí ?", choices: ["Le cubisme", "Le surréalisme", "L'impressionnisme", "Le fauvisme"], correct: 1 },
-  { q: "Qui a écrit le roman « 1984 » ?", choices: ["Aldous Huxley", "George Orwell", "Ray Bradbury", "H.G. Wells"], correct: 1 },
-  { q: "Quel poète français a écrit « Les Fleurs du mal » ?", choices: ["Arthur Rimbaud", "Charles Baudelaire", "Paul Verlaine", "Victor Hugo"], correct: 1 },
   { q: "Quel roman de Victor Hugo se déroule pendant les émeutes de 1832 à Paris ?", choices: ["Notre-Dame de Paris", "Les Misérables", "Les Contemplations", "Quatrevingt-treize"], correct: 1 },
   { q: "Qui a sculpté « Le Penseur » ?", choices: ["Camille Claudel", "Auguste Rodin", "Antoine Bourdelle", "Aristide Maillol"], correct: 1 },
   { q: "Quel musée parisien abrite la Joconde ?", choices: ["Le musée d'Orsay", "Le Louvre", "Le Centre Pompidou", "Le Grand Palais"], correct: 1 },
@@ -216,11 +193,8 @@ const BASE = [
   { q: "Quel est le plus grand félin du monde ?", choices: ["Le lion", "Le tigre", "Le jaguar", "Le léopard"], correct: 1 },
   { q: "Combien de pattes a un insecte ?", choices: ["4", "6", "8", "10"], correct: 1 },
   { q: "Quel animal change de couleur pour se camoufler ?", choices: ["Le lézard", "Le caméléon", "L'iguane", "Le gecko"], correct: 1 },
-  { q: "Quel est le seul mammifère capable de voler activement ?", choices: ["L'écureuil volant", "La chauve-souris", "La roussette", "Le vampire"], correct: 1 },
   { q: "Quelle est la durée de gestation d'un éléphant (environ) ?", choices: ["9 mois", "15 mois", "22 mois", "30 mois"], correct: 2 },
   { q: "Quel oiseau incapable de voler est un excellent nageur ?", choices: ["L'autruche", "Le manchot", "Le kiwi", "Le dindon"], correct: 1 },
-  { q: "Quelle plante carnivore referme ses feuilles sur ses proies ?", choices: ["Le nénuphar", "La dionée (attrape-mouche)", "Le cactus", "L'orchidée"], correct: 1 },
-  { q: "Quel est le plus grand animal terrestre ?", choices: ["Le rhinocéros", "L'éléphant d'Afrique", "La girafe", "L'hippopotame"], correct: 1 },
   { q: "Combien de cœurs a, selon la culture populaire, un lombric (ver de terre) ?", choices: ["1", "5", "10", "20"], correct: 1 },
   { q: "Quel animal est le symbole de la sagesse dans de nombreuses cultures ?", choices: ["Le renard", "La chouette", "Le corbeau", "Le loup"], correct: 1 },
 ];
@@ -258,6 +232,33 @@ const BANKS = [
   { cat: "langue", q: Q_LANGUE },
   { cat: "citations", q: Q_CITATIONS },
   { cat: "insolite", q: Q_INSOLITE },
+  { cat: "mythologie", q: Q_MYTHOLOGIE },
+  { cat: "espace", q: Q_ESPACE },
+  { cat: "terre", q: Q_TERRE },
+  { cat: "maths", q: Q_MATHS },
+  { cat: "litterature", q: Q_LITTERATURE },
+  { cat: "peinture", q: Q_PEINTURE },
+  { cat: "monuments", q: Q_MONUMENTS },
+  { cat: "philo", q: Q_PHILO },
+  { cat: "drapeaux", q: Q_DRAPEAUX },
+  { cat: "monde", q: Q_MONDE },
+  { cat: "animation", q: Q_ANIMATION },
+  { cat: "tele", q: Q_TELE },
+  { cat: "nostalgie", q: Q_NOSTALGIE },
+  { cat: "mode", q: Q_MODE },
+  { cat: "transports", q: Q_TRANSPORTS },
+  { cat: "geo", q: Q3_GEO },
+  { cat: "histoire", q: Q3_HISTOIRE },
+  { cat: "sciences", q: Q3_SCIENCES },
+  { cat: "sport", q: Q3_SPORT },
+  { cat: "nature", q: Q3_NATURE },
+  { cat: "gastro", q: Q3_GASTRO },
+  { cat: "cinema", q: Q3_CINEMA },
+  { cat: "musique", q: Q3_MUSIQUE },
+  { cat: "series", q: Q3_SERIES },
+  { cat: "jeuxvideo", q: Q3_JEUXVIDEO },
+  { cat: "france", q: Q3_FRANCE },
+  { cat: "sante", q: Q3_SANTE },
 ];
 
 /* Agrégation + déduplication par énoncé (insensible casse/espaces) ; chaque
@@ -278,6 +279,6 @@ for (const b of BANKS) {
 }
 
 /* Catégories réellement disponibles (au moins 1 question), pour le sélecteur hôte. */
-export const CATEGORIES = BANKS
-  .filter((b) => _catCount[b.cat] > 0)
-  .map((b) => ({ id: b.cat, label: LIBELLES[b.cat], count: _catCount[b.cat] }));
+export const CATEGORIES = CATS
+  .filter((c) => _catCount[c.id] > 0)
+  .map((c) => ({ id: c.id, label: LIBELLES[c.id], count: _catCount[c.id] }));

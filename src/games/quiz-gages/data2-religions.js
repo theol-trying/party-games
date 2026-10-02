@@ -19,7 +19,6 @@ export const Q_RELIGIONS = [
   { q: "Quel est le premier livre de la Bible ?", choices: ["La Genèse", "L'Exode", "Les Psaumes", "Le Lévitique"], correct: 0 },
   { q: "Combien y a-t-il d'Évangiles canoniques dans le Nouveau Testament ?", choices: ["Trois", "Quatre", "Cinq", "Sept"], correct: 1 },
   { q: "Quel animal est considéré comme sacré dans l'hindouisme ?", choices: ["Le cheval", "Le mouton", "La vache", "Le porc"], correct: 2 },
-  { q: "Quelle est la ville sainte commune au judaïsme, au christianisme et à l'islam ?", choices: ["Rome", "La Mecque", "Bénarès", "Jérusalem"], correct: 3 },
   { q: "Quel est le chef spirituel de l'Église catholique ?", choices: ["Le pape", "Le patriarche", "L'archevêque", "Le cardinal"], correct: 0 },
   { q: "Comment appelle-t-on l'état de libération ultime dans le bouddhisme ?", choices: ["Le samsara", "Le nirvana", "Le moksha", "Le karma"], correct: 1 },
   { q: "Quel texte sacré est le principal du judaïsme ?", choices: ["Le Coran", "L'Évangile", "La Torah", "Le Tripitaka"], correct: 2 },

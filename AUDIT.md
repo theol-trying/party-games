@@ -32,20 +32,28 @@ fichier binaire dans le dépôt).
 
 | Jeu | Contenu |
 |---|---|
-| Quiz à gages | 2546 questions · 26 catégories · 0 malformée · 0 doublon (même à la ponctuation près, testé) |
-| Je n'ai jamais | 738 phrases (369 soft / 249 soirée / 120 18+), dont 23 d'actu 2025-2026 |
-| Action ou Vérité | 701 cartes (360 actions + 341 vérités), dont 20 d'actu 2025-2026 |
-| Qui est le plus susceptible | 261 affirmations, dont 21 d'actu 2025-2026 |
-| Undercover | 239 paires, dont 26 d'actu 2025-2026 |
-| Tu préfères | 232 dilemmes, dont 23 d'actu 2025-2026 |
-| Le Menteur | 207 missions, dont 18 d'actu 2025-2026 |
-| Qui a dit ça ? | 155 questions (58 soft / 57 soirée / 40 18+) |
-| Cadavre exquis | 27 ouvertures · 95 amorces · 25 clôtures · 6 thèmes |
-| Estimations | 212 questions « combien de… ? » en 8 thèmes au choix (réponses numériques et positives, testées) |
+| Quiz à gages | 3859 questions · 41 thèmes · du facile au très difficile · 0 malformée · 0 doublon (testé), y compris un même fait reformulé (contrôle du 2026-10-02) |
+| Je n'ai jamais | 830 phrases (397 soft / 290 soirée / 143 18+), dont 23 d'actu 2025-2026 |
+| Action ou Vérité | 796 cartes (410 actions + 386 vérités), dont 20 d'actu 2025-2026 |
+| Qui est le plus susceptible | 301 affirmations, dont 21 d'actu 2025-2026 |
+| Undercover | 268 paires, dont 26 d'actu 2025-2026 |
+| Tu préfères | 271 dilemmes, dont 23 d'actu 2025-2026 |
+| Le Menteur | 245 missions, dont 18 d'actu 2025-2026 |
+| Qui a dit ça ? | 197 questions (73 soft / 72 soirée / 52 18+) |
+| Cadavre exquis | 35 ouvertures · 119 amorces · 32 clôtures · 6 thèmes |
+| Estimations | 240 questions « combien de… ? » en 8 thèmes au choix (réponses numériques et positives, testées) |
 | Baccalauréat | 8 catégories · 20 lettres |
-| Blind Test | 45 pistes pour « joue-la toi-même » + recherche d'extraits de 30 s (Apple Music / Deezer) |
+| Blind Test | 73 pistes pour « joue-la toi-même » + recherche d'extraits de 30 s (Apple Music / Deezer) |
 
-Gages partagés : 178, plus les gages du groupe (🎭 Mes gages : ajout, désactivation, « seulement les nôtres »).
+Gages partagés : 201, plus les gages du groupe (🎭 Mes gages : ajout, désactivation, « seulement les nôtres »).
+
+**Doublons** : `tests/contenu.test.mjs` refuse tout doublon textuel dans les 12 jeux. Pour les
+faits reformulés (« Quel est le plus grand océan ? » / « Quel océan est le plus vaste ? »), une
+passe du 2026-10-02 a comparé les mots de chaque énoncé et la bonne réponse : 158 doublons
+retirés du quiz, en gardant la question dans son thème le plus précis. Les nouvelles banques du
+quiz (`data2-<thème>.js` pour les 15 nouveaux thèmes, `data3-<thème>.js` pour compléter les
+anciens) sont au format compact `[question, bonne réponse, leurre, leurre, leurre]` : l'ordre
+des choix est tiré au hasard à l'affichage.
 
 ## 3. Architecture
 

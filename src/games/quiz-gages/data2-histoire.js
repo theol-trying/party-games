@@ -148,7 +148,7 @@ export const Q_HISTOIRE = [
   { q: "Quelle femme politique, rescapée de la Shoah, a porté la loi sur l'IVG en 1975 ?", choices: ["Simone Veil", "Françoise Giroud", "Gisèle Halimi", "Yvette Roudy"], correct: 0 },
   { q: "Quel président français a fait construire la pyramide du Louvre ?", choices: ["Giscard d'Estaing", "Mitterrand", "Chirac", "Pompidou"], correct: 1 },
   { q: "Quel président a inauguré le Centre Pompidou, en 1977 ?", choices: ["Charles de Gaulle", "Georges Pompidou", "Valéry Giscard d'Estaing", "François Mitterrand"], correct: 2 },
-  { q: "Sous quel roi la tour de Nesle… non : qui a construit Versailles tel qu'on le connaît ?", choices: ["Louis XIII", "Louis XV", "Louis XVI", "Louis XIV"], correct: 3 },
+  { q: "Quel roi a fait de Versailles le château que l'on connaît ?", choices: ["Louis XIII", "Louis XV", "Louis XVI", "Louis XIV"], correct: 3 },
   { q: "Quel « roi maudit » a fait arrêter les Templiers en 1307 ?", choices: ["Philippe le Bel", "Louis X", "Charles IV", "Philippe VI"], correct: 0 },
   { q: "Quel pape a lancé la première croisade en 1095 ?", choices: ["Grégoire VII", "Urbain II", "Innocent III", "Pascal II"], correct: 1 },
   { q: "Quelle ville sainte fut prise par les croisés en 1099 ?", choices: ["Antioche", "Damas", "Jérusalem", "Constantinople"], correct: 2 },

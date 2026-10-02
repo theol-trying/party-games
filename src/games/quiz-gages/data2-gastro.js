@@ -55,7 +55,6 @@ export const Q_GASTRO = [
   { q: "La sangria est une boisson traditionnelle de quel pays ?", choices: ["Italie", "Espagne", "Portugal", "Grèce"], correct: 1 },
   { q: "Quel plat marocain est cuit dans un récipient en terre cuite conique ?", choices: ["Couscous", "Tajine", "Pastilla", "Harira"], correct: 1 },
   { q: "De quel pays la poutine est-elle un plat emblématique ?", choices: ["États-Unis", "Canada", "Belgique", "France"], correct: 1 },
-  { q: "Quelle boisson alcoolisée mexicaine est distillée à partir de l'agave bleue ?", choices: ["Mezcal", "Tequila", "Pulque", "Pisco"], correct: 1 },
   { q: "Quel dessert italien signifie littéralement remonte-moi le moral ?", choices: ["Panna cotta", "Tiramisu", "Cannoli", "Gelato"], correct: 1 },
   { q: "Quelle herbe aromatique est l'ingrédient principal du pesto genovese ?", choices: ["Persil", "Basilic", "Coriandre", "Menthe"], correct: 1 },
   { q: "De quel pays le biryani est-il un plat de riz épicé traditionnel ?", choices: ["Thaïlande", "Inde", "Chine", "Iran"], correct: 1 },
