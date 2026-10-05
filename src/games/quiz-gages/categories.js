@@ -44,3 +44,25 @@ export const CATEGORIES = [
   { id: "citations", label: "💬 Citations" },
   { id: "insolite", label: "🤯 Insolite" },
 ];
+
+/* Difficulté des questions (champ « d » des banques, recopié en « niveau » par
+   data.js). « Tous niveaux » mélange les trois. Rien à voir avec le niveau des
+   gages (soft / soirée / 18+), réglé à part. */
+export const DIFFICULTES = [
+  { id: "tous", label: "🎲 Tous niveaux" },
+  { id: "facile", n: 1, label: "🟢 Facile" },
+  { id: "moyen", n: 2, label: "🟠 Moyen" },
+  { id: "expert", n: 3, label: "🔴 Expert" },
+];
+
+/** Filtre d'une difficulté : les cartes perso (sans niveau) passent toujours. */
+export function garderDifficulte(id) {
+  const d = DIFFICULTES.find((x) => x.id === id);
+  return d && d.n ? (q) => !q.niveau || q.niveau === d.n : () => true;
+}
+
+/** Libellé du niveau d'une question (« 🟠 Moyen »), ou "" pour une carte perso. */
+export function libelleNiveau(niveau) {
+  const d = DIFFICULTES.find((x) => x.n === niveau);
+  return d ? d.label : "";
+}

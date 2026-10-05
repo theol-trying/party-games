@@ -32,7 +32,7 @@ fichier binaire dans le dépôt).
 
 | Jeu | Contenu |
 |---|---|
-| Quiz à gages | 3859 questions · 41 thèmes · du facile au très difficile · 0 malformée · 0 doublon (testé), y compris un même fait reformulé (contrôle du 2026-10-02) |
+| Quiz à gages | 4023 questions · 41 thèmes · classées Facile / Moyen / Expert (1935 / 1377 / 711, ≥ 15 Expert par thème hors Actus et Assorti, testé) · réglage « Tous niveaux » par défaut · 0 malformée · 0 doublon (testé), y compris un même fait reformulé (contrôle du 2026-10-02) |
 | Je n'ai jamais | 830 phrases (397 soft / 290 soirée / 143 18+), dont 23 d'actu 2025-2026 |
 | Action ou Vérité | 796 cartes (410 actions + 386 vérités), dont 20 d'actu 2025-2026 |
 | Qui est le plus susceptible | 301 affirmations, dont 21 d'actu 2025-2026 |

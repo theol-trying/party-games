@@ -121,7 +121,7 @@ et conservé. La liste de joueurs (`players.js`) l'utilise déjà comme exemple.
 | Le Menteur | ✅ missions secrètes + révélation |
 | Qui a dit ça ? | ✅ réponses secrètes mélangées par le serveur, devinez qui a écrit quoi |
 | Blind Test | ✅ buzzer + scores (⚠️ brancher tes propres audios dans `data.js`) |
-| Quiz à gages | ✅ QCM + gage aléatoire si faux |
+| Quiz à gages | ✅ QCM + gage aléatoire si faux · difficulté Facile / Moyen / Expert ou tous niveaux |
 | Estimations | ✅ « combien de… ? » en secret, le plus proche marque, le plus loin boit |
 | Baccalauréat | ✅ lettre + catégories + chrono |
 | Cadavre exquis | ✅ écriture en aveugle + lecture finale |

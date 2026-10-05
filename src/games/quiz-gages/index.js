@@ -13,7 +13,7 @@ import { tick, vibrate, vibrateSuccess, vibrateTap } from "../../sound.js";
 import { confettiBurst, celebrate, stampGage } from "../../fx.js";
 import { awardStanding } from "../../crown.js";
 import { bump, bumpMany } from "../../stats.js";
-import { CATEGORIES } from "./categories.js";
+import { CATEGORIES, DIFFICULTES, garderDifficulte, libelleNiveau } from "./categories.js";
 import { de } from "../../names.js";
 
 // Points d'une bonne réponse : base + bonus de rapidité selon le rang d'arrivée.
@@ -66,7 +66,7 @@ export function render(container, { game }) {
   const stage = el("div");
   container.append(stage);
 
-  // Les ~2 500 questions (27 fichiers) arrivent en arrière-plan : le menu
+  // Les ~4 000 questions (53 fichiers) arrivent en arrière-plan : le menu
   // s'affiche tout de suite, et tout ce qui a besoin des questions les attend.
   let QUESTIONS = [];
   let questionsPretes = false;
@@ -108,6 +108,26 @@ export function render(container, { game }) {
      reste toujours active). Les cartes perso (sans cat) sont toujours incluses. */
   function categorySelector(selected, onChange) {
     return themeSelector(CATEGORIES, selected, onChange); // brique commune (game-kit.js)
+  }
+
+  /* Difficulté des questions : choix unique (Tous niveaux, Facile, Moyen,
+     Expert), même rangée de pastilles que le niveau des gages. */
+  function difficulteSelector(initial, onChange) {
+    const chips = DIFFICULTES.map((d) => el("button.chip", { text: d.label, type: "button", "aria-pressed": "false", onClick: () => choisir(d.id) }));
+    function choisir(id, auDemarrage) {
+      DIFFICULTES.forEach((d, i) => {
+        chips[i].classList.toggle("is-active", d.id === id);
+        chips[i].setAttribute("aria-pressed", String(d.id === id));
+      });
+      if (!auDemarrage) onChange(id);
+    }
+    choisir(initial, true);
+    return el("div.lvl", {}, [el("div.row.lvl-row", { style: "justify-content:center;flex-wrap:wrap" }, chips)]);
+  }
+  /** Pastille du niveau d'une question (rien pour une carte perso). */
+  function pastilleNiveau(niveau) {
+    const t = libelleNiveau(niveau);
+    return t ? el("span.qz-niv", { text: t }) : null;
   }
 
   // Choix du mode : sur ce téléphone (passe-le) ou chacun sur le sien.
@@ -183,10 +203,11 @@ export function render(container, { game }) {
     const scores = {}; // deviceId -> total cumulé (converge sur tous les clients)
     const streaks = {}; // deviceId -> série de bonnes réponses consécutives (autorité meta)
     let level = "soft"; // niveau des gages, réglé par l'hôte
-    // Catégories filtrées par l'hôte (deck côté hôte : c'est lui qui tire les questions).
+    let diff = "tous"; // difficulté des questions, réglée par l'hôte
+    // Catégories et difficulté filtrées par l'hôte (deck côté hôte : c'est lui qui tire les questions).
     const cats = new Set(CATEGORIES.map((c) => c.id));
-    const catFilter = (c) => !c.cat || cats.has(c.cat);
-    deck.setFilter(catFilter);
+    const filtre = (c) => (!c.cat || cats.has(c.cat)) && garderDifficulte(diff)(c);
+    deck.setFilter(filtre);
 
     liveStop = liveSession(stage, {
       gameId: "quiz-gages",
@@ -197,10 +218,13 @@ export function render(container, { game }) {
       newRoundLabel: "Question suivante →",
       onExit: modeSelect,
       reglages: {
-        lire: () => ({ level, cats: [...cats] }),
+        lire: () => ({ level, cats: [...cats], diff }),
         ecrire: (r) => {
           if (r.level) level = r.level;
-          if (Array.isArray(r.cats) && r.cats.length) { cats.clear(); r.cats.forEach((c) => cats.add(c)); deck.setFilter(catFilter); }
+          let change = false;
+          if (DIFFICULTES.some((d) => d.id === r.diff) && r.diff !== diff) { diff = r.diff; change = true; }
+          if (Array.isArray(r.cats) && r.cats.length) { cats.clear(); r.cats.forEach((c) => cats.add(c)); change = true; }
+          if (change) deck.setFilter(filtre);
         },
       },
       lobbyExtra: () => {
@@ -208,7 +232,9 @@ export function render(container, { game }) {
         return el("div", { style: "margin:10px 0" }, [
           el("p.screen__subtitle", { text: "Niveau des gages", style: "margin-bottom:8px" }),
           ui.node,
-          categorySelector(cats, () => deck.setFilter(catFilter)),
+          el("p.screen__subtitle", { text: "Difficulté des questions", style: "margin:14px 0 8px" }),
+          difficulteSelector(diff, (v) => { diff = v; deck.setFilter(filtre); }),
+          categorySelector(cats, () => deck.setFilter(filtre)),
         ]);
       },
       assign: (ps) => {
@@ -220,7 +246,7 @@ export function render(container, { game }) {
         ps.forEach((p) => { base[p.id] = scores[p.id] || 0; strk[p.id] = streaks[p.id] || 0; });
         const roles = {};
         ps.forEach((p) => (roles[p.id] = true)); // tout le monde reçoit la même question
-        return { roles, meta: { q: item.q, choices: item.choices, correct: item.correct, level, base, streaks: strk } };
+        return { roles, meta: { q: item.q, choices: item.choices, correct: item.correct, niveau: item.niveau || null, level, base, streaks: strk } };
       },
       renderMine: (mine, ctx) => liveRound(ctx),
       renderReveal: (live, ctx) => liveReveal(live, scores, streaks, ctx), // ctx porte n (manche)
@@ -315,7 +341,7 @@ export function render(container, { game }) {
       : null;
 
     return [
-      el("p.screen__subtitle", { text: `Question ${n}${myStreak >= 2 ? ` · série ${myStreak} 🔥` : ""}` }),
+      el("p.screen__subtitle", {}, [`Question ${n}${myStreak >= 2 ? ` · série ${myStreak} 🔥` : ""}`, pastilleNiveau(meta.niveau)].filter(Boolean)),
       el("h2.qz-question", { text: meta.q, style: "margin:8px 0 8px" }),
       el("div.stack.qz-choices", {}, btns),
       el("div.row", { style: "justify-content:center" }, [x2Btn]),
@@ -474,22 +500,27 @@ export function render(container, { game }) {
     let turn = 0;
     let answered = false;
     let level = "soft"; // niveau des gages
+    let diff = "tous"; // difficulté des questions
 
-    // Catégories : toutes actives par défaut ; le filtre garde aussi les perso (sans cat).
+    // Catégories : toutes actives par défaut ; le filtre garde aussi les perso (sans cat ni niveau).
     const cats = new Set(CATEGORIES.map((c) => c.id));
-    const catFilter = (c) => !c.cat || cats.has(c.cat);
-    deck.setFilter(catFilter);
+    const filtre = (c) => (!c.cat || cats.has(c.cat)) && garderDifficulte(diff)(c);
+    deck.setFilter(filtre);
 
     // ⚙️ Réglages repliables : ouverts avant la 1re question, repliés ensuite
     // (une seule fois — si le joueur les rouvre, on les laisse ouverts), pour
     // que question et réponses tiennent à l'écran sans défiler.
     const resume = el("span.reglages__resume");
+    const compte = el("p.screen__subtitle.qz-compte");
     const majResume = () => {
       const lv = LEVELS.find((l) => l.id === level);
-      resume.textContent = `${lv ? lv.label : level} · ${cats.size}/${CATEGORIES.length} thèmes`;
+      const df = DIFFICULTES.find((d) => d.id === diff);
+      resume.textContent = `${lv ? lv.label : level} · ${df.label} · ${cats.size}/${CATEGORIES.length} thèmes`;
+      compte.textContent = `${deck.size().toLocaleString("fr-FR")} questions dans cette sélection`;
     };
-    const catUI = categorySelector(cats, () => { deck.setFilter(catFilter); majResume(); });
+    const catUI = categorySelector(cats, () => { deck.setFilter(filtre); majResume(); });
     const levelUI = levelSelector({ initial: level, onChange: (v) => { level = v; majResume(); } });
+    const diffUI = difficulteSelector(diff, (v) => { diff = v; deck.setFilter(filtre); majResume(); });
     majResume();
     // Replié d'emblée : le résumé montre déjà niveau et thèmes, et déplié il
     // repoussait les réponses C et D sous l'écran dès la 1re question.
@@ -498,7 +529,10 @@ export function render(container, { game }) {
       el("div.reglages__corps", {}, [
         el("p.screen__subtitle", { text: "Niveau des gages", style: "margin-bottom:8px" }),
         levelUI.node,
+        el("p.screen__subtitle", { text: "Difficulté des questions", style: "margin:14px 0 8px" }),
+        diffUI,
         catUI,
+        compte,
       ]),
     ]);
 
@@ -539,6 +573,11 @@ export function render(container, { game }) {
     function draw() {
       answered = false;
       const item = melanger(deck.next());
+      if (!item) { // aucun thème × difficulté ne donne de question (ne devrait pas arriver)
+        showPhase(qArea, el("div.card.center", {}, [el("p", { text: "Aucune question pour ces réglages : change la difficulté ou les thèmes dans ⚙️ Réglages." })]));
+        reglages.open = true;
+        return;
+      }
       count++;
       const pos = turn % nb;
       const player = players[pos];
@@ -586,7 +625,7 @@ export function render(container, { game }) {
       showPhase(qArea,
         el("div.card", {}, [
           nb >= 2 ? tourWrap : null,
-          el("p.screen__subtitle", { text: `Question ${count} · 🎯 au tour ${de(player)}` }),
+          el("p.screen__subtitle", {}, [`Question ${count} · 🎯 au tour ${de(player)}`, pastilleNiveau(item.niveau)].filter(Boolean)),
           el("h2.qz-question", { text: item.q, style: "margin:8px 0 18px" }),
           el("div.stack.qz-choices", {}, boutons),
           feedback,

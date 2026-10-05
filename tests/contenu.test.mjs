@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { QUESTIONS } from "../src/games/quiz-gages/data.js";
+import { CATEGORIES as THEMES_QUIZ, garderDifficulte } from "../src/games/quiz-gages/categories.js";
 import { PHRASES } from "../src/games/jamais-jamais/data.js";
 import { VERITES, ACTIONS } from "../src/games/action-verite/data.js";
 import { AFFIRMATIONS } from "../src/games/plus-susceptible/data.js";
@@ -54,7 +55,25 @@ test("quiz : quatre choix distincts et une bonne réponse valide pour chaque que
     assert.equal(new Set(q.choices.map((c) => c.trim().toLowerCase())).size, 4, `« ${q.q} » : choix en double`);
     assert.ok(Number.isInteger(q.correct) && q.correct >= 0 && q.correct < 4, `« ${q.q} » : bonne réponse invalide`);
   }
-  assert.ok(QUESTIONS.length >= 3800, "banque du quiz anormalement réduite");
+  assert.ok(QUESTIONS.length >= 4000, "banque du quiz anormalement réduite");
+});
+
+test("quiz : chaque question a un niveau, et chaque thème en propose assez à chaque niveau", () => {
+  const parTheme = {};
+  for (const q of QUESTIONS) {
+    assert.ok([1, 2, 3].includes(q.niveau), `« ${q.q} » : niveau manquant ou invalide (${q.niveau})`);
+    (parTheme[q.cat] ||= [0, 0, 0, 0])[q.niveau]++;
+  }
+  for (const t of THEMES_QUIZ) {
+    const [, facile, moyen, expert] = parTheme[t.id] || [0, 0, 0, 0];
+    // Actus et Assorti : banques courtes ou volontairement faciles.
+    const mini = t.id === "actu" || t.id === "melange" ? 1 : 15;
+    assert.ok(facile >= 5 && moyen >= 10 && expert >= mini, `${t.id} : ${facile} facile / ${moyen} moyen / ${expert} expert`);
+  }
+  // Filtre : « Tous niveaux » garde tout, un niveau ne garde que lui (et les cartes perso, sans niveau).
+  assert.equal(QUESTIONS.filter(garderDifficulte("tous")).length, QUESTIONS.length);
+  assert.ok(QUESTIONS.filter(garderDifficulte("expert")).every((q) => q.niveau === 3));
+  assert.ok(garderDifficulte("facile")({ q: "carte perso" }));
 });
 
 test("pas de carte orpheline : le paquet est mélangé, aucune ne peut supposer la précédente", () => {

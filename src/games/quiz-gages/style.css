@@ -101,3 +101,10 @@
 .qz-rep__av .av-badge { width: 26px; height: 26px; font-size: 15px; font-weight: 900; color: #16161f; }
 .qz-rep__eclair { position: absolute; top: -7px; right: -7px; font-size: 13px; }
 .qz-rep__n { font-weight: 800; text-align: right; }
+
+/* Niveau de la question (Facile / Moyen / Expert), à côté de « Question n ». */
+.qz-niv {
+  display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px;
+  background: var(--bg-soft); font-size: 12px; font-weight: 700; white-space: nowrap; vertical-align: 1px;
+}
+.qz-compte { margin-top: 10px; font-size: 13px; }
